@@ -21,22 +21,22 @@ import './LandingPage.css';
 const LandingPage: React.FC = () => {
     const features = [
         {
-            icon: <Users size={32} />,
+            image: '/images/expert-marketplace.png',
             title: 'Expert Marketplace',
             description: 'Connect with verified professionals across various domains for your projects.',
         },
         {
-            icon: <Shield size={32} />,
+            image: '/images/verified.png',
             title: 'Verified Experts',
             description: 'All experts go through a rigorous verification process to ensure quality.',
         },
         {
-            icon: <Zap size={32} />,
+            image: '/images/fast-matching.png',
             title: 'Fast Matching',
             description: 'Our smart algorithm matches you with the perfect expert in minutes.',
         },
         {
-            icon: <CheckCircle size={32} />,
+            image: '/images/quality-assurance.png',
             title: 'Quality Assurance',
             description: 'Built-in review system and task management for seamless collaboration.',
         },
@@ -143,7 +143,9 @@ const LandingPage: React.FC = () => {
                     <div className="features-grid">
                         {features.map((feature, index) => (
                             <div key={index} className="feature-card">
-                                <div className="feature-icon">{feature.icon}</div>
+                                <div className="feature-image">
+                                    <img src={feature.image} alt={feature.title} loading="lazy" />
+                                </div>
                                 <h3>{feature.title}</h3>
                                 <p>{feature.description}</p>
                             </div>
