@@ -26,7 +26,7 @@ const LandingPage: React.FC = () => {
             description: 'Connect with verified professionals across various domains for your projects.',
         },
         {
-            image: '/images/verified.png',
+            image: '/images/verified-experts.png',
             title: 'Verified Experts',
             description: 'All experts go through a rigorous verification process to ensure quality.',
         },
