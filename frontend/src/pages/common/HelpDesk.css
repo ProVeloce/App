@@ -1,0 +1,264 @@
+.helpdesk-page {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-6);
+}
+
+.header-left h1 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.header-left p {
+    color: var(--text-secondary);
+}
+
+.tickets-container {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-light);
+    min-height: 400px;
+}
+
+.tickets-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.ticket-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.ticket-item:hover {
+    background: var(--bg-secondary);
+}
+
+.ticket-item:last-child {
+    border-bottom: none;
+}
+
+.ticket-status {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-open {
+    color: var(--warning-600);
+}
+
+.status-progress {
+    color: var(--primary-600);
+}
+
+.status-resolved {
+    color: var(--success-600);
+}
+
+.ticket-content {
+    flex: 1;
+}
+
+.ticket-content h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.ticket-meta {
+    display: flex;
+    gap: var(--space-3);
+    font-size: 0.75rem;
+}
+
+.ticket-category {
+    color: var(--text-muted);
+}
+
+.ticket-priority {
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-weight: 500;
+}
+
+.priority-normal {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.priority-high {
+    background: var(--warning-50);
+    color: var(--warning-600);
+}
+
+.priority-critical {
+    background: var(--error-50);
+    color: var(--error-500);
+}
+
+.ticket-date {
+    color: var(--text-muted);
+}
+
+.ticket-arrow {
+    color: var(--text-muted);
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: auto;
+    animation: slideUp 0.3s ease-out;
+}
+
+.ticket-detail-modal {
+    max-width: 600px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: var(--space-6);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.modal-header h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--space-1);
+}
+
+.close-btn:hover {
+    color: var(--text-primary);
+}
+
+.modal-form {
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.modal-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: flex-end;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-light);
+}
+
+.ticket-messages {
+    padding: var(--space-6);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.message {
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-3);
+}
+
+.message.sent {
+    background: var(--primary-50);
+    margin-left: var(--space-8);
+}
+
+.message.received {
+    background: var(--bg-tertiary);
+    margin-right: var(--space-8);
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+    font-size: 0.75rem;
+}
+
+.sender-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.message-time {
+    color: var(--text-muted);
+}
+
+.message p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.no-messages {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--text-muted);
+}
+
+.ticket-status-badge {
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.ticket-status-badge.open {
+    background: var(--warning-50);
+    color: var(--warning-600);
+}
+
+.ticket-status-badge.in_progress {
+    background: var(--primary-100);
+    color: var(--primary-600);
+}
+
+.ticket-status-badge.resolved {
+    background: var(--success-50);
+    color: var(--success-600);
+}

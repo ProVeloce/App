@@ -1,0 +1,556 @@
+// This is your Prisma schema file for ProVeloce SaaS Application
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  CUSTOMER
+  EXPERT
+  ANALYST
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum ApplicationStatus {
+  DRAFT
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REQUIRES_CLARIFICATION
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  UNDER_REVIEW
+  COMPLETED
+  REJECTED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketCategory {
+  TECHNICAL
+  BILLING
+  VERIFICATION
+  OTHER
+}
+
+enum DocumentType {
+  GOVERNMENT_ID
+  PHOTO
+  RESUME
+  CERTIFICATE
+  PORTFOLIO
+  OTHER
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  SYSTEM
+}
+
+// ============================================
+// USER & AUTH MODELS
+// ============================================
+
+model User {
+  id                String      @id @default(uuid())
+  email             String      @unique
+  phone             String?     @unique
+  passwordHash      String
+  name              String
+  role              Role        @default(CUSTOMER)
+  status            UserStatus  @default(PENDING_VERIFICATION)
+  emailVerified     Boolean     @default(false)
+  phoneVerified     Boolean     @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  // Relations
+  profile           UserProfile?
+  expertApplication ExpertApplication?
+  documents         Document[]
+  portfolioItems    PortfolioItem[]
+  certifications    Certification[]
+  assignedTasks     Task[]              @relation("AssignedTasks")
+  createdTasks      Task[]              @relation("CreatedTasks")
+  taskSubmissions   TaskSubmission[]
+  tickets           Ticket[]            @relation("UserTickets")
+  assignedTickets   Ticket[]            @relation("AssignedTickets")
+  ticketMessages    TicketMessage[]
+  activityLogs      ActivityLog[]
+  notifications     Notification[]
+  loginHistory      LoginHistory[]
+  refreshTokens     RefreshToken[]
+  otpCodes          OTPCode[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+}
+
+model UserProfile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  dob         DateTime?
+  gender      String?
+  addressLine1 String?
+  addressLine2 String?
+  city        String?
+  state       String?
+  country     String?
+  pincode     String?
+  avatarUrl   String?
+  bio         String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model OTPCode {
+  id          String    @id @default(uuid())
+  userId      String
+  code        String
+  type        String    // email_verification, phone_verification, password_reset
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([code])
+}
+
+model LoginHistory {
+  id          String    @id @default(uuid())
+  userId      String
+  ipAddress   String?
+  userAgent   String?
+  device      String?
+  location    String?
+  success     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================
+// EXPERT APPLICATION MODELS
+// ============================================
+
+model ExpertApplication {
+  id                  String            @id @default(uuid())
+  userId              String            @unique
+  status              ApplicationStatus @default(DRAFT)
+  
+  // Personal Details
+  dob                 DateTime?
+  gender              String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  state               String?
+  country             String?
+  pincode             String?
+  
+  // Expertise Section
+  domains             String[]          // Array of domain names
+  yearsOfExperience   Int?
+  summaryBio          String?
+  skills              String[]          // Array of skill tags
+  hourlyRate          Decimal?          @db.Decimal(10, 2)
+  projectRate         Decimal?          @db.Decimal(10, 2)
+  availableDays       String[]          // Array of days
+  availableTimeSlots  String[]          // Array of time slots
+  
+  // Professional History (stored as JSON)
+  professionalHistory Json?
+  
+  // References (stored as JSON - array of reference objects)
+  references          Json?
+  
+  // Legal & Compliance
+  termsAccepted       Boolean           @default(false)
+  ndaAccepted         Boolean           @default(false)
+  signatureUrl        String?
+  
+  // Review Information
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  rejectionReason     String?
+  internalNotes       String?
+  verificationChecks  Json?              // Analyst verification checklist
+  
+  // Timestamps
+  submittedAt         DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relations
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments            ApplicationComment[]
+
+  @@index([status])
+  @@index([userId])
+}
+
+model ApplicationComment {
+  id            String    @id @default(uuid())
+  applicationId String
+  authorId      String
+  authorName    String
+  authorRole    Role
+  content       String
+  isInternal    Boolean   @default(false) // Internal notes not visible to applicant
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  application   ExpertApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+// ============================================
+// DOCUMENT & MEDIA MODELS
+// ============================================
+
+model Document {
+  id          String        @id @default(uuid())
+  userId      String
+  type        DocumentType
+  name        String
+  fileUrl     String
+  mimeType    String?
+  size        Int?
+  isVerified  Boolean       @default(false)
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+model PortfolioItem {
+  id          String    @id @default(uuid())
+  expertId    String
+  title       String
+  description String?
+  mediaUrls   String[]  // Array of media file URLs
+  tags        String[]  // Array of tags
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  expert      User      @relation(fields: [expertId], references: [id], onDelete: Cascade)
+
+  @@index([expertId])
+}
+
+model Certification {
+  id          String    @id @default(uuid())
+  expertId    String
+  name        String
+  issuedBy    String?
+  issueYear   Int?
+  expiryYear  Int?
+  fileUrl     String?
+  isVerified  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  expert      User      @relation(fields: [expertId], references: [id], onDelete: Cascade)
+
+  @@index([expertId])
+}
+
+// ============================================
+// TASK MANAGEMENT MODELS
+// ============================================
+
+model Task {
+  id            String      @id @default(uuid())
+  title         String
+  description   String?
+  attachments   String[]    // Array of file URLs
+  deadline      DateTime?
+  status        TaskStatus  @default(PENDING)
+  priority      String?     @default("MEDIUM")
+  assignedToId  String
+  createdById   String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  assignedTo    User        @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  createdBy     User        @relation("CreatedTasks", fields: [createdById], references: [id])
+  submissions   TaskSubmission[]
+  comments      TaskComment[]
+
+  @@index([assignedToId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model TaskSubmission {
+  id          String    @id @default(uuid())
+  taskId      String
+  expertId    String
+  message     String?
+  fileUrls    String[]  // Array of submitted file URLs
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  expert      User      @relation(fields: [expertId], references: [id])
+
+  @@index([taskId])
+  @@index([expertId])
+}
+
+model TaskComment {
+  id          String    @id @default(uuid())
+  taskId      String
+  authorId    String
+  authorName  String
+  content     String
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ============================================
+// SUPPORT TICKET MODELS
+// ============================================
+
+model Ticket {
+  id            String          @id @default(uuid())
+  userId        String
+  assignedToId  String?
+  category      TicketCategory
+  priority      TicketPriority  @default(MEDIUM)
+  subject       String
+  description   String
+  status        TicketStatus    @default(OPEN)
+  attachments   String[]
+  resolvedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  user          User            @relation("UserTickets", fields: [userId], references: [id])
+  assignedTo    User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  messages      TicketMessage[]
+
+  @@index([userId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model TicketMessage {
+  id          String    @id @default(uuid())
+  ticketId    String
+  senderId    String
+  senderName  String
+  senderRole  Role
+  content     String
+  attachments String[]
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender      User      @relation(fields: [senderId], references: [id])
+
+  @@index([ticketId])
+}
+
+// ============================================
+// ACTIVITY & NOTIFICATION MODELS
+// ============================================
+
+model ActivityLog {
+  id          String    @id @default(uuid())
+  userId      String
+  action      String
+  entityType  String?   // User, Application, Task, etc.
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Notification {
+  id          String            @id @default(uuid())
+  userId      String
+  type        NotificationType  @default(INFO)
+  title       String
+  message     String
+  link        String?           // Optional link to navigate to
+  isRead      Boolean           @default(false)
+  readAt      DateTime?
+  createdAt   DateTime          @default(now())
+
+  // Relations
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+// ============================================
+// SYSTEM CONFIGURATION MODELS
+// ============================================
+
+model SystemConfig {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  value       Json
+  description String?
+  updatedBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([key])
+}
+
+model FeatureToggle {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  isEnabled   Boolean   @default(true)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  content     String
+  targetRoles Role[]    // Which roles should see this
+  isActive    Boolean   @default(true)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
+// ============================================
+// EARNINGS MODULE (Placeholder for future)
+// ============================================
+
+model Transaction {
+  id          String    @id @default(uuid())
+  expertId    String
+  amount      Decimal   @db.Decimal(10, 2)
+  currency    String    @default("USD")
+  type        String    // earning, withdrawal, refund
+  status      String    // pending, completed, failed
+  description String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([expertId])
+  @@index([status])
+}
+
+model WithdrawalRequest {
+  id            String    @id @default(uuid())
+  expertId      String
+  amount        Decimal   @db.Decimal(10, 2)
+  currency      String    @default("USD")
+  status        String    @default("pending") // pending, approved, rejected, completed
+  paymentMethod String?
+  accountDetails Json?
+  processedBy   String?
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([expertId])
+  @@index([status])
+}
