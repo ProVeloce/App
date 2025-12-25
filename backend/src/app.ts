@@ -44,6 +44,19 @@ app.use(cookieParser());
 // Static files for uploads
 app.use('/uploads', express.static(config.uploadDir));
 
+// Root route
+app.get('/', (req, res) => {
+    res.json({
+        success: true,
+        message: 'ProVeloce API Server',
+        version: '1.0.0',
+        endpoints: {
+            health: '/health',
+            api: '/api/*'
+        }
+    });
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
