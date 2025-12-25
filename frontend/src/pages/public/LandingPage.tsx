@@ -21,22 +21,22 @@ import './LandingPage.css';
 const LandingPage: React.FC = () => {
     const features = [
         {
-            image: '/images/expert-marketplace.png',
+            image: 'public/images/expert-marketplace.png',
             title: 'Expert Marketplace',
             description: 'Connect with verified professionals across various domains for your projects.',
         },
         {
-            image: '/images/verified.png',
+            image: 'public/images/verified.png',
             title: 'Verified Experts',
             description: 'All experts go through a rigorous verification process to ensure quality.',
         },
         {
-            image: '/images/fast-matching.png',
+            image: 'public/images/fast-matching.png',
             title: 'Fast Matching',
             description: 'Our smart algorithm matches you with the perfect expert in minutes.',
         },
         {
-            image: '/images/quality-assurance.png',
+            image: 'public/images/quality-assurance.png',
             title: 'Quality Assurance',
             description: 'Built-in review system and task management for seamless collaboration.',
         },
