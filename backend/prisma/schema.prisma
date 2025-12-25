@@ -1,4 +1,5 @@
 // This is your Prisma schema file for ProVeloce SaaS Application
+// MongoDB Configuration
 // Learn more: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -6,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -89,7 +90,7 @@ enum NotificationType {
 // ============================================
 
 model User {
-  id                String      @id @default(uuid())
+  id                String      @id @default(auto()) @map("_id") @db.ObjectId
   email             String      @unique
   phone             String?     @unique
   passwordHash      String
@@ -122,35 +123,33 @@ model User {
   refreshTokens     RefreshToken[]
   otpCodes          OTPCode[]
 
-  @@index([email])
-  @@index([phone])
   @@index([role])
   @@index([status])
 }
 
 model UserProfile {
-  id          String    @id @default(uuid())
-  userId      String    @unique
-  dob         DateTime?
-  gender      String?
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String    @unique @db.ObjectId
+  dob          DateTime?
+  gender       String?
   addressLine1 String?
   addressLine2 String?
-  city        String?
-  state       String?
-  country     String?
-  pincode     String?
-  avatarUrl   String?
-  bio         String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  city         String?
+  state        String?
+  country      String?
+  pincode      String?
+  avatarUrl    String?
+  bio          String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relations
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model RefreshToken {
-  id          String    @id @default(uuid())
-  userId      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
   token       String    @unique
   expiresAt   DateTime
   createdAt   DateTime  @default(now())
@@ -160,12 +159,11 @@ model RefreshToken {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([token])
 }
 
 model OTPCode {
-  id          String    @id @default(uuid())
-  userId      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
   code        String
   type        String    // email_verification, phone_verification, password_reset
   expiresAt   DateTime
@@ -176,12 +174,11 @@ model OTPCode {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([code])
 }
 
 model LoginHistory {
-  id          String    @id @default(uuid())
-  userId      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
   ipAddress   String?
   userAgent   String?
   device      String?
@@ -200,8 +197,8 @@ model LoginHistory {
 // ============================================
 
 model ExpertApplication {
-  id                  String            @id @default(uuid())
-  userId              String            @unique
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId              String            @unique @db.ObjectId
   status              ApplicationStatus @default(DRAFT)
   
   // Personal Details
@@ -219,8 +216,8 @@ model ExpertApplication {
   yearsOfExperience   Int?
   summaryBio          String?
   skills              String[]          // Array of skill tags
-  hourlyRate          Decimal?          @db.Decimal(10, 2)
-  projectRate         Decimal?          @db.Decimal(10, 2)
+  hourlyRate          Float?
+  projectRate         Float?
   availableDays       String[]          // Array of days
   availableTimeSlots  String[]          // Array of time slots
   
@@ -252,12 +249,11 @@ model ExpertApplication {
   comments            ApplicationComment[]
 
   @@index([status])
-  @@index([userId])
 }
 
 model ApplicationComment {
-  id            String    @id @default(uuid())
-  applicationId String
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId String    @db.ObjectId
   authorId      String
   authorName    String
   authorRole    Role
@@ -276,8 +272,8 @@ model ApplicationComment {
 // ============================================
 
 model Document {
-  id          String        @id @default(uuid())
-  userId      String
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String        @db.ObjectId
   type        DocumentType
   name        String
   fileUrl     String
@@ -297,8 +293,8 @@ model Document {
 }
 
 model PortfolioItem {
-  id          String    @id @default(uuid())
-  expertId    String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  expertId    String    @db.ObjectId
   title       String
   description String?
   mediaUrls   String[]  // Array of media file URLs
@@ -314,8 +310,8 @@ model PortfolioItem {
 }
 
 model Certification {
-  id          String    @id @default(uuid())
-  expertId    String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  expertId    String    @db.ObjectId
   name        String
   issuedBy    String?
   issueYear   Int?
@@ -336,15 +332,15 @@ model Certification {
 // ============================================
 
 model Task {
-  id            String      @id @default(uuid())
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
   title         String
   description   String?
   attachments   String[]    // Array of file URLs
   deadline      DateTime?
   status        TaskStatus  @default(PENDING)
   priority      String?     @default("MEDIUM")
-  assignedToId  String
-  createdById   String
+  assignedToId  String      @db.ObjectId
+  createdById   String      @db.ObjectId
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -360,9 +356,9 @@ model Task {
 }
 
 model TaskSubmission {
-  id          String    @id @default(uuid())
-  taskId      String
-  expertId    String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String    @db.ObjectId
+  expertId    String    @db.ObjectId
   message     String?
   fileUrls    String[]  // Array of submitted file URLs
   createdAt   DateTime  @default(now())
@@ -377,8 +373,8 @@ model TaskSubmission {
 }
 
 model TaskComment {
-  id          String    @id @default(uuid())
-  taskId      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String    @db.ObjectId
   authorId    String
   authorName  String
   content     String
@@ -395,9 +391,9 @@ model TaskComment {
 // ============================================
 
 model Ticket {
-  id            String          @id @default(uuid())
-  userId        String
-  assignedToId  String?
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String          @db.ObjectId
+  assignedToId  String?         @db.ObjectId
   category      TicketCategory
   priority      TicketPriority  @default(MEDIUM)
   subject       String
@@ -414,14 +410,13 @@ model Ticket {
   messages      TicketMessage[]
 
   @@index([userId])
-  @@index([assignedToId])
   @@index([status])
 }
 
 model TicketMessage {
-  id          String    @id @default(uuid())
-  ticketId    String
-  senderId    String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId    String    @db.ObjectId
+  senderId    String    @db.ObjectId
   senderName  String
   senderRole  Role
   content     String
@@ -440,8 +435,8 @@ model TicketMessage {
 // ============================================
 
 model ActivityLog {
-  id          String    @id @default(uuid())
-  userId      String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
   action      String
   entityType  String?   // User, Application, Task, etc.
   entityId    String?
@@ -459,8 +454,8 @@ model ActivityLog {
 }
 
 model Notification {
-  id          String            @id @default(uuid())
-  userId      String
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String            @db.ObjectId
   type        NotificationType  @default(INFO)
   title       String
   message     String
@@ -481,7 +476,7 @@ model Notification {
 // ============================================
 
 model SystemConfig {
-  id          String    @id @default(uuid())
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   key         String    @unique
   value       Json
   description String?
@@ -489,22 +484,20 @@ model SystemConfig {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@index([key])
 }
 
 model FeatureToggle {
-  id          String    @id @default(uuid())
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   name        String    @unique
   isEnabled   Boolean   @default(true)
   description String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@index([name])
 }
 
 model Announcement {
-  id          String    @id @default(uuid())
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   title       String
   content     String
   targetRoles Role[]    // Which roles should see this
@@ -523,9 +516,9 @@ model Announcement {
 // ============================================
 
 model Transaction {
-  id          String    @id @default(uuid())
-  expertId    String
-  amount      Decimal   @db.Decimal(10, 2)
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  expertId    String    @db.ObjectId
+  amount      Float
   currency    String    @default("USD")
   type        String    // earning, withdrawal, refund
   status      String    // pending, completed, failed
@@ -539,9 +532,9 @@ model Transaction {
 }
 
 model WithdrawalRequest {
-  id            String    @id @default(uuid())
-  expertId      String
-  amount        Decimal   @db.Decimal(10, 2)
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  expertId      String    @db.ObjectId
+  amount        Float
   currency      String    @default("USD")
   status        String    @default("pending") // pending, approved, rejected, completed
   paymentMethod String?

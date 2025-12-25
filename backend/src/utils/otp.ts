@@ -40,6 +40,8 @@ export const createOTP = async (
         },
     });
 
+    console.log(`🔐 OTP Created: ${code} for user ${userId} (type: ${type}), expires at: ${expiresAt}`);
+
     return code;
 };
 
@@ -51,6 +53,8 @@ export const verifyOTP = async (
     code: string,
     type: string
 ): Promise<boolean> => {
+    console.log(`🔍 Verifying OTP: ${code} for user ${userId} (type: ${type})`);
+
     const otp = await prisma.oTPCode.findFirst({
         where: {
             userId,
@@ -62,8 +66,23 @@ export const verifyOTP = async (
     });
 
     if (!otp) {
+        // Debug: log all OTPs for this user to see what's stored
+        const allOtps = await prisma.oTPCode.findMany({
+            where: { userId, type },
+            orderBy: { createdAt: 'desc' },
+            take: 3,
+        });
+        console.log(`❌ OTP not found. Recent OTPs for user:`, allOtps.map(o => ({
+            code: o.code,
+            type: o.type,
+            expiresAt: o.expiresAt,
+            usedAt: o.usedAt,
+            isExpired: o.expiresAt < new Date(),
+        })));
         return false;
     }
+
+    console.log(`✅ OTP verified successfully`);
 
     // Mark OTP as used
     await prisma.oTPCode.update({

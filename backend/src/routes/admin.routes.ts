@@ -33,16 +33,20 @@ router.get('/dashboard', async (req: Request, res: Response, next: NextFunction)
             prisma.ticket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
         ]);
 
-        // Get user growth data
-        const userGrowth = await prisma.$queryRaw`
-      SELECT 
-        DATE_TRUNC('day', "createdAt") as date,
-        COUNT(*) as count
-      FROM "User"
-      WHERE "createdAt" >= ${thirtyDaysAgo}
-      GROUP BY DATE_TRUNC('day', "createdAt")
-      ORDER BY date
-    `;
+        // Get recent users for growth data (simplified for MongoDB)
+        const recentUsers = await prisma.user.findMany({
+            where: { createdAt: { gte: thirtyDaysAgo } },
+            select: { createdAt: true },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        // Group by date in JavaScript
+        const userGrowthMap = new Map<string, number>();
+        recentUsers.forEach(user => {
+            const date = user.createdAt.toISOString().split('T')[0];
+            userGrowthMap.set(date, (userGrowthMap.get(date) || 0) + 1);
+        });
+        const userGrowth = Array.from(userGrowthMap.entries()).map(([date, count]) => ({ date, count }));
 
         res.json({
             success: true,

@@ -296,6 +296,41 @@
     border-color: var(--primary-500) !important;
 }
 
+/* 6-Box OTP Input */
+.otp-boxes {
+    display: flex;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.otp-box {
+    width: 48px;
+    height: 56px;
+    border: 2px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+    text-align: center;
+    transition: all var(--transition-fast);
+    padding: 0;
+}
+
+.otp-box:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.otp-box.error {
+    border-color: var(--error-500);
+}
+
+.otp-box.error:focus {
+    box-shadow: 0 0 0 3px var(--error-50);
+}
+
 .resend-section {
     text-align: center;
 }
@@ -361,4 +396,55 @@
 .input-wrapper input::placeholder {
     padding-left: 0 !important;
     /* cursor & placeholder same line */
+}
+
+/* ===== GOOGLE OAUTH BUTTON ===== */
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: var(--space-4) 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.auth-divider span {
+    padding: 0 var(--space-4);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    text-transform: lowercase;
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3) var(--space-6);
+    background: white;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-google:hover {
+    background: var(--gray-50);
+    border-color: var(--border-dark);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.btn-google svg {
+    flex-shrink: 0;
 }

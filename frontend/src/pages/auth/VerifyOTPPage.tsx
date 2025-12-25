@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,10 +7,6 @@ import { authApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Lock, ArrowRight, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import './AuthPages.css';
-
-const otpSchema = z.object({
-    otp: z.string().length(6, 'OTP must be 6 digits'),
-});
 
 const resetPasswordSchema = z.object({
     newPassword: z
@@ -26,15 +22,17 @@ const resetPasswordSchema = z.object({
     path: ['confirmPassword'],
 });
 
-type OTPForm = z.infer<typeof otpSchema>;
 type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 
 const VerifyOTPPage: React.FC = () => {
+    const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
     const [otpVerified, setOtpVerified] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [countdown, setCountdown] = useState(60);
     const [canResend, setCanResend] = useState(false);
+    const [otpError, setOtpError] = useState('');
+    const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
     const { error, success } = useToast();
     const navigate = useNavigate();
     const location = useLocation();
@@ -56,18 +54,54 @@ const VerifyOTPPage: React.FC = () => {
         }
     }, [countdown]);
 
-    const otpForm = useForm<OTPForm>({
-        resolver: zodResolver(otpSchema),
-    });
-
     const resetForm = useForm<ResetPasswordForm>({
         resolver: zodResolver(resetPasswordSchema),
     });
 
-    const handleVerifyOTP = async (data: OTPForm) => {
+    const handleOtpChange = (index: number, value: string) => {
+        // Only allow digits
+        if (value && !/^\d$/.test(value)) return;
+
+        const newOtp = [...otp];
+        newOtp[index] = value;
+        setOtp(newOtp);
+        setOtpError('');
+
+        // Move to next input if value entered
+        if (value && index < 5) {
+            inputRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Move to previous input on backspace if current is empty
+        if (e.key === 'Backspace' && !otp[index] && index > 0) {
+            inputRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (pastedData.length === 6) {
+            const newOtp = pastedData.split('');
+            setOtp(newOtp);
+            inputRefs.current[5]?.focus();
+        }
+    };
+
+    const handleVerifyOTP = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const otpString = otp.join('');
+
+        if (otpString.length !== 6) {
+            setOtpError('Please enter all 6 digits');
+            return;
+        }
+
         setIsLoading(true);
         try {
-            const response = await authApi.verifyOTP({ email, otp: data.otp, type });
+            const response = await authApi.verifyOTP({ email, otp: otpString, type });
 
             if (response.data.success) {
                 if (type === 'password_reset') {
@@ -79,7 +113,9 @@ const VerifyOTPPage: React.FC = () => {
                 }
             }
         } catch (err: any) {
-            error(err.response?.data?.error || 'Invalid OTP');
+            const errorMsg = err.response?.data?.error || 'Invalid or expired OTP';
+            setOtpError(errorMsg);
+            error(errorMsg);
         } finally {
             setIsLoading(false);
         }
@@ -90,7 +126,7 @@ const VerifyOTPPage: React.FC = () => {
         try {
             const response = await authApi.resetPassword({
                 email,
-                otp: otpForm.getValues('otp'),
+                otp: otp.join(''),
                 newPassword: data.newPassword,
             });
 
@@ -111,6 +147,8 @@ const VerifyOTPPage: React.FC = () => {
             success('New OTP sent to your email');
             setCountdown(60);
             setCanResend(false);
+            setOtp(['', '', '', '', '', '']);
+            inputRefs.current[0]?.focus();
         } catch (err) {
             error('Failed to resend OTP');
         }
@@ -131,22 +169,26 @@ const VerifyOTPPage: React.FC = () => {
                     </div>
 
                     {!otpVerified ? (
-                        <form onSubmit={otpForm.handleSubmit(handleVerifyOTP)} className="auth-form">
+                        <form onSubmit={handleVerifyOTP} className="auth-form">
                             <div className="form-group">
-                                <label htmlFor="otp">Enter OTP</label>
-                                <div className="otp-input-wrapper">
-                                    <input
-                                        id="otp"
-                                        type="text"
-                                        maxLength={6}
-                                        placeholder="000000"
-                                        {...otpForm.register('otp')}
-                                        className={`otp-input ${otpForm.formState.errors.otp ? 'error' : ''}`}
-                                    />
+                                <label>Enter OTP</label>
+                                <div className="otp-boxes" onPaste={handlePaste}>
+                                    {otp.map((digit, index) => (
+                                        <input
+                                            key={index}
+                                            ref={(el) => (inputRefs.current[index] = el)}
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={1}
+                                            value={digit}
+                                            onChange={(e) => handleOtpChange(index, e.target.value)}
+                                            onKeyDown={(e) => handleKeyDown(index, e)}
+                                            className={`otp-box ${otpError ? 'error' : ''}`}
+                                            autoFocus={index === 0}
+                                        />
+                                    ))}
                                 </div>
-                                {otpForm.formState.errors.otp && (
-                                    <span className="error-message">{otpForm.formState.errors.otp.message}</span>
-                                )}
+                                {otpError && <span className="error-message">{otpError}</span>}
                             </div>
 
                             <div className="resend-section">
