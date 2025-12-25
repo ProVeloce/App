@@ -34,8 +34,8 @@ export const config = {
     uploadDir: process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'),
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10), // 10MB
 
-    // Frontend URL
-    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    // Frontend URL (remove trailing slash to prevent CORS issues)
+    frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''),
 
     // OTP
     otpExpiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES || '10', 10),
