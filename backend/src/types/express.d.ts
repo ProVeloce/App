@@ -1,36 +1,15 @@
 import { Role } from '@prisma/client';
 
-// Define our JWT payload structure
-interface JWTPayload {
-    userId: string;
-    email: string;
-    role: Role;
-    iat?: number;
-    exp?: number;
-}
-
-// Define the full user from Prisma (for passport callback)
-interface PassportUser {
-    id: string;
-    email: string;
-    role: Role;
-    name: string;
-    status: string;
-    emailVerified: boolean;
-    profile?: {
-        avatarUrl?: string | null;
-    } | null;
-}
-
 // Extend Express with our types
 declare global {
     namespace Express {
-        // User can be either JWTPayload (from JWT auth) or PassportUser (from OAuth)
+        // User type for authenticated requests - always has userId after auth middleware
         interface User {
-            id?: string;
-            userId?: string;
+            userId: string;
             email: string;
             role: Role;
+            // Optional properties from Passport OAuth
+            id?: string;
             name?: string;
             status?: string;
             emailVerified?: boolean;
@@ -43,4 +22,13 @@ declare global {
     }
 }
 
-export { JWTPayload, PassportUser };
+// Define our JWT payload structure (exported for use in code)
+export interface JWTPayload {
+    userId: string;
+    email: string;
+    role: Role;
+    iat?: number;
+    exp?: number;
+}
+
+export { };

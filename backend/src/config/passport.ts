@@ -61,7 +61,19 @@ passport.use(
                     });
                 }
 
-                return done(null, user);
+                // Return user with userId for Express.User type compatibility
+                const expressUser = {
+                    userId: user.id,
+                    id: user.id,
+                    email: user.email,
+                    role: user.role,
+                    name: user.name,
+                    status: user.status,
+                    emailVerified: user.emailVerified,
+                    profile: user.profile,
+                };
+
+                return done(null, expressUser);
             } catch (error) {
                 return done(error, null);
             }
@@ -70,7 +82,7 @@ passport.use(
 );
 
 passport.serializeUser((user: any, done) => {
-    done(null, user.id);
+    done(null, user.userId || user.id);
 });
 
 passport.deserializeUser(async (id: string, done) => {
@@ -79,7 +91,22 @@ passport.deserializeUser(async (id: string, done) => {
             where: { id },
             include: { profile: true },
         });
-        done(null, user);
+
+        if (user) {
+            const expressUser = {
+                userId: user.id,
+                id: user.id,
+                email: user.email,
+                role: user.role,
+                name: user.name,
+                status: user.status,
+                emailVerified: user.emailVerified,
+                profile: user.profile,
+            };
+            done(null, expressUser);
+        } else {
+            done(null, null);
+        }
     } catch (error) {
         done(error, null);
     }
