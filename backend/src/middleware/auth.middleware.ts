@@ -4,15 +4,7 @@ import { config } from '../config/index';
 import { prisma } from '../lib/prisma';
 import { JWTPayload } from '../types/index';
 import { Role } from '@prisma/client';
-
-// Extend Express Request type
-declare global {
-    namespace Express {
-        interface Request {
-            user?: JWTPayload;
-        }
-    }
-}
+import '../types/express.d';
 
 /**
  * Verify JWT access token

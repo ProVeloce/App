@@ -67,10 +67,9 @@ router.get('/google/callback',
             // Log activity
             await logActivity({
                 userId: user.id,
-                action: ACTIONS.LOGIN,
+                action: ACTIONS.USER_LOGIN,
                 metadata: { method: 'google_oauth' },
-                ipAddress: req.ip || undefined,
-                userAgent: req.get('User-Agent') || undefined,
+                req,
             });
 
             // Redirect to frontend with tokens
