@@ -1,4 +1,4 @@
-# Dependencies - ignore all node_modules everywhere
+# Dependencies
 **/node_modules/
 node_modules/
 
@@ -45,3 +45,6 @@ coverage/
 
 # Misc
 *.local
+
+# Vercel
+.vercel/

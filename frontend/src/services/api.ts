@@ -51,8 +51,10 @@ export interface PaginatedResponse<T> {
 }
 
 // Create axios instance
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 const api: AxiosInstance = axios.create({
-    baseURL: '/api',
+    baseURL: `${API_BASE_URL}/api`,
     headers: {
         'Content-Type': 'application/json',
     },
