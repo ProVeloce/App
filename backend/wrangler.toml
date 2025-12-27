@@ -7,10 +7,6 @@ routes = [
   { pattern = "backend.proveloce.com/*", zone_name = "proveloce.com" }
 ]
 
-# Optional: Add environment variables if needed
-# [vars]
-# RENDER_API = "https://app-0zrq.onrender.com"
-
 [vars]
 DATABASE_URL="mongodb+srv://proveloce-meet:ProVeloce%4012345@proveloce-meet.ut6jcqt.mongodb.net/App?retryWrites=true&w=majority"
 EMAIL_FROM=support@proveloce.com
