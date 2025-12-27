@@ -1,0 +1,12 @@
+name = "proveloce-backend-proxy"
+main = "worker.ts"
+compatibility_date = "2024-01-01"
+
+# Custom domain routing
+routes = [
+  { pattern = "backend.proveloce.com/*", zone_name = "proveloce.com" }
+]
+
+# Optional: Add environment variables if needed
+# [vars]
+# RENDER_API = "https://app-0zrq.onrender.com"
