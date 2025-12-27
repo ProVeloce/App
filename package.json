@@ -24,6 +24,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "openssl": "^2.0.0"
   }
 }
