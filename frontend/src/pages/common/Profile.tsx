@@ -8,8 +8,6 @@ import { profileApi, activityApi } from '../../services/api';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Save, Clock } from 'lucide-react';
 import './Profile.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
 const profileSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     phone: z.string().optional(),
@@ -138,7 +136,17 @@ const Profile: React.FC = () => {
                         <div className="avatar-section">
                             <div className="avatar-wrapper">
                                 {profileData?.profile?.avatarUrl ? (
-                                    <img src={`${API_BASE_URL}${profileData.profile.avatarUrl}`} alt={profileData.name} />
+                                    <img
+                                        src={profileData.profile.avatarUrl}
+                                        alt={profileData.name}
+                                        onError={(e) => {
+                                            // Hide the broken image and show fallback
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            const fallback = document.createElement('span');
+                                            fallback.textContent = profileData?.name?.charAt(0).toUpperCase() || '?';
+                                            (e.target as HTMLImageElement).parentElement?.appendChild(fallback);
+                                        }}
+                                    />
                                 ) : (
                                     <span>{profileData?.name?.charAt(0).toUpperCase()}</span>
                                 )}

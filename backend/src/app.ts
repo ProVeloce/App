@@ -41,8 +41,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Static files for uploads
-app.use('/uploads', express.static(config.uploadDir));
+// Static files for uploads with CORS headers
+app.use('/uploads', (req, res, next) => {
+    // Allow cross-origin requests for uploaded files
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express.static(config.uploadDir));
 
 // Root route
 app.get('/', (req, res) => {
