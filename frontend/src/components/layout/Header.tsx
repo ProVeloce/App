@@ -5,6 +5,8 @@ import { notificationApi } from '../../services/api';
 import { Bell, Moon, Sun, LogOut, Search } from 'lucide-react';
 import './Header.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 interface HeaderProps {
     user: User | null;
     theme: 'light' | 'dark';
@@ -63,7 +65,7 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, onLogout })
                     >
                         <div className="header-avatar">
                             {user?.profile?.avatarUrl ? (
-                                <img src={user.profile.avatarUrl} alt={user.name} />
+                                <img src={`${API_BASE_URL}${user.profile.avatarUrl}`} alt={user.name} />
                             ) : (
                                 <span>{user?.name?.charAt(0).toUpperCase()}</span>
                             )}

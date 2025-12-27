@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import './Sidebar.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 interface SidebarProps {
     user: User | null;
     collapsed: boolean;
@@ -106,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle }) => {
                 <div className="sidebar-user">
                     <div className="user-avatar">
                         {user.profile?.avatarUrl ? (
-                            <img src={user.profile.avatarUrl} alt={user.name} />
+                            <img src={`${API_BASE_URL}${user.profile.avatarUrl}`} alt={user.name} />
                         ) : (
                             <span>{user.name.charAt(0).toUpperCase()}</span>
                         )}
