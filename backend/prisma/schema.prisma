@@ -138,7 +138,9 @@ model UserProfile {
   state        String?
   country      String?
   pincode      String?
-  avatarUrl    String?
+  avatarUrl    String?   // Legacy field for file-based storage
+  avatarData   String?   // Base64 encoded image data
+  avatarMimeType String? // MIME type of the avatar (e.g., image/jpeg, image/png)
   bio          String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

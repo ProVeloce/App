@@ -1,7 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import {
     getMyProfile,
     updateMyProfile,
@@ -11,21 +9,10 @@ import {
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { handleValidation } from '../middleware/handleValidation';
 import { updateProfileValidator, uuidParamValidator } from '../middleware/validators';
-import { config } from '../config/index';
 
-// Configure multer for avatar uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(config.uploadDir, 'avatars'));
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${uuidv4()}${ext}`);
-    },
-});
-
+// Configure multer for avatar uploads - use memory storage for database storage
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(), // Store in memory as buffer
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, cb) => {
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];

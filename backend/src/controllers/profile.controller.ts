@@ -137,7 +137,7 @@ export const updateMyProfile = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Update profile avatar
+ * Update profile avatar - stores image as Base64 in database
  */
 export const updateAvatar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -147,12 +147,26 @@ export const updateAvatar = async (req: Request, res: Response, next: NextFuncti
             throw new AppError('No file uploaded', 400);
         }
 
-        const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+        // Convert file buffer to Base64
+        const avatarData = req.file.buffer.toString('base64');
+        const avatarMimeType = req.file.mimetype;
+
+        // Create a data URL for the avatar
+        const avatarUrl = `data:${avatarMimeType};base64,${avatarData}`;
 
         await prisma.userProfile.upsert({
             where: { userId },
-            create: { userId, avatarUrl },
-            update: { avatarUrl },
+            create: {
+                userId,
+                avatarData,
+                avatarMimeType,
+                avatarUrl, // Store data URL for backward compatibility
+            },
+            update: {
+                avatarData,
+                avatarMimeType,
+                avatarUrl, // Store data URL for backward compatibility
+            },
         });
 
         await logActivity({
