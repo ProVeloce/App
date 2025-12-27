@@ -92,7 +92,7 @@ enum NotificationType {
 model User {
   id                String      @id @default(auto()) @map("_id") @db.ObjectId
   email             String      @unique
-  phone             String?     @unique
+  phone             String?
   passwordHash      String
   name              String
   role              Role        @default(CUSTOMER)
@@ -210,18 +210,31 @@ model ExpertApplication {
   state               String?
   country             String?
   pincode             String?
+  governmentIdType    String?           // Aadhar, PAN, Passport, Other
+  governmentIdUrl     String?           // Uploaded government ID file URL
+  profilePhotoUrl     String?           // Optional profile photo
   
   // Expertise Section
   domains             String[]          // Array of domain names
   yearsOfExperience   Int?
   summaryBio          String?
   skills              String[]          // Array of skill tags
+  resumeUrl           String?           // Resume file URL (PDF)
+  portfolioUrls       String[]          // Portfolio files/links
+  certificationUrls   String[]          // Certification files
+  workingType         String?           // Hourly, Project, Both
   hourlyRate          Float?
   projectRate         Float?
-  availableDays       String[]          // Array of days
-  availableTimeSlots  String[]          // Array of time slots
+  expectedRate        String?           // Expected rate range
+  languages           String[]          // Languages known
   
-  // Professional History (stored as JSON)
+  // Availability & Preferences
+  availableDays       String[]          // Array of days (Weekdays, Weekends)
+  availableTimeSlots  String[]          // Array of time slots
+  workPreference      String?           // Remote, Onsite, Both
+  communicationMode   String?           // Email, Phone, Chat
+  
+  // Professional History (stored as JSON - array of work history objects)
   professionalHistory Json?
   
   // References (stored as JSON - array of reference objects)
@@ -237,6 +250,8 @@ model ExpertApplication {
   reviewedAt          DateTime?
   rejectionReason     String?
   internalNotes       String?
+  adminNotes          String?
+  analystNotes        String?
   verificationChecks  Json?              // Analyst verification checklist
   
   // Timestamps
