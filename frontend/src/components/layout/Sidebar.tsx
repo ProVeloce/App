@@ -38,15 +38,13 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-    // Common items (shown at bottom)
-    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'] },
-    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'] },
-
     // Customer
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
     { label: 'Apply as Expert', icon: <FileText size={20} />, path: '/customer/apply-expert', roles: ['CUSTOMER'] },
     { label: 'Application Status', icon: <ClipboardList size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['CUSTOMER'] },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['CUSTOMER'] },
+    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['CUSTOMER'] },
 
     // Expert
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/expert/dashboard', roles: ['EXPERT'] },
@@ -55,11 +53,15 @@ const menuItems: MenuItem[] = [
     { label: 'Tasks', icon: <Briefcase size={20} />, path: '/expert/tasks', roles: ['EXPERT'] },
     { label: 'Earnings', icon: <Wallet size={20} />, path: '/expert/earnings', roles: ['EXPERT'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['EXPERT'] },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['EXPERT'] },
+    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['EXPERT'] },
 
     // Analyst
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/analyst/dashboard', roles: ['ANALYST'] },
     { label: 'Verification', icon: <CheckCircle size={20} />, path: '/analyst/verification', roles: ['ANALYST'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['ANALYST'] },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['ANALYST'] },
+    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['ANALYST'] },
 
     // Admin
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', roles: ['ADMIN'] },
@@ -68,8 +70,10 @@ const menuItems: MenuItem[] = [
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['ADMIN'] },
     { label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports', roles: ['ADMIN'] },
     { label: 'User Management', icon: <Users size={20} />, path: '/admin/users', roles: ['ADMIN'] },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['ADMIN'] },
+    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['ADMIN'] },
 
-    // SuperAdmin - Ordered as requested
+    // SuperAdmin - Ordered as requested: Dashboard > Expert Review > Task Assignment > Help Desk > Reports > User Management > Configuration > System Logs > Notifications > Profile
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/superadmin/dashboard', roles: ['SUPERADMIN'] },
     { label: 'Expert Review', icon: <CheckCircle size={20} />, path: '/admin/expert-review', roles: ['SUPERADMIN'] },
     { label: 'Task Assignment', icon: <Briefcase size={20} />, path: '/admin/task-assignment', roles: ['SUPERADMIN'] },
@@ -78,6 +82,8 @@ const menuItems: MenuItem[] = [
     { label: 'User Management', icon: <Users size={20} />, path: '/superadmin/admins', roles: ['SUPERADMIN'] },
     { label: 'Configuration', icon: <Settings size={20} />, path: '/superadmin/config', roles: ['SUPERADMIN'] },
     { label: 'System Logs', icon: <FileText size={20} />, path: '/superadmin/logs', roles: ['SUPERADMIN'] },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['SUPERADMIN'] },
+    { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['SUPERADMIN'] },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }) => {
