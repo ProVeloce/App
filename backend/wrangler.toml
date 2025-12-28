@@ -4,15 +4,16 @@ compatibility_date = "2025-12-25"
 compatibility_flags = ["nodejs_compat"]
 
 # Custom domain routing
-routes = [
-  { pattern = "backend.proveloce.com/*", zone_name = "proveloce.com" }
-]
+[[routes]]
+pattern = "backend.proveloce.com/*"
+zone_name = "proveloce.com"
 
 # D1 Database Binding
 [[d1_databases]]
 binding = "DB"
 database_name = "proveloce_db"
 database_id = "3b3261c1-a83c-49dc-82df-4688cbdc785c"
+remote = true
 
 # Environment Variables
 [vars]
