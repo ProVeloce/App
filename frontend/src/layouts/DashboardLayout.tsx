@@ -23,6 +23,7 @@ const DashboardLayout: React.FC = () => {
                 user={user}
                 collapsed={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+                onLogout={handleLogout}
             />
             <div className="dashboard-main">
                 <Header

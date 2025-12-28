@@ -27,6 +27,7 @@ interface SidebarProps {
     user: User | null;
     collapsed: boolean;
     onToggle: () => void;
+    onLogout?: () => void;
 }
 
 interface MenuItem {
@@ -72,7 +73,7 @@ const menuItems: MenuItem[] = [
     { label: 'System Logs', icon: <FileText size={20} />, path: '/superadmin/logs', roles: ['SUPERADMIN'] },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }) => {
     const location = useLocation();
 
     const filteredItems = menuItems.filter(item =>
@@ -88,6 +89,12 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle }) => {
             SUPERADMIN: 'badge-superadmin',
         };
         return classes[role] || '';
+    };
+
+    const handleLogout = () => {
+        if (onLogout) {
+            onLogout();
+        }
     };
 
     return (
@@ -145,14 +152,41 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle }) => {
                 ))}
             </nav>
 
-            <div className="sidebar-footer">
-                <NavLink to="/change-password" className="nav-item" title={collapsed ? 'Settings' : undefined}>
-                    <span className="nav-icon"><Settings size={20} /></span>
-                    {!collapsed && <span className="nav-label">Settings</span>}
-                </NavLink>
+            <div className={`sidebar-footer ${collapsed ? 'footer-collapsed' : 'footer-expanded'}`}>
+                {collapsed ? (
+                    // Collapsed: Logout on top, Settings below
+                    <>
+                        <button
+                            className="nav-item logout-btn"
+                            onClick={handleLogout}
+                            title="Logout"
+                        >
+                            <span className="nav-icon"><LogOut size={20} /></span>
+                        </button>
+                        <NavLink to="/change-password" className="nav-item" title="Settings">
+                            <span className="nav-icon"><Settings size={20} /></span>
+                        </NavLink>
+                    </>
+                ) : (
+                    // Expanded: Settings on left, Logout on right (side by side)
+                    <div className="footer-row">
+                        <NavLink to="/change-password" className="nav-item footer-item">
+                            <span className="nav-icon"><Settings size={20} /></span>
+                            <span className="nav-label">Settings</span>
+                        </NavLink>
+                        <button
+                            className="nav-item footer-item logout-btn"
+                            onClick={handleLogout}
+                        >
+                            <span className="nav-icon"><LogOut size={20} /></span>
+                            <span className="nav-label">Logout</span>
+                        </button>
+                    </div>
+                )}
             </div>
         </aside>
     );
 };
 
 export default Sidebar;
+
