@@ -538,6 +538,131 @@ export default {
             }
 
             // =====================================================
+            // Change Password Route
+            // =====================================================
+
+            if (url.pathname === "/api/auth/change-password" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const body = await request.json() as any;
+                const { currentPassword, newPassword, confirmPassword } = body;
+
+                if (!currentPassword || !newPassword || !confirmPassword) {
+                    return jsonResponse({ success: false, error: "All password fields are required" }, 400);
+                }
+
+                if (newPassword !== confirmPassword) {
+                    return jsonResponse({ success: false, error: "New password and confirmation do not match" }, 400);
+                }
+
+                // Strong password validation
+                const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+                if (!passwordRegex.test(newPassword)) {
+                    return jsonResponse({
+                        success: false,
+                        error: "Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character (@$!%*?&)"
+                    }, 400);
+                }
+
+                // Get current user
+                const user = await env.proveloce_db.prepare(
+                    "SELECT id, password_hash FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                if (!user) {
+                    return jsonResponse({ success: false, error: "User not found" }, 404);
+                }
+
+                // If user has existing password, verify current password
+                if (user.password_hash) {
+                    // Simple hash comparison (in production, use bcrypt)
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(currentPassword);
+                    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    const currentHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+                    if (currentHash !== user.password_hash) {
+                        return jsonResponse({ success: false, error: "Current password is incorrect" }, 400);
+                    }
+                }
+
+                // Hash new password
+                const encoder = new TextEncoder();
+                const data = encoder.encode(newPassword);
+                const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const newHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+                // Update password
+                await env.proveloce_db.prepare(
+                    "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(newHash, payload.userId).run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), payload.userId, "CHANGE_PASSWORD", "user", payload.userId, JSON.stringify({ timestamp: new Date().toISOString() })).run();
+
+                return jsonResponse({ success: true, message: "Password changed successfully" });
+            }
+
+            // =====================================================
+            // Login History Route
+            // =====================================================
+
+            if (url.pathname === "/api/auth/login-history" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Get login history from activity_logs
+                const history = await env.proveloce_db.prepare(
+                    `SELECT id, action, ip_address, user_agent, metadata, created_at 
+                     FROM activity_logs 
+                     WHERE user_id = ? AND action IN ('LOGIN', 'LOGIN_OAUTH', 'LOGIN_FAILED')
+                     ORDER BY created_at DESC 
+                     LIMIT 20`
+                ).bind(payload.userId).all();
+
+                const loginHistory = history.results.map((entry: any) => ({
+                    id: entry.id,
+                    createdAt: entry.created_at,
+                    ipAddress: entry.ip_address || 'Unknown',
+                    device: entry.user_agent ? (entry.user_agent.substring(0, 50) + '...') : 'Unknown device',
+                    success: entry.action !== 'LOGIN_FAILED'
+                }));
+
+                return jsonResponse({ success: true, data: { loginHistory } });
+            }
+
+            // =====================================================
             // D1 Database Routes
             // =====================================================
 

@@ -160,8 +160,11 @@ export const authApi = {
     resetPassword: (data: { email: string; otp: string; newPassword: string }) =>
         api.post<ApiResponse>('/auth/reset-password', data),
 
-    changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
         api.post<ApiResponse>('/auth/change-password', data),
+
+    getLoginHistory: () =>
+        api.get<ApiResponse<{ loginHistory: any[] }>>('/auth/login-history'),
 
     logout: (refreshToken?: string) =>
         api.post<ApiResponse>('/auth/logout', { refreshToken }),

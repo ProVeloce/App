@@ -166,7 +166,7 @@ const AdminManagement: React.FC = () => {
             {/* Filters */}
             <div className="filters-section">
                 <div className="role-tabs">
-                    {['all', 'superadmin', 'admin', 'analyst', 'expert', 'customer'].map(role => (
+                    {['all', 'admin', 'analyst', 'expert', 'customer'].map(role => (
                         <button
                             key={role}
                             className={`tab-btn ${roleFilter === role ? 'active' : ''}`}
@@ -219,7 +219,7 @@ const AdminManagement: React.FC = () => {
                                     <td>{user.email}</td>
                                     <td><span className={`badge ${getRoleBadgeClass(user.role)}`}>{user.role}</span></td>
                                     <td><span className={`status-badge ${getStatusBadgeClass(user.status)}`}>{user.status}</span></td>
-                                    <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>
+                                    <td>{(user.createdAt || (user as any).created_at) ? new Date((user.createdAt || (user as any).created_at)).toLocaleDateString() : '-'}</td>
                                     <td className="actions">
                                         <button className="icon-btn" title="Edit" onClick={() => openEditModal(user)}><Edit2 size={16} /></button>
                                         <button className="icon-btn danger" title="Delete" onClick={() => openDeleteModal(user)}><Trash2 size={16} /></button>

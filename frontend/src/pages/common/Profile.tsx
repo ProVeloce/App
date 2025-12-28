@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { profileApi, activityApi } from '../../services/api';
-import { User, Mail, Phone, MapPin, Calendar, Camera, Save, Clock } from 'lucide-react';
+import { profileApi, authApi } from '../../services/api';
+import { User, Mail, Phone, MapPin, Calendar, Camera, Save, Clock, Lock, Eye, EyeOff } from 'lucide-react';
 import './Profile.css';
 
 const profileSchema = z.object({
@@ -38,6 +38,12 @@ const Profile: React.FC = () => {
     const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm<ProfileForm>({
         resolver: zodResolver(profileSchema),
     });
+
+    // Password change state
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false });
+    const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
         fetchProfile();
@@ -75,12 +81,57 @@ const Profile: React.FC = () => {
 
     const fetchLoginHistory = async () => {
         try {
-            const response = await activityApi.getLoginHistory();
+            const response = await authApi.getLoginHistory();
             if (response.data.success && response.data.data) {
-                setLoginHistory(response.data.data.history || []);
+                setLoginHistory(response.data.data.loginHistory || []);
             }
         } catch (err) {
             // Ignore
+        }
+    };
+
+    const validatePassword = (password: string): string | null => {
+        if (password.length < 8) return 'Password must be at least 8 characters';
+        if (!/[A-Z]/.test(password)) return 'Password must contain at least 1 uppercase letter';
+        if (!/[a-z]/.test(password)) return 'Password must contain at least 1 lowercase letter';
+        if (!/[0-9]/.test(password)) return 'Password must contain at least 1 number';
+        if (!/[@$!%*?&]/.test(password)) return 'Password must contain at least 1 special character (@$!%*?&)';
+        return null;
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordError('');
+
+        if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+            setPasswordError('All fields are required');
+            return;
+        }
+
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordError('New password and confirmation do not match');
+            return;
+        }
+
+        const validationError = validatePassword(passwordData.newPassword);
+        if (validationError) {
+            setPasswordError(validationError);
+            return;
+        }
+
+        setChangingPassword(true);
+        try {
+            const response = await authApi.changePassword(passwordData);
+            if (response.data.success) {
+                success('Password changed successfully');
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                setPasswordError(response.data.error || 'Failed to change password');
+            }
+        } catch (err: any) {
+            setPasswordError(err.response?.data?.error || 'Failed to change password');
+        } finally {
+            setChangingPassword(false);
         }
     };
 
@@ -292,8 +343,85 @@ const Profile: React.FC = () => {
 
                     {activeTab === 'security' && (
                         <div className="security-section">
+                            {/* Change Password Section */}
                             <div className="form-section">
-                                <h3>Login History</h3>
+                                <h3><Lock size={18} /> Change Password</h3>
+                                <p className="form-description">Update your password to keep your account secure</p>
+
+                                <form onSubmit={handleChangePassword} className="password-form">
+                                    {passwordError && (
+                                        <div className="password-error">{passwordError}</div>
+                                    )}
+
+                                    <div className="form-group">
+                                        <label>Current Password</label>
+                                        <div className="password-input-wrapper">
+                                            <input
+                                                type={showPasswords.current ? 'text' : 'password'}
+                                                value={passwordData.currentPassword}
+                                                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                                placeholder="Enter current password"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="password-toggle"
+                                                onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                                            >
+                                                {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>New Password</label>
+                                        <div className="password-input-wrapper">
+                                            <input
+                                                type={showPasswords.new ? 'text' : 'password'}
+                                                value={passwordData.newPassword}
+                                                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                                placeholder="Enter new password"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="password-toggle"
+                                                onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                                            >
+                                                {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
+                                        <p className="password-requirements">
+                                            Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special (@$!%*?&)
+                                        </p>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Confirm New Password</label>
+                                        <div className="password-input-wrapper">
+                                            <input
+                                                type={showPasswords.confirm ? 'text' : 'password'}
+                                                value={passwordData.confirmPassword}
+                                                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                                placeholder="Confirm new password"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="password-toggle"
+                                                onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                                            >
+                                                {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" className="btn btn-primary" disabled={changingPassword}>
+                                        {changingPassword ? 'Changing Password...' : 'Change Password'}
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* Login History Section */}
+                            <div className="form-section">
+                                <h3><Clock size={18} /> Login History</h3>
                                 <div className="login-history">
                                     {loginHistory.length > 0 ? (
                                         loginHistory.map((entry, index) => (

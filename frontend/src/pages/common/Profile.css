@@ -378,6 +378,61 @@
     color: var(--error-500);
 }
 
+/* Password Change Form */
+.password-form {
+    max-width: 400px;
+}
+
+.password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrapper input {
+    width: 100%;
+    padding-right: 40px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-muted, #9ca3af);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.password-toggle:hover {
+    color: var(--text-secondary, #6b7280);
+}
+
+.password-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 12px;
+    border-radius: var(--radius-md, 8px);
+    margin-bottom: 16px;
+    font-size: 0.875rem;
+}
+
+.password-requirements {
+    font-size: 0.75rem;
+    color: var(--text-muted, #9ca3af);
+    margin-top: 4px;
+}
+
+.form-description {
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+}
+
 .no-history {
     text-align: center;
     padding: var(--space-8);

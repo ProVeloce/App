@@ -50,6 +50,7 @@ const ChangePassword: React.FC = () => {
             await authApi.changePassword({
                 currentPassword: data.currentPassword,
                 newPassword: data.newPassword,
+                confirmPassword: data.confirmPassword,
             });
             success('Password changed successfully');
             reset();
