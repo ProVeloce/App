@@ -1,31 +1,158 @@
-import React from 'react';
-import { Shield, Users, Settings, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Users, UserCheck, Briefcase, Activity, TrendingUp, Clock } from 'lucide-react';
+import { adminApi, User } from '../../services/api';
+import { Link } from 'react-router-dom';
+import './SuperAdminDashboard.css';
 
-const SuperAdminDashboard: React.FC = () => (
-    <div className="page">
-        <div className="page-header"><h1>SuperAdmin Dashboard</h1><p>System-wide control center</p></div>
-        <div className="stats-grid">
-            <div className="stat-card"><div className="stat-icon primary"><Users size={24} /></div><div className="stat-content"><span className="stat-value">0</span><span className="stat-label">Total Admins</span></div></div>
-            <div className="stat-card"><div className="stat-icon success"><Shield size={24} /></div><div className="stat-content"><span className="stat-value">0</span><span className="stat-label">Active Roles</span></div></div>
-            <div className="stat-card"><div className="stat-icon warning"><Settings size={24} /></div><div className="stat-content"><span className="stat-value">0</span><span className="stat-label">System Configs</span></div></div>
-            <div className="stat-card"><div className="stat-icon accent"><Activity size={24} /></div><div className="stat-content"><span className="stat-value">0</span><span className="stat-label">Today's Logs</span></div></div>
+interface Stats {
+    totalUsers: number;
+    admins: number;
+    analysts: number;
+    experts: number;
+    customers: number;
+    activeUsers: number;
+    pendingUsers: number;
+    recentUsers: User[];
+}
+
+const SuperAdminDashboard: React.FC = () => {
+    const [stats, setStats] = useState<Stats | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchStats();
+    }, []);
+
+    const fetchStats = async () => {
+        try {
+            const response = await adminApi.getStats();
+            if (response.data?.success && response.data?.data) {
+                setStats(response.data.data as Stats);
+            }
+        } catch (err) {
+            console.error('Failed to fetch stats:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="dashboard-loading">
+                <div className="spinner" />
+                <p>Loading dashboard...</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="superadmin-dashboard">
+            <div className="page-header">
+                <h1><Shield size={24} /> SuperAdmin Dashboard</h1>
+                <p>System-wide control center</p>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="stats-grid">
+                <div className="stat-card">
+                    <div className="stat-icon primary"><Users size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.totalUsers || 0}</span>
+                        <span className="stat-label">Total Users</span>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon purple"><Shield size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.admins || 0}</span>
+                        <span className="stat-label">Admins</span>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon blue"><UserCheck size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.analysts || 0}</span>
+                        <span className="stat-label">Analysts</span>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon orange"><Briefcase size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.experts || 0}</span>
+                        <span className="stat-label">Experts</span>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon green"><TrendingUp size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.activeUsers || 0}</span>
+                        <span className="stat-label">Active Users</span>
+                    </div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-icon yellow"><Clock size={24} /></div>
+                    <div className="stat-content">
+                        <span className="stat-value">{stats?.pendingUsers || 0}</span>
+                        <span className="stat-label">Pending Verification</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Actions & Recent Users */}
+            <div className="dashboard-grid">
+                <div className="dashboard-card">
+                    <div className="card-header">
+                        <h2>Quick Actions</h2>
+                    </div>
+                    <div className="card-body">
+                        <div className="quick-actions">
+                            <Link to="/superadmin/admins" className="action-btn">
+                                <Users size={20} />
+                                <span>Manage Users</span>
+                            </Link>
+                            <Link to="/superadmin/logs" className="action-btn">
+                                <Activity size={20} />
+                                <span>View Logs</span>
+                            </Link>
+                            <Link to="/superadmin/config" className="action-btn">
+                                <Shield size={20} />
+                                <span>System Config</span>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="dashboard-card">
+                    <div className="card-header">
+                        <h2>Recent Users</h2>
+                        <Link to="/superadmin/admins" className="view-all">View All</Link>
+                    </div>
+                    <div className="card-body">
+                        {stats?.recentUsers && stats.recentUsers.length > 0 ? (
+                            <div className="recent-list">
+                                {stats.recentUsers.map(user => (
+                                    <div key={user.id} className="recent-item">
+                                        <div className="user-avatar">
+                                            {user.name?.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <div className="user-info">
+                                            <span className="user-name">{user.name || 'Unnamed'}</span>
+                                            <span className="user-email">{user.email}</span>
+                                        </div>
+                                        <span className={`role-badge ${user.role?.toLowerCase()}`}>
+                                            {user.role}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="no-data">No recent users</p>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
-        <style>{`
-      .page { animation: fadeIn 0.3s ease-out; }
-      .page-header { margin-bottom: var(--space-6); }
-      .page-header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-1); }
-      .page-header p { color: var(--text-secondary); }
-      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
-      .stat-card { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); background: var(--bg-primary); border-radius: var(--radius-xl); border: 1px solid var(--border-light); }
-      .stat-icon { width: 48px; height: 48px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; }
-      .stat-icon.primary { background: var(--primary-100); color: var(--primary-600); }
-      .stat-icon.success { background: var(--success-50); color: var(--success-600); }
-      .stat-icon.warning { background: var(--warning-50); color: var(--warning-600); }
-      .stat-icon.accent { background: var(--accent-100); color: var(--accent-600); }
-      .stat-value { display: block; font-size: 1.5rem; font-weight: 700; }
-      .stat-label { font-size: 0.875rem; color: var(--text-muted); }
-    `}</style>
-    </div>
-);
+    );
+};
 
 export default SuperAdminDashboard;

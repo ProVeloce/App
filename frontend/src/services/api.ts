@@ -188,6 +188,42 @@ export const userApi = {
         api.get<ApiResponse>('/users/stats'),
 };
 
+// Admin API (for superadmin portal)
+export const adminApi = {
+    getUsers: (params?: Record<string, any>) =>
+        api.get<ApiResponse<{ users: User[]; pagination: any }>>('/admin/users', { params }),
+
+    getUserById: (id: string) =>
+        api.get<ApiResponse<{ user: User }>>(`/admin/users/${id}`),
+
+    createUser: (data: { name: string; email: string; phone?: string; role?: string; status?: string }) =>
+        api.post<ApiResponse<{ user: User }>>('/admin/users', data),
+
+    updateUser: (id: string, data: Partial<{ name: string; email: string; phone: string; role: string; status: string }>) =>
+        api.patch<ApiResponse<{ user: User }>>(`/admin/users/${id}`, data),
+
+    deleteUser: (id: string) =>
+        api.delete<ApiResponse>(`/admin/users/${id}`),
+
+    getStats: () =>
+        api.get<ApiResponse<{
+            totalUsers: number;
+            admins: number;
+            analysts: number;
+            experts: number;
+            customers: number;
+            activeUsers: number;
+            pendingUsers: number;
+            recentUsers: User[];
+        }>>('/admin/stats'),
+
+    getLogs: (params?: Record<string, any>) =>
+        api.get<ApiResponse<{ logs: any[] }>>('/admin/logs', { params }),
+
+    getDashboard: () =>
+        api.get<ApiResponse<{ stats: any }>>('/admin/stats'),
+};
+
 // Profile API
 export const profileApi = {
     getMyProfile: () =>
@@ -314,21 +350,6 @@ export const activityApi = {
 
     getAllActivity: (params?: Record<string, any>) =>
         api.get<ApiResponse>('/activity', { params }),
-};
-
-// Admin API
-export const adminApi = {
-    getDashboard: () =>
-        api.get<ApiResponse>('/admin/dashboard'),
-
-    getReports: (params?: Record<string, any>) =>
-        api.get<ApiResponse>('/admin/reports', { params }),
-
-    createAnnouncement: (data: any) =>
-        api.post<ApiResponse>('/admin/announcements', data),
-
-    getAnnouncements: () =>
-        api.get<ApiResponse>('/admin/announcements'),
 };
 
 // Config API (SuperAdmin)

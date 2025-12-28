@@ -1,27 +1,164 @@
-import React from 'react';
-import { FileText, Download, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, Search, Filter, RefreshCw, User, Clock } from 'lucide-react';
+import { adminApi } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
+import './SystemLogs.css';
 
-const SystemLogs: React.FC = () => (
-    <div className="page">
-        <div className="page-header">
-            <div><h1>System Logs</h1><p>Audit logs and activity monitoring</p></div>
-            <div className="actions">
-                <button className="btn btn-ghost"><RefreshCw size={18} /> Refresh</button>
-                <button className="btn btn-ghost"><Download size={18} /> Export</button>
+interface ActivityLog {
+    id: string;
+    user_id: string;
+    user_name?: string;
+    user_email?: string;
+    action: string;
+    entity_type: string;
+    entity_id: string;
+    metadata?: string;
+    ip_address?: string;
+    created_at: string;
+}
+
+const SystemLogs: React.FC = () => {
+    const { error } = useToast();
+    const [logs, setLogs] = useState<ActivityLog[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [actionFilter, setActionFilter] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [actionFilter]);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const params: Record<string, any> = {};
+            if (actionFilter) params.action = actionFilter;
+
+            const response = await adminApi.getLogs(params);
+            if (response.data.success && response.data.data) {
+                setLogs(response.data.data.logs || []);
+            }
+        } catch (err: any) {
+            if (err.response?.status === 403) {
+                error('Superadmin access required to view logs');
+            } else {
+                error('Failed to fetch activity logs');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchLogs();
+        setRefreshing(false);
+    };
+
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleString();
+    };
+
+    const getActionBadgeClass = (action: string) => {
+        if (action.includes('CREATE')) return 'action-create';
+        if (action.includes('UPDATE')) return 'action-update';
+        if (action.includes('DELETE')) return 'action-delete';
+        return 'action-default';
+    };
+
+    const parseMetadata = (metadata: string | undefined) => {
+        if (!metadata) return null;
+        try {
+            return JSON.parse(metadata);
+        } catch {
+            return null;
+        }
+    };
+
+    const actionTypes = ['CREATE_USER', 'UPDATE_USER', 'DELETE_USER', 'LOGIN', 'LOGOUT'];
+
+    return (
+        <div className="system-logs-page">
+            <div className="page-header">
+                <div>
+                    <h1><Activity size={24} /> System Logs</h1>
+                    <p>View activity logs and system events</p>
+                </div>
+                <button className="btn btn-secondary" onClick={handleRefresh} disabled={refreshing}>
+                    <RefreshCw size={18} className={refreshing ? 'spinning' : ''} />
+                    Refresh
+                </button>
+            </div>
+
+            {/* Filters */}
+            <div className="filters-section">
+                <div className="filter-group">
+                    <Filter size={18} />
+                    <select value={actionFilter} onChange={e => setActionFilter(e.target.value)}>
+                        <option value="">All Actions</option>
+                        {actionTypes.map(action => (
+                            <option key={action} value={action}>{action.replace('_', ' ')}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Logs List */}
+            <div className="logs-container">
+                {loading ? (
+                    <div className="loading-state">
+                        <div className="spinner" />
+                        <p>Loading logs...</p>
+                    </div>
+                ) : logs.length === 0 ? (
+                    <div className="empty-state">
+                        <Activity size={48} />
+                        <h3>No logs found</h3>
+                        <p>Activity logs will appear here when actions are performed</p>
+                    </div>
+                ) : (
+                    <div className="logs-list">
+                        {logs.map(log => {
+                            const meta = parseMetadata(log.metadata);
+                            return (
+                                <div key={log.id} className="log-item">
+                                    <div className="log-icon">
+                                        <User size={18} />
+                                    </div>
+                                    <div className="log-content">
+                                        <div className="log-header">
+                                            <span className={`action-badge ${getActionBadgeClass(log.action)}`}>
+                                                {log.action}
+                                            </span>
+                                            <span className="entity-info">
+                                                {log.entity_type} • {log.entity_id?.substring(0, 8)}...
+                                            </span>
+                                        </div>
+                                        <div className="log-user">
+                                            <strong>{log.user_name || 'Unknown User'}</strong>
+                                            <span>{log.user_email}</span>
+                                        </div>
+                                        {meta && (
+                                            <div className="log-meta">
+                                                {meta.name && <span>Name: {meta.name}</span>}
+                                                {meta.email && <span>Email: {meta.email}</span>}
+                                                {meta.role && <span>Role: {meta.role}</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="log-time">
+                                        <Clock size={14} />
+                                        <span>{formatDate(log.created_at)}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
-        <div className="empty-state"><FileText size={48} /><h3>No Logs Available</h3><p>System activity logs will appear here</p></div>
-        <style>{`
-      .page { animation: fadeIn 0.3s ease-out; }
-      .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); }
-      .page-header h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--space-1); }
-      .page-header p { color: var(--text-secondary); }
-      .actions { display: flex; gap: var(--space-2); }
-      .empty-state { background: var(--bg-primary); border-radius: var(--radius-xl); border: 1px solid var(--border-light); padding: var(--space-12); text-align: center; color: var(--text-muted); }
-      .empty-state svg { margin-bottom: var(--space-4); opacity: 0.5; }
-      .empty-state h3 { color: var(--text-secondary); margin-bottom: var(--space-2); }
-    `}</style>
-    </div>
-);
+    );
+};
 
 export default SystemLogs;

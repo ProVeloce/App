@@ -586,6 +586,360 @@ export default {
             }
 
             // =====================================================
+            // Admin Routes (Protected - ADMIN/SUPERADMIN only)
+            // =====================================================
+
+            // Helper: Check if user has admin role
+            const checkAdminRole = async (req: Request): Promise<{ valid: boolean; payload?: any; error?: string }> => {
+                const authHeader = req.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return { valid: false, error: "Unauthorized" };
+                }
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+                if (!payload) {
+                    return { valid: false, error: "Invalid or expired token" };
+                }
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return { valid: false, error: "Insufficient permissions" };
+                }
+                return { valid: true, payload };
+            };
+
+            // GET /api/admin/users - List all users with filtering
+            if (url.pathname === "/api/admin/users" && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const role = url.searchParams.get("role");
+                const status = url.searchParams.get("status");
+                const search = url.searchParams.get("search");
+                const page = parseInt(url.searchParams.get("page") || "1");
+                const limit = parseInt(url.searchParams.get("limit") || "20");
+                const offset = (page - 1) * limit;
+
+                let query = "SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at FROM users WHERE 1=1";
+                const params: any[] = [];
+
+                if (role) {
+                    query += " AND role = ?";
+                    params.push(role);
+                }
+                if (status) {
+                    query += " AND status = ?";
+                    params.push(status);
+                }
+                if (search) {
+                    query += " AND (name LIKE ? OR email LIKE ?)";
+                    params.push(`%${search}%`, `%${search}%`);
+                }
+
+                // Get total count
+                const countQuery = query.replace("SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at", "SELECT COUNT(*) as total");
+                const countResult = await env.proveloce_db.prepare(countQuery).bind(...params).first() as any;
+                const total = countResult?.total || 0;
+
+                // Get paginated results
+                query += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+                params.push(limit, offset);
+
+                const result = await env.proveloce_db.prepare(query).bind(...params).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        users: result.results,
+                        pagination: {
+                            page,
+                            limit,
+                            total,
+                            totalPages: Math.ceil(total / limit)
+                        }
+                    }
+                });
+            }
+
+            // GET /api/admin/users/:id - Get single user
+            if (url.pathname.match(/^\/api\/admin\/users\/[^\/]+$/) && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const id = url.pathname.split("/").pop();
+                const user = await env.proveloce_db.prepare(
+                    "SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at FROM users WHERE id = ?"
+                ).bind(id).first();
+
+                if (!user) {
+                    return jsonResponse({ success: false, error: "User not found" }, 404);
+                }
+
+                const profile = await env.proveloce_db.prepare(
+                    "SELECT * FROM user_profiles WHERE user_id = ?"
+                ).bind(id).first();
+
+                return jsonResponse({ success: true, data: { user: { ...user, profile } } });
+            }
+
+            // POST /api/admin/users - Create new user
+            if (url.pathname === "/api/admin/users" && request.method === "POST") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const body = await request.json() as any;
+                const { name, email, phone, role, status } = body;
+
+                if (!name || !email) {
+                    return jsonResponse({ success: false, error: "Name and email are required" }, 400);
+                }
+
+                // Check if email exists
+                const existing = await env.proveloce_db.prepare(
+                    "SELECT id FROM users WHERE email = ?"
+                ).bind(email).first();
+
+                if (existing) {
+                    return jsonResponse({ success: false, error: "Email already exists" }, 409);
+                }
+
+                const id = crypto.randomUUID();
+                await env.proveloce_db.prepare(
+                    "INSERT INTO users (id, name, email, phone, role, status, email_verified) VALUES (?, ?, ?, ?, ?, ?, 1)"
+                ).bind(id, name, email, phone || null, role || "customer", status || "active").run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), auth.payload.userId, "CREATE_USER", "user", id, JSON.stringify({ name, email, role })).run();
+
+                const newUser = await env.proveloce_db.prepare(
+                    "SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?"
+                ).bind(id).first();
+
+                return jsonResponse({ success: true, message: "User created successfully", data: { user: newUser } }, 201);
+            }
+
+            // PATCH /api/admin/users/:id - Update user
+            if (url.pathname.match(/^\/api\/admin\/users\/[^\/]+$/) && request.method === "PATCH") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const id = url.pathname.split("/").pop();
+                const body = await request.json() as any;
+                const { name, email, phone, role, status } = body;
+
+                // Check if user exists
+                const existing = await env.proveloce_db.prepare(
+                    "SELECT id FROM users WHERE id = ?"
+                ).bind(id).first();
+
+                if (!existing) {
+                    return jsonResponse({ success: false, error: "User not found" }, 404);
+                }
+
+                // Build update query dynamically
+                const updates: string[] = [];
+                const values: any[] = [];
+
+                if (name !== undefined) { updates.push("name = ?"); values.push(name); }
+                if (email !== undefined) { updates.push("email = ?"); values.push(email); }
+                if (phone !== undefined) { updates.push("phone = ?"); values.push(phone); }
+                if (role !== undefined) { updates.push("role = ?"); values.push(role); }
+                if (status !== undefined) { updates.push("status = ?"); values.push(status); }
+
+                if (updates.length === 0) {
+                    return jsonResponse({ success: false, error: "No fields to update" }, 400);
+                }
+
+                updates.push("updated_at = CURRENT_TIMESTAMP");
+                values.push(id);
+
+                await env.proveloce_db.prepare(
+                    `UPDATE users SET ${updates.join(", ")} WHERE id = ?`
+                ).bind(...values).run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), auth.payload.userId, "UPDATE_USER", "user", id, JSON.stringify(body)).run();
+
+                const updatedUser = await env.proveloce_db.prepare(
+                    "SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?"
+                ).bind(id).first();
+
+                return jsonResponse({ success: true, message: "User updated successfully", data: { user: updatedUser } });
+            }
+
+            // DELETE /api/admin/users/:id - Deactivate user
+            if (url.pathname.match(/^\/api\/admin\/users\/[^\/]+$/) && request.method === "DELETE") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const id = url.pathname.split("/").pop();
+
+                // Check if user exists
+                const existing = await env.proveloce_db.prepare(
+                    "SELECT id, role FROM users WHERE id = ?"
+                ).bind(id).first() as any;
+
+                if (!existing) {
+                    return jsonResponse({ success: false, error: "User not found" }, 404);
+                }
+
+                // Prevent deleting superadmin
+                if (existing.role === "superadmin") {
+                    return jsonResponse({ success: false, error: "Cannot delete superadmin" }, 403);
+                }
+
+                // Soft delete - set status to deactivated
+                await env.proveloce_db.prepare(
+                    "UPDATE users SET status = 'deactivated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(id).run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), auth.payload.userId, "DELETE_USER", "user", id, JSON.stringify({ userId: id })).run();
+
+                return jsonResponse({ success: true, message: "User deactivated successfully" });
+            }
+
+            // GET /api/admin/stats - Dashboard statistics
+            if (url.pathname === "/api/admin/stats" && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const stats = {
+                    totalUsers: 0,
+                    admins: 0,
+                    analysts: 0,
+                    experts: 0,
+                    customers: 0,
+                    activeUsers: 0,
+                    pendingUsers: 0,
+                    recentUsers: [] as any[]
+                };
+
+                // Get counts by role
+                const roleCounts = await env.proveloce_db.prepare(
+                    "SELECT role, COUNT(*) as count FROM users GROUP BY role"
+                ).all();
+
+                for (const row of roleCounts.results as any[]) {
+                    const role = (row.role || "").toLowerCase();
+                    const count = row.count || 0;
+                    stats.totalUsers += count;
+                    if (role === "admin") stats.admins = count;
+                    if (role === "analyst") stats.analysts = count;
+                    if (role === "expert") stats.experts = count;
+                    if (role === "customer") stats.customers = count;
+                }
+
+                // Get counts by status
+                const statusCounts = await env.proveloce_db.prepare(
+                    "SELECT status, COUNT(*) as count FROM users GROUP BY status"
+                ).all();
+
+                for (const row of statusCounts.results as any[]) {
+                    const status = (row.status || "").toLowerCase();
+                    const count = row.count || 0;
+                    if (status === "active") stats.activeUsers = count;
+                    if (status === "pending_verification") stats.pendingUsers = count;
+                }
+
+                // Get recent users
+                const recentUsers = await env.proveloce_db.prepare(
+                    "SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC LIMIT 5"
+                ).all();
+                stats.recentUsers = recentUsers.results as any[];
+
+                return jsonResponse({ success: true, data: stats });
+            }
+
+            // GET /api/admin/logs - Activity logs (SUPERADMIN only)
+            if (url.pathname === "/api/admin/logs" && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                // Restrict to superadmin only
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const action = url.searchParams.get("action");
+                const userId = url.searchParams.get("userId");
+                const page = parseInt(url.searchParams.get("page") || "1");
+                const limit = parseInt(url.searchParams.get("limit") || "50");
+                const offset = (page - 1) * limit;
+
+                let query = `
+                    SELECT al.*, u.name as user_name, u.email as user_email 
+                    FROM activity_logs al 
+                    LEFT JOIN users u ON al.user_id = u.id 
+                    WHERE 1=1
+                `;
+                const params: any[] = [];
+
+                if (action) {
+                    query += " AND al.action = ?";
+                    params.push(action);
+                }
+                if (userId) {
+                    query += " AND al.user_id = ?";
+                    params.push(userId);
+                }
+
+                query += " ORDER BY al.created_at DESC LIMIT ? OFFSET ?";
+                params.push(limit, offset);
+
+                const result = await env.proveloce_db.prepare(query).bind(...params).all();
+
+                return jsonResponse({ success: true, data: { logs: result.results } });
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 

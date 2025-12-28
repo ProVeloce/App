@@ -45,11 +45,13 @@ const Dashboard: React.FC = () => {
 
             // Fetch role-specific data
             if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
-                const [dashboardRes] = await Promise.all([
-                    adminApi.getDashboard(),
-                ]);
-                if (dashboardRes.data.data?.stats) {
-                    setStats(prev => ({ ...prev, ...dashboardRes.data.data.stats }));
+                try {
+                    const dashboardRes = await adminApi.getDashboard();
+                    if (dashboardRes.data?.data) {
+                        setStats(prev => ({ ...prev, ...dashboardRes.data.data }));
+                    }
+                } catch (e) {
+                    // Ignore admin dashboard errors for non-admin users
                 }
             }
         } catch (error) {
