@@ -351,7 +351,7 @@ export default {
                             name: user.name,
                             role: user.role
                         },
-                        env.JWT_SECRET || "default-secret",
+                        env.JWT_ACCESS_SECRET || "default-secret",
                         604800 // 7 days
                     );
 
@@ -384,7 +384,7 @@ export default {
                 }
 
                 const token = authHeader.substring(7);
-                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
 
                 if (!payload) {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
@@ -404,7 +404,7 @@ export default {
                 }
 
                 const token = authHeader.substring(7);
-                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
 
                 if (!payload) {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
@@ -436,7 +436,7 @@ export default {
                 }
 
                 const token = authHeader.substring(7);
-                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
 
                 if (!payload) {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
@@ -471,7 +471,7 @@ export default {
                 }
 
                 const token = authHeader.substring(7);
-                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
 
                 if (!payload) {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
