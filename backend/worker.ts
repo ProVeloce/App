@@ -442,15 +442,15 @@ export default {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
                 }
 
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
-                const user = await env.DB.prepare(
+                const user = await env.proveloce_db.prepare(
                     "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first();
 
-                const profile = await env.DB.prepare(
+                const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
                 ).bind(payload.userId).first();
 
@@ -477,7 +477,7 @@ export default {
                     return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
                 }
 
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
@@ -486,18 +486,18 @@ export default {
 
                 // Update user name if provided
                 if (name) {
-                    await env.DB.prepare(
+                    await env.proveloce_db.prepare(
                         "UPDATE users SET name = ? WHERE id = ?"
                     ).bind(name, payload.userId).run();
                 }
 
                 // Upsert user profile
-                const existingProfile = await env.DB.prepare(
+                const existingProfile = await env.proveloce_db.prepare(
                     "SELECT id FROM user_profiles WHERE user_id = ?"
                 ).bind(payload.userId).first();
 
                 if (existingProfile) {
-                    await env.DB.prepare(`
+                    await env.proveloce_db.prepare(`
                         UPDATE user_profiles SET 
                             dob = COALESCE(?, dob),
                             gender = COALESCE(?, gender),
@@ -513,18 +513,18 @@ export default {
                     `).bind(dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
                 } else {
                     const profileId = crypto.randomUUID();
-                    await env.DB.prepare(`
+                    await env.proveloce_db.prepare(`
                         INSERT INTO user_profiles (id, user_id, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `).bind(profileId, payload.userId, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
                 }
 
                 // Get updated user and profile
-                const user = await env.DB.prepare(
+                const user = await env.proveloce_db.prepare(
                     "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first();
 
-                const profile = await env.DB.prepare(
+                const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
                 ).bind(payload.userId).first();
 
