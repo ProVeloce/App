@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { setAccessToken } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import './AuthPages.css';
 
 const AuthSuccess: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { checkAuth } = useAuth();
     const [message, setMessage] = useState('Login successful! Redirecting...');
 
     useEffect(() => {
-        const handleAuth = () => {
+        const handleAuth = async () => {
             const token = searchParams.get('token');
             const email = searchParams.get('email');
             const name = searchParams.get('name');
@@ -32,10 +34,11 @@ const AuthSuccess: React.FC = () => {
                 if (email) localStorage.setItem('userEmail', email);
                 if (name) localStorage.setItem('userName', name);
 
-                // Redirect to dashboard after a brief delay
-                setTimeout(() => {
-                    navigate('/dashboard', { replace: true });
-                }, 500);
+                // IMPORTANT: Refresh auth state before redirecting
+                await checkAuth();
+
+                // Now redirect to dashboard
+                navigate('/dashboard', { replace: true });
             } else {
                 setMessage('No token received. Redirecting to login...');
                 setTimeout(() => navigate('/login', { replace: true }), 2000);
@@ -43,7 +46,7 @@ const AuthSuccess: React.FC = () => {
         };
 
         handleAuth();
-    }, [searchParams, navigate]);
+    }, [searchParams, navigate, checkAuth]);
 
     return (
         <div className="auth-page">
