@@ -15,9 +15,9 @@
 	},
 	"vars": {
 		"GOOGLE_CLIENT_ID": "707765451928-ui139ks51aht4jr7fk5abh9v58gphr0l.apps.googleusercontent.com",
-		"GOOGLE_CLIENT_SECRET": "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\n",
+		"GOOGLE_CLIENT_SECRET": "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",
 		"FRONTEND_URL": "https://app.proveloce.com/",
-		"GOOGLE_CALLBACK_URL": "https://backend.proveloce.com/api/auth/google/callback\n",
+		"GOOGLE_CALLBACK_URL": "https://backend.proveloce.com/api/auth/google/callback",
 		"JWT_ACCESS_EXPIRES_IN": "15m",
 		"JWT_ACCESS_SECRET": "557ca0e6eb333ea35114e05c6545e945bd6849eb02bd9612061973bdc458993a4f4556b5e9ace05f5311056a598657b06721decc9fa8766f90331244c0e038e1",
 		"JWT_REFRESH_EXPIRES_IN": "7d",
