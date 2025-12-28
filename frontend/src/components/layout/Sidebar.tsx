@@ -154,8 +154,11 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }
 
             <div className={`sidebar-footer ${collapsed ? 'footer-collapsed' : 'footer-expanded'}`}>
                 {collapsed ? (
-                    // Collapsed: Logout on top, Settings below
+                    // Collapsed: Settings on top, Logout below
                     <>
+                        <NavLink to="/change-password" className="nav-item" title="Settings">
+                            <span className="nav-icon"><Settings size={20} /></span>
+                        </NavLink>
                         <button
                             className="nav-item logout-btn"
                             onClick={handleLogout}
@@ -163,9 +166,6 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }
                         >
                             <span className="nav-icon"><LogOut size={20} /></span>
                         </button>
-                        <NavLink to="/change-password" className="nav-item" title="Settings">
-                            <span className="nav-icon"><Settings size={20} /></span>
-                        </NavLink>
                     </>
                 ) : (
                     // Expanded: Settings on left, Logout on right (side by side)
