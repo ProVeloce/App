@@ -23,7 +23,7 @@ const ALLOWED_ORIGIN = "https://app.proveloce.com";
 
 const corsHeaders: Record<string, string> = {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Allow-Credentials": "true",
 };
@@ -422,6 +422,117 @@ export default {
                 }
 
                 return jsonResponse({ success: true, user: payload });
+            }
+
+            // =====================================================
+            // Profile Routes
+            // =====================================================
+
+            // Get current user profile
+            if (url.pathname === "/api/profiles/me" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.DB) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const user = await env.DB.prepare(
+                    "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+                ).bind(payload.userId).first();
+
+                const profile = await env.DB.prepare(
+                    "SELECT * FROM user_profiles WHERE user_id = ?"
+                ).bind(payload.userId).first();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        user: { ...user, profile },
+                        profileCompletion: profile ? 80 : 20
+                    }
+                });
+            }
+
+            // Update current user profile (PATCH)
+            if (url.pathname === "/api/profiles/me" && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.DB) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const body = await request.json() as any;
+                const { name, phone, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio } = body;
+
+                // Update user name if provided
+                if (name) {
+                    await env.DB.prepare(
+                        "UPDATE users SET name = ? WHERE id = ?"
+                    ).bind(name, payload.userId).run();
+                }
+
+                // Upsert user profile
+                const existingProfile = await env.DB.prepare(
+                    "SELECT id FROM user_profiles WHERE user_id = ?"
+                ).bind(payload.userId).first();
+
+                if (existingProfile) {
+                    await env.DB.prepare(`
+                        UPDATE user_profiles SET 
+                            dob = COALESCE(?, dob),
+                            gender = COALESCE(?, gender),
+                            address_line1 = COALESCE(?, address_line1),
+                            address_line2 = COALESCE(?, address_line2),
+                            city = COALESCE(?, city),
+                            state = COALESCE(?, state),
+                            country = COALESCE(?, country),
+                            pincode = COALESCE(?, pincode),
+                            bio = COALESCE(?, bio),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ?
+                    `).bind(dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
+                } else {
+                    const profileId = crypto.randomUUID();
+                    await env.DB.prepare(`
+                        INSERT INTO user_profiles (id, user_id, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(profileId, payload.userId, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
+                }
+
+                // Get updated user and profile
+                const user = await env.DB.prepare(
+                    "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+                ).bind(payload.userId).first();
+
+                const profile = await env.DB.prepare(
+                    "SELECT * FROM user_profiles WHERE user_id = ?"
+                ).bind(payload.userId).first();
+
+                return jsonResponse({
+                    success: true,
+                    message: "Profile updated successfully",
+                    data: { user: { ...user, profile } }
+                });
             }
 
             // =====================================================
