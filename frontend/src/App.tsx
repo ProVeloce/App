@@ -14,6 +14,8 @@ import SignupPage from './pages/auth/SignupPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import VerifyOTPPage from './pages/auth/VerifyOTPPage';
 import AuthCallback from './pages/auth/AuthCallback';
+import AuthSuccess from './pages/auth/AuthSuccess';
+import AuthError from './pages/auth/AuthError';
 
 // Common Pages
 import Dashboard from './pages/common/Dashboard';
@@ -78,6 +80,8 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/verify-otp" element={<VerifyOTPPage />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/auth/success" element={<AuthSuccess />} />
+                <Route path="/auth/error" element={<AuthError />} />
             </Route>
 
             {/* Protected Routes */}
