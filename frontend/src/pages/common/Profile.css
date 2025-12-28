@@ -192,22 +192,25 @@
 
 .tab-btn {
     padding: var(--space-2) var(--space-4);
-    background: none;
-    border: none;
+    background: var(--bg-secondary, #f9fafb);
+    border: 1px solid var(--border-light, #e5e7eb);
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--text-secondary, #4b5563);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
+    cursor: pointer;
 }
 
 .tab-btn:hover {
-    background: var(--bg-tertiary);
+    background: var(--bg-tertiary, #f3f4f6);
+    border-color: var(--border-medium, #d1d5db);
 }
 
 .tab-btn.active {
-    background: var(--primary-100);
-    color: var(--primary-600);
+    background: #6366f1;
+    color: white;
+    border-color: #6366f1;
 }
 
 .form-section {

@@ -618,7 +618,7 @@ export default {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
-                const role = url.searchParams.get("role");
+                const filterRole = url.searchParams.get("role");
                 const status = url.searchParams.get("status");
                 const search = url.searchParams.get("search");
                 const page = parseInt(url.searchParams.get("page") || "1");
@@ -628,9 +628,19 @@ export default {
                 let query = "SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at FROM users WHERE 1=1";
                 const params: any[] = [];
 
-                if (role) {
+                // Role-based visibility restrictions
+                const requesterRole = (auth.payload.role || "").toLowerCase();
+                if (requesterRole === "superadmin") {
+                    // SuperAdmin cannot see other SuperAdmins (including themselves)
+                    query += " AND role != 'superadmin'";
+                } else if (requesterRole === "admin") {
+                    // Admin can only see Customer, Expert, Analyst
+                    query += " AND role IN ('customer', 'expert', 'analyst')";
+                }
+
+                if (filterRole) {
                     query += " AND role = ?";
-                    params.push(role);
+                    params.push(filterRole);
                 }
                 if (status) {
                     query += " AND status = ?";
@@ -720,10 +730,24 @@ export default {
                     return jsonResponse({ success: false, error: "Email already exists" }, 409);
                 }
 
+                // Role creation restrictions
+                const requesterRole = (auth.payload.role || "").toLowerCase();
+                const newRole = (role || "customer").toLowerCase();
+
+                // Admin cannot create admin or superadmin users
+                if (requesterRole === "admin" && (newRole === "admin" || newRole === "superadmin")) {
+                    return jsonResponse({ success: false, error: "You don't have permission to create users with this role" }, 403);
+                }
+
+                // Only superadmin can create superadmin users
+                if (newRole === "superadmin" && requesterRole !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Only superadmin can create superadmin users" }, 403);
+                }
+
                 const id = crypto.randomUUID();
                 await env.proveloce_db.prepare(
                     "INSERT INTO users (id, name, email, phone, role, status, email_verified) VALUES (?, ?, ?, ?, ?, ?, 1)"
-                ).bind(id, name, email, phone || null, role || "customer", status || "active").run();
+                ).bind(id, name, email, phone || null, newRole, status || "active").run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
@@ -752,13 +776,40 @@ export default {
                 const body = await request.json() as any;
                 const { name, email, phone, role, status } = body;
 
-                // Check if user exists
+                // Check if user exists and get their current role
                 const existing = await env.proveloce_db.prepare(
-                    "SELECT id FROM users WHERE id = ?"
-                ).bind(id).first();
+                    "SELECT id, role FROM users WHERE id = ?"
+                ).bind(id).first() as any;
 
                 if (!existing) {
                     return jsonResponse({ success: false, error: "User not found" }, 404);
+                }
+
+                // Get requester's role
+                const requesterRole = (auth.payload.role || "").toLowerCase();
+                const targetRole = (existing.role || "").toLowerCase();
+
+                // Prevent modifying superadmin accounts
+                if (targetRole === "superadmin") {
+                    return jsonResponse({ success: false, error: "Cannot modify superadmin accounts" }, 403);
+                }
+
+                // Admin cannot modify other admins
+                if (requesterRole === "admin" && targetRole === "admin") {
+                    return jsonResponse({ success: false, error: "Admins cannot modify other admins" }, 403);
+                }
+
+                // Privilege escalation prevention
+                if (role !== undefined) {
+                    const newRole = role.toLowerCase();
+                    // Admin cannot assign admin or superadmin roles
+                    if (requesterRole === "admin" && (newRole === "admin" || newRole === "superadmin")) {
+                        return jsonResponse({ success: false, error: "You don't have permission to assign this role" }, 403);
+                    }
+                    // Only superadmin can assign superadmin role
+                    if (newRole === "superadmin" && requesterRole !== "superadmin") {
+                        return jsonResponse({ success: false, error: "Only superadmin can assign superadmin role" }, 403);
+                    }
                 }
 
                 // Build update query dynamically

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Plus, Search, Edit2, Trash2, X, Check, Users, UserCog } from 'lucide-react';
 import { adminApi, User } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import './AdminManagement.css';
 
 interface UserFormData {
@@ -14,6 +15,7 @@ interface UserFormData {
 
 const AdminManagement: React.FC = () => {
     const { success, error } = useToast();
+    const { user: currentUser } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -265,8 +267,12 @@ const AdminManagement: React.FC = () => {
                                     <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
                                         <option value="customer">Customer</option>
                                         <option value="expert">Expert</option>
-                                        <option value="analyst">Analyst</option>
-                                        <option value="admin">Admin</option>
+                                        {currentUser?.role === 'SUPERADMIN' && (
+                                            <>
+                                                <option value="analyst">Analyst</option>
+                                                <option value="admin">Admin</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
                                 <div className="form-group">
@@ -316,9 +322,12 @@ const AdminManagement: React.FC = () => {
                                     <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
                                         <option value="customer">Customer</option>
                                         <option value="expert">Expert</option>
-                                        <option value="analyst">Analyst</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="superadmin">Superadmin</option>
+                                        {currentUser?.role === 'SUPERADMIN' && (
+                                            <>
+                                                <option value="analyst">Analyst</option>
+                                                <option value="admin">Admin</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
                                 <div className="form-group">

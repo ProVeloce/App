@@ -40,23 +40,23 @@
 
 .tab-btn {
     padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--border-light);
-    background: var(--bg-primary);
+    border: 1px solid var(--border-light, #e5e7eb);
+    background: var(--bg-secondary, #f9fafb);
     border-radius: var(--radius-md);
-    color: var(--text-secondary);
+    color: var(--text-secondary, #4b5563);
     cursor: pointer;
     transition: all 0.2s;
     font-size: 0.875rem;
 }
 
 .tab-btn:hover {
-    border-color: var(--primary);
-    color: var(--primary);
+    border-color: #6366f1;
+    color: #6366f1;
 }
 
 .tab-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
+    background: #6366f1;
+    border-color: #6366f1;
     color: white;
 }
 
