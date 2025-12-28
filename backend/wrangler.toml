@@ -7,14 +7,22 @@ routes = [
 ]
 
 # ======================= D1 DATABASE BINDING =======================
-d1_databases = [
-  { binding = "proveloce_db", database_name = "proveloce_db", database_id = "3b3261c1-a83c-49dc-82df-4688cbdc785c" }
-]
+[[d1_databases]]
+binding = "proveloce_db"            # MUST match env.proveloce_db used in Worker
+database_name = "proveloce_db"
+database_id = "3b3261c1-a83c-49dc-82df-4688cbdc785c"
 
-# Environment Variables
+# ======================= ENV VARIABLES =======================
 [vars]
-GOOGLE_CLIENT_ID = "707765451928-ui139ks51aht4jr7fk5abh9v58gphr0l.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
-JWT_SECRET = "557ca0e6eb333ea35114e05c6545e945bd6849eb02bd9612061973bdc458993a4f4556b5e9ace05f5311056a598657b06721decc9fa8766f90331244c0e038e1"
-FRONTEND_URL = "https://app.proveloce.com"
-GOOGLE_CALLBACK_URL = "https://backend.proveloce.com/api/auth/google/callback"
+GOOGLE_CLIENT_ID="707765451928-ui139ks51aht4jr7fk5abh9v58gphr0l.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="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"
+
+# JWT must be **two keys**, not one
+JWT_ACCESS_SECRET="557ca0e6eb333ea35114e05c6545e945bd6849eb02bd9612061973bdc458993a4f4556b5e9ace05f5311056a598657b06721decc9fa8766f90331244c0e038e1"
+JWT_REFRESH_SECRET="b8de244aa755e62886843c4d2a2772a0ed29802749663867717c3f2f9a7c171404aaac18babfbb6134128ead5027a187ef43533ee38cff0f7c446db9bd60b5a1"
+
+JWT_ACCESS_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+
+FRONTEND_URL="https://app.proveloce.com"
+GOOGLE_CALLBACK_URL="https://backend.proveloce.com/api/auth/google/callback"
