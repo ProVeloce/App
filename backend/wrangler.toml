@@ -1,4 +1,4 @@
-name = "proveloce-backend-proxy"
+name = "backend"
 main = "worker.ts"
 compatibility_date = "2024-01-01"
 
