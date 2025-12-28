@@ -9,6 +9,7 @@ interface UserFormData {
     name: string;
     email: string;
     phone: string;
+    password: string;
     role: string;
     status: string;
 }
@@ -30,7 +31,7 @@ const AdminManagement: React.FC = () => {
     const [submitting, setSubmitting] = useState(false);
 
     const [formData, setFormData] = useState<UserFormData>({
-        name: '', email: '', phone: '', role: 'admin', status: 'active'
+        name: '', email: '', phone: '', password: '123user123', role: 'customer', status: 'active'
     });
 
     useEffect(() => {
@@ -65,7 +66,7 @@ const AdminManagement: React.FC = () => {
     };
 
     const openAddModal = () => {
-        setFormData({ name: '', email: '', phone: '', role: 'admin', status: 'active' });
+        setFormData({ name: '', email: '', phone: '', password: '123user123', role: 'customer', status: 'active' });
         setShowAddModal(true);
     };
 
@@ -75,6 +76,7 @@ const AdminManagement: React.FC = () => {
             name: user.name || '',
             email: user.email || '',
             phone: user.phone || '',
+            password: '',
             role: user.role?.toLowerCase() || 'customer',
             status: user.status?.toLowerCase() || 'active'
         });
@@ -87,8 +89,8 @@ const AdminManagement: React.FC = () => {
     };
 
     const handleCreate = async () => {
-        if (!formData.name || !formData.email) {
-            error('Name and email are required');
+        if (!formData.name || !formData.email || !formData.phone || !formData.password) {
+            error('All fields are required');
             return;
         }
         setSubmitting(true);
@@ -258,8 +260,12 @@ const AdminManagement: React.FC = () => {
                                 <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" />
                             </div>
                             <div className="form-group">
-                                <label>Phone</label>
+                                <label>Phone *</label>
                                 <input type="tel" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="+91 98765 43210" />
+                            </div>
+                            <div className="form-group">
+                                <label>Password *</label>
+                                <input type="text" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Enter password" />
                             </div>
                             <div className="form-row">
                                 <div className="form-group">

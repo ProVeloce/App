@@ -842,8 +842,8 @@ export default {
                 const body = await request.json() as any;
                 const { name, email, phone, role, status } = body;
 
-                if (!name || !email) {
-                    return jsonResponse({ success: false, error: "Name and email are required" }, 400);
+                if (!name || !email || !phone || !body.password) {
+                    return jsonResponse({ success: false, error: "All fields are required (name, email, phone, password)" }, 400);
                 }
 
                 // Check if email exists
@@ -869,10 +869,18 @@ export default {
                     return jsonResponse({ success: false, error: "Only superadmin can create superadmin users" }, 403);
                 }
 
+                // Hash password if provided
+                const password = body.password || "123user123";
+                const encoder = new TextEncoder();
+                const data = encoder.encode(password);
+                const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const passwordHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
                 const id = crypto.randomUUID();
                 await env.proveloce_db.prepare(
-                    "INSERT INTO users (id, name, email, phone, role, status, email_verified) VALUES (?, ?, ?, ?, ?, ?, 1)"
-                ).bind(id, name, email, phone || null, newRole, status || "active").run();
+                    "INSERT INTO users (id, name, email, phone, role, status, email_verified, password_hash) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
+                ).bind(id, name, email, phone || null, newRole, status || "active", passwordHash).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
