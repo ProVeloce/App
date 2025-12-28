@@ -14,6 +14,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper function to decode JWT token (without verification - just for reading payload)
+function decodeJWT(token: string): any {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+
+        const payload = parts[1];
+        // Add padding if needed
+        const padded = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = atob(padded);
+        return JSON.parse(decoded);
+    } catch {
+        return null;
+    }
+}
+
+// Check if JWT is expired
+function isJWTExpired(token: string): boolean {
+    const payload = decodeJWT(token);
+    if (!payload || !payload.exp) return true;
+    return payload.exp * 1000 < Date.now();
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -24,21 +47,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const checkAuth = async () => {
         const token = getAccessToken();
+
         if (!token) {
             setIsLoading(false);
             return;
         }
 
-        try {
-            const response = await authApi.getCurrentUser();
-            if (response.data.success && response.data.data) {
-                setUser(response.data.data.user);
-            }
-        } catch (error) {
-            // Token invalid, clear it
+        // Check if token is expired
+        if (isJWTExpired(token)) {
             setAccessToken(null);
             setRefreshToken(null);
-        } finally {
+            setIsLoading(false);
+            return;
+        }
+
+        // Decode JWT to get user info
+        const payload = decodeJWT(token);
+
+        if (payload) {
+            // Create user object from JWT payload
+            const userFromToken: User = {
+                id: payload.userId || payload.id || '',
+                name: payload.name || '',
+                email: payload.email || '',
+                role: (payload.role?.toUpperCase() as User['role']) || 'CUSTOMER',
+                status: 'ACTIVE',
+                emailVerified: true,
+                createdAt: new Date().toISOString(),
+            };
+
+            setUser(userFromToken);
+            setIsLoading(false);
+
+            // Optionally try to fetch fresh user data from API (if available)
+            try {
+                const response = await authApi.getCurrentUser();
+                if (response.data.success && response.data.data) {
+                    setUser(response.data.data.user);
+                }
+            } catch (error) {
+                // API call failed, but we still have user from JWT - that's fine
+                console.log('Could not refresh user from API, using JWT data');
+            }
+        } else {
+            // Invalid token
+            setAccessToken(null);
+            setRefreshToken(null);
             setIsLoading(false);
         }
     };
@@ -90,6 +144,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setAccessToken(null);
             setRefreshToken(null);
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('userEmail');
+            localStorage.removeItem('userName');
             setUser(null);
         }
     };
@@ -101,7 +158,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUser(response.data.data.user);
             }
         } catch (error) {
-            // Ignore
+            // If API fails, try to get user from JWT
+            const token = getAccessToken();
+            if (token) {
+                const payload = decodeJWT(token);
+                if (payload) {
+                    setUser({
+                        id: payload.userId || payload.id || '',
+                        name: payload.name || '',
+                        email: payload.email || '',
+                        role: (payload.role?.toUpperCase() as User['role']) || 'CUSTOMER',
+                        status: 'ACTIVE',
+                        emailVerified: true,
+                        createdAt: new Date().toISOString(),
+                    });
+                }
+            }
         }
     };
 
