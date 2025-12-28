@@ -430,12 +430,47 @@
 .form-description {
     color: var(--text-secondary, #6b7280);
     font-size: 0.875rem;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+/* Security Section Spacing */
+.security-section .form-section {
+    margin-bottom: 40px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+}
+
+.security-section .form-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.security-section .form-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.security-section .form-group {
+    margin-bottom: 20px;
+}
+
+.password-form {
+    margin-top: 16px;
+}
+
+.password-form .btn {
+    margin-top: 8px;
+}
+
+.login-history {
+    margin-top: 16px;
 }
 
 .no-history {
     text-align: center;
-    padding: var(--space-8);
+    padding: var(--space-8, 32px);
     color: var(--text-muted);
 }
 
