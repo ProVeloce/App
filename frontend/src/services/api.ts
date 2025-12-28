@@ -16,10 +16,14 @@ export interface User {
 
 export interface UserProfile {
     id: string;
+    full_name?: string;
+    phone_number?: string;
     dob?: string;
     gender?: string;
     addressLine1?: string;
     addressLine2?: string;
+    address_line1?: string;
+    address_line2?: string;
     city?: string;
     state?: string;
     country?: string;

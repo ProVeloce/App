@@ -10,7 +10,8 @@ import './Profile.css';
 
 const profileSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
-    phone: z.string().optional(),
+    full_name: z.string().optional(),
+    phone_number: z.string().optional(),
     dob: z.string().optional(),
     gender: z.string().optional(),
     addressLine1: z.string().optional(),
@@ -51,12 +52,13 @@ const Profile: React.FC = () => {
                 setProfileData(userData);
                 setCompletion(profileCompletion);
                 reset({
-                    name: userData.name,
-                    phone: userData.phone || '',
+                    name: userData.name || '',
+                    full_name: userData.profile?.full_name || '',
+                    phone_number: userData.profile?.phone_number || '',
                     dob: userData.profile?.dob?.split('T')[0] || '',
                     gender: userData.profile?.gender || '',
-                    addressLine1: userData.profile?.addressLine1 || '',
-                    addressLine2: userData.profile?.addressLine2 || '',
+                    addressLine1: userData.profile?.address_line1 || '',
+                    addressLine2: userData.profile?.address_line2 || '',
                     city: userData.profile?.city || '',
                     state: userData.profile?.state || '',
                     country: userData.profile?.country || '',
@@ -174,15 +176,15 @@ const Profile: React.FC = () => {
                                 <Mail size={16} />
                                 <span>{profileData?.email}</span>
                             </div>
-                            {profileData?.phone && (
+                            {profileData?.profile?.phone_number && (
                                 <div className="info-item">
                                     <Phone size={16} />
-                                    <span>{profileData.phone}</span>
+                                    <span>{profileData.profile.phone_number}</span>
                                 </div>
                             )}
                             <div className="info-item">
                                 <Calendar size={16} />
-                                <span>Joined {new Date(profileData?.createdAt).toLocaleDateString()}</span>
+                                <span>Joined {new Date(profileData?.createdAt || profileData?.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>
                     </div>
@@ -211,13 +213,17 @@ const Profile: React.FC = () => {
                                 <h3>Personal Information</h3>
                                 <div className="form-grid">
                                     <div className="form-group">
-                                        <label>Full Name *</label>
+                                        <label>Display Name *</label>
                                         <input type="text" {...register('name')} />
                                         {errors.name && <span className="error">{errors.name.message}</span>}
                                     </div>
                                     <div className="form-group">
+                                        <label>Full Name</label>
+                                        <input type="text" {...register('full_name')} placeholder="Enter your full name" />
+                                    </div>
+                                    <div className="form-group">
                                         <label>Phone Number</label>
-                                        <input type="tel" {...register('phone')} />
+                                        <input type="tel" {...register('phone_number')} placeholder="+91 98765 43210" />
                                     </div>
                                     <div className="form-group">
                                         <label>Date of Birth</label>
