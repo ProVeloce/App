@@ -216,11 +216,11 @@ export default {
                     }
 
                     // Check if user exists in D1
-                    if (!env.DB) {
+                    if (!env.proveloce_db) {
                         return jsonResponse({ success: false, error: "Database not configured" }, 500);
                     }
 
-                    const user = await env.DB.prepare(
+                    const user = await env.proveloce_db.prepare(
                         "SELECT id, name, email, role, password_hash FROM users WHERE email = ?"
                     ).bind(body.email).first();
 
@@ -308,7 +308,7 @@ export default {
                     const googleUser = await getGoogleUserInfo(tokens.access_token);
 
                     // Check if D1 database is available
-                    if (!env.DB) {
+                    if (!env.proveloce_db) {
                         console.error("D1 Database not bound");
                         return Response.redirect(
                             `${frontendUrl}/auth/error?error=database_not_configured`,
@@ -317,14 +317,14 @@ export default {
                     }
 
                     // Check if user exists
-                    let user = await env.DB.prepare(
+                    let user = await env.proveloce_db.prepare(
                         "SELECT id, name, email, role FROM users WHERE email = ?"
                     ).bind(googleUser.email).first();
 
                     // Create user if doesn't exist
                     if (!user) {
                         const userId = crypto.randomUUID();
-                        await env.DB.prepare(
+                        await env.proveloce_db.prepare(
                             "INSERT INTO users (id, name, email, role, email_verified, avatar_data) VALUES (?, ?, ?, ?, ?, ?)"
                         ).bind(
                             userId,
@@ -411,8 +411,8 @@ export default {
                 }
 
                 // Get fresh user data from DB
-                if (env.DB) {
-                    const user = await env.DB.prepare(
+                if (env.proveloce_db) {
+                    const user = await env.proveloce_db.prepare(
                         "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
                     ).bind(payload.userId).first();
 
@@ -429,41 +429,41 @@ export default {
             // =====================================================
 
             if (url.pathname === "/api/db/test") {
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "D1 Database not bound" }, 500);
                 }
-                const result = await env.DB.prepare("SELECT 1 as test").all();
+                const result = await env.proveloce_db.prepare("SELECT 1 as test").all();
                 return jsonResponse({ success: true, message: "D1 Database Connected ✔", result: result.results });
             }
 
             if (url.pathname === "/api/db/users" && request.method === "GET") {
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "D1 Database not bound" }, 500);
                 }
-                const result = await env.DB.prepare(
+                const result = await env.proveloce_db.prepare(
                     "SELECT id, name, email, role, created_at FROM users LIMIT 50"
                 ).all();
                 return jsonResponse({ success: true, users: result.results });
             }
 
             if (url.pathname === "/api/db/users" && request.method === "POST") {
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "D1 Database not bound" }, 500);
                 }
                 const body = await request.json() as any;
                 const id = crypto.randomUUID();
-                await env.DB.prepare(
+                await env.proveloce_db.prepare(
                     "INSERT INTO users (id, name, email, role) VALUES (?, ?, ?, ?)"
                 ).bind(id, body.name, body.email, body.role || "customer").run();
                 return jsonResponse({ success: true, message: "User created", id }, 201);
             }
 
             if (url.pathname.startsWith("/api/db/users/") && request.method === "GET") {
-                if (!env.DB) {
+                if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "D1 Database not bound" }, 500);
                 }
                 const id = url.pathname.split("/").pop();
-                const result = await env.DB.prepare(
+                const result = await env.proveloce_db.prepare(
                     "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
                 ).bind(id).first();
                 if (!result) {
