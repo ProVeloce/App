@@ -38,15 +38,15 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-    // Common
-    { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
+    // Common items (shown at bottom)
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'] },
-    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'] },
 
     // Customer
+    { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
     { label: 'Apply as Expert', icon: <FileText size={20} />, path: '/customer/apply-expert', roles: ['CUSTOMER'] },
     { label: 'Application Status', icon: <ClipboardList size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
+    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['CUSTOMER'] },
 
     // Expert
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/expert/dashboard', roles: ['EXPERT'] },
@@ -54,21 +54,28 @@ const menuItems: MenuItem[] = [
     { label: 'Certifications', icon: <Award size={20} />, path: '/expert/certifications', roles: ['EXPERT'] },
     { label: 'Tasks', icon: <Briefcase size={20} />, path: '/expert/tasks', roles: ['EXPERT'] },
     { label: 'Earnings', icon: <Wallet size={20} />, path: '/expert/earnings', roles: ['EXPERT'] },
+    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['EXPERT'] },
 
     // Analyst
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/analyst/dashboard', roles: ['ANALYST'] },
     { label: 'Verification', icon: <CheckCircle size={20} />, path: '/analyst/verification', roles: ['ANALYST'] },
+    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['ANALYST'] },
 
     // Admin
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin/dashboard', roles: ['ADMIN'] },
-    { label: 'Users', icon: <Users size={20} />, path: '/admin/users', roles: ['ADMIN', 'SUPERADMIN'] },
-    { label: 'Expert Review', icon: <CheckCircle size={20} />, path: '/admin/expert-review', roles: ['ADMIN', 'SUPERADMIN'] },
-    { label: 'Task Assignment', icon: <Briefcase size={20} />, path: '/admin/task-assignment', roles: ['ADMIN', 'SUPERADMIN'] },
-    { label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports', roles: ['ADMIN', 'SUPERADMIN'] },
+    { label: 'Expert Review', icon: <CheckCircle size={20} />, path: '/admin/expert-review', roles: ['ADMIN'] },
+    { label: 'Task Assignment', icon: <Briefcase size={20} />, path: '/admin/task-assignment', roles: ['ADMIN'] },
+    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['ADMIN'] },
+    { label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports', roles: ['ADMIN'] },
+    { label: 'User Management', icon: <Users size={20} />, path: '/admin/users', roles: ['ADMIN'] },
 
-    // SuperAdmin
+    // SuperAdmin - Ordered as requested
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/superadmin/dashboard', roles: ['SUPERADMIN'] },
-    { label: 'Admin Management', icon: <Shield size={20} />, path: '/superadmin/admins', roles: ['SUPERADMIN'] },
+    { label: 'Expert Review', icon: <CheckCircle size={20} />, path: '/admin/expert-review', roles: ['SUPERADMIN'] },
+    { label: 'Task Assignment', icon: <Briefcase size={20} />, path: '/admin/task-assignment', roles: ['SUPERADMIN'] },
+    { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['SUPERADMIN'] },
+    { label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports', roles: ['SUPERADMIN'] },
+    { label: 'User Management', icon: <Users size={20} />, path: '/superadmin/admins', roles: ['SUPERADMIN'] },
     { label: 'Configuration', icon: <Settings size={20} />, path: '/superadmin/config', roles: ['SUPERADMIN'] },
     { label: 'System Logs', icon: <FileText size={20} />, path: '/superadmin/logs', roles: ['SUPERADMIN'] },
 ];

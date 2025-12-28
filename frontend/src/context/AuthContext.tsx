@@ -9,7 +9,7 @@ interface AuthContextType {
     signup: (name: string, email: string, phone: string, password: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
-    checkAuth: () => Promise<void>;
+    checkAuth: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,12 +45,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         checkAuth();
     }, []);
 
-    const checkAuth = async () => {
+    const checkAuth = async (): Promise<User | null> => {
         const token = getAccessToken();
 
         if (!token) {
             setIsLoading(false);
-            return;
+            return null;
         }
 
         // Check if token is expired
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setAccessToken(null);
             setRefreshToken(null);
             setIsLoading(false);
-            return;
+            return null;
         }
 
         // Decode JWT to get user info
@@ -82,18 +82,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Optionally try to fetch fresh user data from API (if available)
             try {
                 const response = await authApi.getCurrentUser();
-                if (response.data.success && response.data.data) {
+                if (response.data?.success && response.data?.data?.user) {
                     setUser(response.data.data.user);
+                    return response.data.data.user;
                 }
             } catch (error) {
                 // API call failed, but we still have user from JWT - that's fine
                 console.log('Could not refresh user from API, using JWT data');
             }
+            return userFromToken;
         } else {
             // Invalid token
             setAccessToken(null);
             setRefreshToken(null);
             setIsLoading(false);
+            return null;
         }
     };
 

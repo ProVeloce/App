@@ -35,10 +35,23 @@ const AuthSuccess: React.FC = () => {
                 if (name) localStorage.setItem('userName', name);
 
                 // IMPORTANT: Refresh auth state before redirecting
-                await checkAuth();
+                const user = await checkAuth();
 
-                // Now redirect to dashboard
-                navigate('/dashboard', { replace: true });
+                // Role-based redirect
+                const role = user?.role?.toUpperCase() || 'CUSTOMER';
+                let redirectPath = '/dashboard';
+
+                if (role === 'SUPERADMIN') {
+                    redirectPath = '/superadmin/dashboard';
+                } else if (role === 'ADMIN') {
+                    redirectPath = '/admin/dashboard';
+                } else if (role === 'ANALYST') {
+                    redirectPath = '/analyst/dashboard';
+                } else if (role === 'EXPERT') {
+                    redirectPath = '/expert/dashboard';
+                }
+
+                navigate(redirectPath, { replace: true });
             } else {
                 setMessage('No token received. Redirecting to login...');
                 setTimeout(() => navigate('/login', { replace: true }), 2000);
