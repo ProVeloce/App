@@ -228,21 +228,16 @@ const ExpertApplication: React.FC = () => {
     useEffect(() => {
         const loadUserProfile = async () => {
             try {
-                // First set from auth context if available
-                if (user) {
-                    setFormData(prev => ({
-                        ...prev,
-                        fullName: user.name || prev.fullName,
-                        email: user.email || prev.email,
-                        phone: user.phone || prev.phone,
-                    }));
-                }
-
-                // Then fetch full profile from API for more details
+                // Fetch full profile from API
                 const response = await profileApi.getMyProfile();
+                console.log('Profile API response:', response.data);
+
                 if (response.data.success && response.data.data?.user) {
                     const userData = response.data.data.user;
                     const profile: any = userData.profile || {};
+
+                    console.log('User data:', userData);
+                    console.log('Phone from API:', userData.phone);
 
                     setFormData(prev => ({
                         ...prev,
@@ -266,7 +261,7 @@ const ExpertApplication: React.FC = () => {
         };
 
         loadUserProfile();
-    }, [user]);
+    }, []); // Run on mount
 
     // Load existing application on mount
     useEffect(() => {
