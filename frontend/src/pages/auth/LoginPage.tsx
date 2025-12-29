@@ -58,7 +58,7 @@ const LoginPage: React.FC = () => {
             <div className="auth-container">
                 <div className="auth-card">
                     <div className="auth-header">
-                        <Link to="/" className="auth-logo">ProVeloce</Link>
+                        <Link to="/" className="auth-logo">ProVeloce Connect</Link>
                         <h1>Welcome Back</h1>
                         <p>Sign in to continue to your account</p>
                     </div>

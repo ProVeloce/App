@@ -141,8 +141,8 @@ const LandingPage: React.FC = () => {
                 <div className="container">
                     <div className="nav-content">
                         <Link to="/" className="nav-logo">
-                            <img src="/logo.png" alt="ProVeloce" className="nav-logo-img" />
-                            <span>ProVeloce</span>
+                            <img src="/logo.png" alt="ProVeloce Connect" className="nav-logo-img" />
+                            <span>ProVeloce Connect</span>
                         </Link>
                         <div className="nav-links">
                             <a href="#how-it-works">How It Works</a>
@@ -487,8 +487,8 @@ const LandingPage: React.FC = () => {
                     <div className="footer-grid">
                         <div className="footer-brand">
                             <h3 className="footer-logo">
-                                <img src="/logo.png" alt="ProVeloce" />
-                                ProVeloce
+                                <img src="/logo.png" alt="ProVeloce Connect" />
+                                ProVeloce Connect
                             </h3>
                             <p>Transform ideas into reality. Your trusted skill marketplace connecting verified experts with businesses worldwide.</p>
                             <div className="footer-social">

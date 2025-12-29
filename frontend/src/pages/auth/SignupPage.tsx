@@ -78,7 +78,7 @@ const SignupPage: React.FC = () => {
             <div className="auth-container">
                 <div className="auth-card signup-card">
                     <div className="auth-header">
-                        <Link to="/" className="auth-logo">ProVeloce</Link>
+                        <Link to="/" className="auth-logo">ProVeloce Connect</Link>
                         <h1>Create Account</h1>
                         <p>Join the ProVeloce expert community</p>
                     </div>

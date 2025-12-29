@@ -164,40 +164,36 @@
 }
 
 .hero-visual {
-    position: relative;
-    min-height: 400px;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
     justify-content: center;
+    gap: 24px;
+    padding: 20px 0;
 }
 
 .hero-card {
-    position: absolute;
+    position: relative;
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4) var(--space-6);
+    gap: 12px;
+    padding: 16px 24px;
     background: var(--bg-primary);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
     animation: float 3s ease-in-out infinite;
+    white-space: nowrap;
 }
 
 .hero-card.card-1 {
-    top: 20%;
-    right: 10%;
     animation-delay: 0s;
 }
 
 .hero-card.card-2 {
-    top: 50%;
-    left: 10%;
     animation-delay: 0.5s;
 }
 
 .hero-card.card-3 {
-    top: 70%;
-    left: 25%;
     animation-delay: 1s;
 }
 

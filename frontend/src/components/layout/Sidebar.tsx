@@ -114,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }
         <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-header">
                 <div className="logo">
-                    {!collapsed && <span className="logo-text">ProVeloce</span>}
+                    {!collapsed && <span className="logo-text">ProVeloce Connect</span>}
                     {collapsed && <span className="logo-icon">PV</span>}
                 </div>
                 <button className="collapse-btn" onClick={onToggle}>
