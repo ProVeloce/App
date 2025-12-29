@@ -126,13 +126,6 @@ const LandingPage: React.FC = () => {
         'Average expert response time under 4 hours',
     ];
 
-    // Roadmap
-    const roadmap = [
-        { phase: 'Q1 2025', title: 'Platform Launch', description: 'Core marketplace with expert verification system', status: 'completed' },
-        { phase: 'Q2 2025', title: 'Payment Integration', description: 'Secure payments with escrow protection', status: 'current' },
-        { phase: 'Q3 2025', title: 'Mobile Applications', description: 'iOS and Android apps for on-the-go access', status: 'upcoming' },
-        { phase: 'Q4 2025', title: 'AI-Powered Insights', description: 'Smart recommendations and analytics dashboard', status: 'upcoming' },
-    ];
 
     return (
         <div className="landing-page">
@@ -419,27 +412,6 @@ const LandingPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* Roadmap Section */}
-            <section id="roadmap" className="roadmap">
-                <div className="container">
-                    <div className="section-header">
-                        <h2 className="section-title">Platform Roadmap</h2>
-                        <p className="section-subtitle">Our journey to revolutionize expert services</p>
-                    </div>
-                    <div className="roadmap-timeline">
-                        {roadmap.map((item, index) => (
-                            <div key={index} className={`roadmap-item ${item.status}`}>
-                                <div className="roadmap-phase">{item.phase}</div>
-                                <div className="roadmap-content">
-                                    <h3>{item.title}</h3>
-                                    <p>{item.description}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
             {/* CTA Section - Dual */}
             <section className="cta-dual">
                 <div className="container">
@@ -512,7 +484,6 @@ const LandingPage: React.FC = () => {
                             <a href="#services">Services</a>
                             <a href="#features">Features</a>
                             <a href="#testimonials">Testimonials</a>
-                            <a href="#roadmap">Roadmap</a>
                         </div>
                         <div className="footer-links">
                             <h4>Company</h4>

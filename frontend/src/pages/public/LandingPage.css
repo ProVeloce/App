@@ -19,23 +19,36 @@
 }
 
 .nav-content {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     padding: var(--space-4) 0;
 }
 
 .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-size: 1.5rem;
     font-weight: 700;
+    font-family: var(--font-heading);
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-logo-img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    border-radius: var(--radius-lg);
 }
 
 .nav-links {
     display: flex;
     gap: var(--space-8);
+    justify-content: center;
 }
 
 .nav-links a {
@@ -51,6 +64,7 @@
 .nav-actions {
     display: flex;
     gap: var(--space-3);
+    justify-content: flex-end;
 }
 
 /* Buttons */
@@ -738,8 +752,8 @@
 }
 
 .nav-logo-img {
-    width: 32px;
-    height: 32px;
+    width: 64px;
+    height: 64px;
     object-fit: contain;
 }
 
@@ -1369,8 +1383,8 @@
     }
 
     .nav-logo-img {
-        width: 28px;
-        height: 28px;
+        width: 48px;
+        height: 48px;
     }
 
     /* Hero Section */
