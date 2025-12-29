@@ -250,13 +250,20 @@ const LandingPage: React.FC = () => {
                             </h3>
                             <div className="steps-grid">
                                 {customerSteps.map((item, index) => (
-                                    <div key={index} className="step-card">
-                                        <div className="step-number">{item.step}</div>
-                                        <div className="step-card-content">
-                                            <h4>{item.title}</h4>
-                                            <p>{item.description}</p>
+                                    <React.Fragment key={index}>
+                                        <div className="step-card">
+                                            <div className="step-number">{item.step}</div>
+                                            <div className="step-card-content">
+                                                <h4>{item.title}</h4>
+                                                <p>{item.description}</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                        {index < customerSteps.length - 1 && (
+                                            <div className="step-arrow">
+                                                <ChevronRight size={24} />
+                                            </div>
+                                        )}
+                                    </React.Fragment>
                                 ))}
                             </div>
                         </div>
@@ -268,13 +275,20 @@ const LandingPage: React.FC = () => {
                             </h3>
                             <div className="steps-grid">
                                 {expertSteps.map((item, index) => (
-                                    <div key={index} className="step-card">
-                                        <div className="step-number">{item.step}</div>
-                                        <div className="step-card-content">
-                                            <h4>{item.title}</h4>
-                                            <p>{item.description}</p>
+                                    <React.Fragment key={index}>
+                                        <div className="step-card">
+                                            <div className="step-number">{item.step}</div>
+                                            <div className="step-card-content">
+                                                <h4>{item.title}</h4>
+                                                <p>{item.description}</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                        {index < expertSteps.length - 1 && (
+                                            <div className="step-arrow">
+                                                <ChevronRight size={24} />
+                                            </div>
+                                        )}
+                                    </React.Fragment>
                                 ))}
                             </div>
                         </div>
