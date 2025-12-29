@@ -413,7 +413,7 @@ export default {
                 // Get fresh user data from DB
                 if (env.proveloce_db) {
                     const user = await env.proveloce_db.prepare(
-                        "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+                        "SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?"
                     ).bind(payload.userId).first();
 
                     if (user) {
