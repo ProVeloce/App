@@ -491,16 +491,32 @@ export default {
                 }
 
                 const body = await request.json() as any;
-                const { name, full_name, phone_number, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio } = body;
+                const { name, phone, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio } = body;
 
-                // Update user name if provided
-                if (name) {
-                    await env.proveloce_db.prepare(
-                        "UPDATE users SET name = ? WHERE id = ?"
-                    ).bind(name, payload.userId).run();
+                // Update user name and phone if provided (these are in users table)
+                if (name || phone) {
+                    const updates = [];
+                    const values = [];
+
+                    if (name) {
+                        updates.push("name = ?");
+                        values.push(name);
+                    }
+                    if (phone) {
+                        updates.push("phone = ?");
+                        values.push(phone);
+                    }
+
+                    if (updates.length > 0) {
+                        updates.push("updated_at = CURRENT_TIMESTAMP");
+                        values.push(payload.userId);
+                        await env.proveloce_db.prepare(
+                            `UPDATE users SET ${updates.join(", ")} WHERE id = ?`
+                        ).bind(...values).run();
+                    }
                 }
 
-                // Upsert user profile
+                // Upsert user profile (profile-specific fields)
                 const existingProfile = await env.proveloce_db.prepare(
                     "SELECT id FROM user_profiles WHERE user_id = ?"
                 ).bind(payload.userId).first();
@@ -508,8 +524,6 @@ export default {
                 if (existingProfile) {
                     await env.proveloce_db.prepare(`
                         UPDATE user_profiles SET 
-                            full_name = COALESCE(?, full_name),
-                            phone_number = COALESCE(?, phone_number),
                             dob = COALESCE(?, dob),
                             gender = COALESCE(?, gender),
                             address_line1 = COALESCE(?, address_line1),
@@ -521,19 +535,19 @@ export default {
                             bio = COALESCE(?, bio),
                             updated_at = CURRENT_TIMESTAMP
                         WHERE user_id = ?
-                    `).bind(full_name, phone_number, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
+                    `).bind(dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
                 } else {
                     const profileId = crypto.randomUUID();
                     await env.proveloce_db.prepare(`
-                        INSERT INTO user_profiles (id, user_id, full_name, phone_number, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `).bind(profileId, payload.userId, full_name, phone_number, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
+                        INSERT INTO user_profiles (id, user_id, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(profileId, payload.userId, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
                 }
 
                 // Get updated user and profile
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
-                ).bind(payload.userId).first();
+                    "SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
 
                 const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
@@ -542,7 +556,16 @@ export default {
                 return jsonResponse({
                     success: true,
                     message: "Profile updated successfully",
-                    data: { user: { ...user, profile } }
+                    data: {
+                        user: {
+                            id: user?.id,
+                            name: user?.name,
+                            email: user?.email,
+                            phone: user?.phone || null,
+                            role: user?.role,
+                            profile
+                        }
+                    }
                 });
             }
 
