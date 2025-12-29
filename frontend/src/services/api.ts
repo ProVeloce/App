@@ -246,14 +246,14 @@ export const profileApi = {
 
 // Expert Application API
 export const applicationApi = {
-    submitApplication: (data: any) =>
-        api.post<ApiResponse>('/applications/submit', data),
+    getMyApplication: () =>
+        api.get<ApiResponse<{ application: any }>>('/expert-application'),
 
     saveDraft: (data: any) =>
-        api.post<ApiResponse>('/applications/draft', data),
+        api.post<ApiResponse>('/expert-application', data),
 
-    getMyApplication: () =>
-        api.get<ApiResponse>('/applications/my-application'),
+    submitApplication: () =>
+        api.post<ApiResponse>('/expert-application/submit', {}),
 
     getApplications: (params?: Record<string, any>) =>
         api.get<ApiResponse>('/applications', { params }),

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { applicationApi } from '../../services/api';
 import {
     User,
     Briefcase,
@@ -160,6 +161,7 @@ const ExpertApplication: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [showDraftSaved, setShowDraftSaved] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [skillInput, setSkillInput] = useState('');
     const [portfolioLinkInput, setPortfolioLinkInput] = useState('');
@@ -221,6 +223,48 @@ const ExpertApplication: React.FC = () => {
         { id: 5, title: 'Availability', icon: Clock },
         { id: 6, title: 'Legal & Submit', icon: FileCheck },
     ];
+
+    // Load existing application on mount
+    useEffect(() => {
+        const loadApplication = async () => {
+            try {
+                const response = await applicationApi.getMyApplication();
+                if (response.data.success && response.data.data?.application) {
+                    const app = response.data.data.application;
+                    // Map database fields to form state
+                    setFormData(prev => ({
+                        ...prev,
+                        dob: app.dob || '',
+                        gender: app.gender || '',
+                        addressLine1: app.address_line1 || '',
+                        addressLine2: app.address_line2 || '',
+                        city: app.city || '',
+                        state: app.state || '',
+                        country: app.country || '',
+                        pincode: app.pincode || '',
+                        governmentIdType: app.government_id_type || '',
+                        domains: JSON.parse(app.domains || '[]'),
+                        skills: JSON.parse(app.skills || '[]'),
+                        yearsOfExperience: app.years_of_experience || 0,
+                        summaryBio: app.summary_bio || '',
+                        portfolioLinks: JSON.parse(app.portfolio_urls || '[]'),
+                        workingType: app.working_type || '',
+                        expectedRate: app.hourly_rate || '',
+                        languages: JSON.parse(app.languages || '[]'),
+                        availableDays: JSON.parse(app.available_days || '[]'),
+                        availableTimeSlots: JSON.parse(app.available_time_slots || '[]'),
+                        workPreference: app.work_preference || '',
+                        communicationMode: app.communication_mode || '',
+                        termsAccepted: !!app.terms_accepted,
+                        ndaAccepted: !!app.nda_accepted,
+                    }));
+                }
+            } catch (error) {
+                console.log('No existing application found or error fetching:', error);
+            }
+        };
+        loadApplication();
+    }, []);
 
     // Validation functions
     const validateStep = (step: number): boolean => {
@@ -403,9 +447,37 @@ const ExpertApplication: React.FC = () => {
     const saveDraft = async () => {
         setIsSaving(true);
         try {
-            // TODO: API call to save draft
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            alert('Draft saved successfully!');
+            // Prepare data for API (Files would need separate upload handling)
+            const applicationData = {
+                dob: formData.dob,
+                gender: formData.gender,
+                addressLine1: formData.addressLine1,
+                addressLine2: formData.addressLine2,
+                city: formData.city,
+                state: formData.state,
+                country: formData.country,
+                pincode: formData.pincode,
+                governmentIdType: formData.governmentIdType,
+                domains: formData.domains,
+                skills: formData.skills,
+                yearsOfExperience: formData.yearsOfExperience,
+                summaryBio: formData.summaryBio,
+                portfolioLinks: formData.portfolioLinks,
+                workingType: formData.workingType,
+                expectedRate: formData.expectedRate,
+                languages: formData.languages,
+                availableDays: formData.availableDays,
+                availableTimeSlots: formData.availableTimeSlots,
+                workPreference: formData.workPreference,
+                communicationMode: formData.communicationMode,
+                termsAccepted: formData.termsAccepted,
+                ndaAccepted: formData.ndaAccepted,
+            };
+
+            await applicationApi.saveDraft(applicationData);
+            setShowDraftSaved(true);
+            // Auto-hide after 3 seconds
+            setTimeout(() => setShowDraftSaved(false), 3000);
         } catch (error) {
             console.error('Failed to save draft:', error);
         } finally {
@@ -419,8 +491,39 @@ const ExpertApplication: React.FC = () => {
 
         setIsSubmitting(true);
         try {
-            // TODO: Upload files and submit to API
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // First save the current data
+            const applicationData = {
+                dob: formData.dob,
+                gender: formData.gender,
+                addressLine1: formData.addressLine1,
+                addressLine2: formData.addressLine2,
+                city: formData.city,
+                state: formData.state,
+                country: formData.country,
+                pincode: formData.pincode,
+                governmentIdType: formData.governmentIdType,
+                domains: formData.domains,
+                skills: formData.skills,
+                yearsOfExperience: formData.yearsOfExperience,
+                summaryBio: formData.summaryBio,
+                portfolioLinks: formData.portfolioLinks,
+                workingType: formData.workingType,
+                expectedRate: formData.expectedRate,
+                languages: formData.languages,
+                availableDays: formData.availableDays,
+                availableTimeSlots: formData.availableTimeSlots,
+                workPreference: formData.workPreference,
+                communicationMode: formData.communicationMode,
+                termsAccepted: formData.termsAccepted,
+                ndaAccepted: formData.ndaAccepted,
+            };
+
+            // Save final data
+            await applicationApi.saveDraft(applicationData);
+
+            // Submit application
+            await applicationApi.submitApplication();
+
             setShowSuccess(true);
             setTimeout(() => {
                 navigate('/customer/application-status');
@@ -1200,6 +1303,25 @@ const ExpertApplication: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Draft Saved Popup */}
+            {showDraftSaved && (
+                <div className="draft-saved-overlay">
+                    <div className="draft-saved-popup">
+                        <button className="popup-close" onClick={() => setShowDraftSaved(false)}>
+                            <X size={20} />
+                        </button>
+                        <div className="popup-icon">
+                            <CheckCircle size={48} />
+                        </div>
+                        <h3>Draft Saved Successfully!</h3>
+                        <p>Your progress has been saved. You can continue from where you left off.</p>
+                        <button className="btn btn-primary" onClick={() => setShowDraftSaved(false)}>
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

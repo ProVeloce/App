@@ -1124,6 +1124,160 @@ export default {
             }
 
             // =====================================================
+            // Expert Application Routes
+            // =====================================================
+
+            // GET /api/expert-application - Get current user's application
+            if (url.pathname === "/api/expert-application" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const application = await env.proveloce_db.prepare(
+                    "SELECT * FROM expert_applications WHERE user_id = ?"
+                ).bind(payload.userId).first();
+
+                return jsonResponse({
+                    success: true,
+                    data: { application: application || null }
+                });
+            }
+
+            // POST /api/expert-application - Save/update draft
+            if (url.pathname === "/api/expert-application" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const body = await request.json() as any;
+
+                // Check if application exists
+                const existing = await env.proveloce_db.prepare(
+                    "SELECT id FROM expert_applications WHERE user_id = ?"
+                ).bind(payload.userId).first();
+
+                if (existing) {
+                    // Update existing application
+                    await env.proveloce_db.prepare(`
+                        UPDATE expert_applications SET
+                            dob = ?, gender = ?, address_line1 = ?, address_line2 = ?,
+                            city = ?, state = ?, country = ?, pincode = ?,
+                            government_id_type = ?, government_id_url = ?, profile_photo_url = ?,
+                            domains = ?, years_of_experience = ?, summary_bio = ?, skills = ?,
+                            resume_url = ?, portfolio_urls = ?, certification_urls = ?,
+                            working_type = ?, hourly_rate = ?, languages = ?,
+                            available_days = ?, available_time_slots = ?,
+                            work_preference = ?, communication_mode = ?,
+                            terms_accepted = ?, nda_accepted = ?, signature_url = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ?
+                    `).bind(
+                        body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
+                        body.city || null, body.state || null, body.country || null, body.pincode || null,
+                        body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
+                        JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
+                        body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
+                        body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
+                        JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
+                        body.workPreference || null, body.communicationMode || null,
+                        body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null,
+                        payload.userId
+                    ).run();
+                } else {
+                    // Create new application
+                    const id = crypto.randomUUID();
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO expert_applications (
+                            id, user_id, status,
+                            dob, gender, address_line1, address_line2,
+                            city, state, country, pincode,
+                            government_id_type, government_id_url, profile_photo_url,
+                            domains, years_of_experience, summary_bio, skills,
+                            resume_url, portfolio_urls, certification_urls,
+                            working_type, hourly_rate, languages,
+                            available_days, available_time_slots,
+                            work_preference, communication_mode,
+                            terms_accepted, nda_accepted, signature_url
+                        ) VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(
+                        id, payload.userId,
+                        body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
+                        body.city || null, body.state || null, body.country || null, body.pincode || null,
+                        body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
+                        JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
+                        body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
+                        body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
+                        JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
+                        body.workPreference || null, body.communicationMode || null,
+                        body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null
+                    ).run();
+                }
+
+                return jsonResponse({ success: true, message: "Application saved successfully" });
+            }
+
+            // POST /api/expert-application/submit - Submit application
+            if (url.pathname === "/api/expert-application/submit" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Update status to pending
+                const result = await env.proveloce_db.prepare(`
+                    UPDATE expert_applications 
+                    SET status = 'pending', submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                `).bind(payload.userId).run();
+
+                if (result.changes === 0) {
+                    return jsonResponse({ success: false, error: "No application found to submit" }, 404);
+                }
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), payload.userId, "SUBMIT_EXPERT_APPLICATION", "expert_application", payload.userId, JSON.stringify({ timestamp: new Date().toISOString() })).run();
+
+                return jsonResponse({ success: true, message: "Application submitted successfully" });
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 
