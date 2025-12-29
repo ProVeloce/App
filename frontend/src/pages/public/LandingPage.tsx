@@ -65,18 +65,18 @@ const LandingPage: React.FC = () => {
 
     // How It Works - For Customers
     const customerSteps = [
-        { step: '01', title: 'Post Your Requirement', description: 'Describe your project or consultation need in detail.' },
-        { step: '02', title: 'Get Matched', description: 'Receive proposals from verified experts within hours.' },
-        { step: '03', title: 'Collaborate Securely', description: 'Work together with built-in messaging and task tracking.' },
-        { step: '04', title: 'Pay with Confidence', description: 'Release payment only when you\'re satisfied with results.' },
+        { step: '1', title: 'Post Your Requirement', description: 'Describe your project or consultation need in detail.' },
+        { step: '2', title: 'Get Matched', description: 'Receive proposals from verified experts within hours.' },
+        { step: '3', title: 'Collaborate Securely', description: 'Work together with built-in messaging and task tracking.' },
+        { step: '4', title: 'Pay with Confidence', description: 'Release payment only when you\'re satisfied with results.' },
     ];
 
     // How It Works - For Experts
     const expertSteps = [
-        { step: '01', title: 'Create Your Profile', description: 'Showcase your expertise, experience, and portfolio.' },
-        { step: '02', title: 'Get Verified', description: 'Complete our verification process to build trust.' },
-        { step: '03', title: 'Receive Projects', description: 'Get matched with clients seeking your skills.' },
-        { step: '04', title: 'Grow Your Business', description: 'Build your reputation and earn on your terms.' },
+        { step: '1', title: 'Create Your Profile', description: 'Showcase your expertise, experience, and portfolio.' },
+        { step: '2', title: 'Get Verified', description: 'Complete our verification process to build trust.' },
+        { step: '3', title: 'Receive Projects', description: 'Get matched with clients seeking your skills.' },
+        { step: '4', title: 'Grow Your Business', description: 'Build your reputation and earn on your terms.' },
     ];
 
     // Platform Features
