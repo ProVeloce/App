@@ -186,14 +186,17 @@
 }
 
 .hero-card.card-1 {
+    align-self: flex-end;
     animation-delay: 0s;
 }
 
 .hero-card.card-2 {
+    align-self: flex-start;
     animation-delay: 0.5s;
 }
 
 .hero-card.card-3 {
+    align-self: flex-end;
     animation-delay: 1s;
 }
 
