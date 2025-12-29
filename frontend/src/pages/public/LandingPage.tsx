@@ -473,7 +473,7 @@ const LandingPage: React.FC = () => {
                     <div className="footer-grid">
                         <div className="footer-brand">
                             <h3 className="footer-logo">
-                                <img src="/logo.png" alt="ProVeloce Connect" />
+                                <img src="/footer-logo.png" alt="ProVeloce Connect" />
                                 ProVeloce Connect
                             </h3>
                             <p>Transform ideas into reality. Your trusted skill marketplace connecting verified experts with businesses worldwide.</p>
