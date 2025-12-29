@@ -1077,8 +1077,109 @@
 }
 
 /* Responsive */
-@media (max-width: 1024px) {
+/* Container */
+.container {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 var(--space-6);
+}
 
+/* =====================================================
+   RESPONSIVE STYLES
+   ===================================================== */
+
+/* Large Desktop (1280px and above) */
+@media (min-width: 1280px) {
+    .hero-title {
+        font-size: 4rem;
+    }
+
+    .hero .container {
+        gap: var(--space-20);
+    }
+}
+
+/* Desktop (1024px - 1279px) */
+@media (max-width: 1279px) {
+    .container {
+        max-width: 1024px;
+    }
+
+    .hero-title {
+        font-size: 3rem;
+    }
+
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .footer-grid {
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+    }
+}
+
+/* Tablet (768px - 1023px) */
+@media (max-width: 1023px) {
+    .container {
+        max-width: 768px;
+        padding: 0 var(--space-5);
+    }
+
+    /* Navigation */
+    .nav-links {
+        gap: var(--space-4);
+    }
+
+    .nav-links a {
+        font-size: 0.875rem;
+    }
+
+    /* Hero Section */
+    .hero {
+        padding: 140px 0 60px;
+    }
+
+    .hero .container {
+        grid-template-columns: 1fr;
+        gap: var(--space-10);
+        text-align: center;
+    }
+
+    .hero-content {
+        order: 1;
+    }
+
+    .hero-visual {
+        order: 2;
+        height: 300px;
+    }
+
+    .hero-title {
+        font-size: 2.75rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.125rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .hero-actions {
+        justify-content: center;
+    }
+
+    .hero-stats {
+        justify-content: center;
+    }
+
+    .hero-badge {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* Grids */
     .features-grid,
     .roadmap-timeline,
     .services-grid,
@@ -1088,10 +1189,9 @@
 
     .testimonials-grid {
         grid-template-columns: 1fr;
-    }
-
-    .footer-grid {
-        grid-template-columns: 1fr 1fr;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     .how-tabs,
@@ -1102,18 +1202,77 @@
     }
 
     .value-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .footer-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-8);
+    }
+
+    /* About Section */
+    .about-grid {
         grid-template-columns: 1fr;
-        gap: var(--space-6);
+        gap: var(--space-8);
+    }
+
+    .about-stats {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Sections padding */
+    .features,
+    .how-it-works,
+    .services,
+    .platform-features,
+    .testimonials,
+    .benefits,
+    .roadmap,
+    .about {
+        padding: 80px 0;
+    }
+
+    .cta-dual,
+    .newsletter {
+        padding: 60px 0;
     }
 }
 
-@media (max-width: 768px) {
+/* Mobile (480px - 767px) */
+@media (max-width: 767px) {
+    .container {
+        padding: 0 var(--space-4);
+    }
+
+    /* Navigation */
+    .landing-nav {
+        padding: var(--space-2) 0;
+    }
+
     .nav-links {
         display: none;
     }
 
-    .hero .container {
-        grid-template-columns: 1fr;
+    .nav-content {
+        padding: var(--space-3) 0;
+    }
+
+    .nav-actions .btn-ghost {
+        display: none;
+    }
+
+    .nav-logo {
+        font-size: 1.25rem;
+    }
+
+    .nav-logo-img {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* Hero Section */
+    .hero {
+        padding: 120px 0 50px;
     }
 
     .hero-visual {
@@ -1121,38 +1280,287 @@
     }
 
     .hero-title {
-        font-size: 2.5rem;
+        font-size: 2rem;
+        line-height: 1.2;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+        margin-bottom: var(--space-6);
+    }
+
+    .hero-badge {
+        font-size: 0.75rem;
+        padding: var(--space-1) var(--space-3);
+    }
+
+    .hero-actions {
+        flex-direction: column;
+        gap: var(--space-3);
+        width: 100%;
+    }
+
+    .hero-actions .btn {
+        width: 100%;
+        justify-content: center;
     }
 
     .hero-stats {
         flex-direction: column;
         gap: var(--space-4);
+        text-align: center;
     }
 
-    .hero-actions {
-        flex-direction: column;
+    .hero-stat {
+        text-align: center;
     }
 
-    .about-grid {
-        grid-template-columns: 1fr;
+    .stat-value {
+        font-size: 1.75rem;
     }
 
+    /* Section Headers */
+    .section-title {
+        font-size: 1.75rem;
+    }
+
+    .section-subtitle {
+        font-size: 1rem;
+    }
+
+    .section-header {
+        margin-bottom: var(--space-8);
+    }
+
+    /* Grids - Single Column */
     .features-grid,
     .roadmap-timeline,
     .services-grid,
-    .platform-grid {
+    .platform-grid,
+    .value-grid {
         grid-template-columns: 1fr;
+        gap: var(--space-4);
     }
 
-    .footer-grid {
-        grid-template-columns: 1fr;
+    /* Feature Cards */
+    .feature-card {
+        padding: var(--space-6);
+    }
+
+    .feature-image {
+        height: 140px;
+    }
+
+    /* Service Cards */
+    .service-card {
+        padding: var(--space-6);
+    }
+
+    /* Platform Cards */
+    .platform-card {
+        padding: var(--space-5);
+    }
+
+    /* How It Works */
+    .how-section {
+        padding: var(--space-6);
+    }
+
+    .step-card {
+        grid-template-columns: 40px 1fr;
+        gap: var(--space-3);
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        font-size: 0.75rem;
+    }
+
+    /* Testimonials */
+    .testimonial-card {
+        padding: var(--space-6);
+    }
+
+    /* About Stats */
+    .about-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-4);
+    }
+
+    .stat-card {
+        padding: var(--space-4);
+    }
+
+    .stat-number {
+        font-size: 2rem;
+    }
+
+    /* Benefits */
+    .benefits-content h2 {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+
+    .benefits-list {
+        gap: var(--space-3);
+    }
+
+    .benefits-list li {
+        font-size: 0.9375rem;
+    }
+
+    .cta-box {
+        padding: var(--space-8);
+    }
+
+    .cta-box h3 {
+        font-size: 1.25rem;
+    }
+
+    /* CTA Dual */
+    .cta-card {
+        padding: var(--space-8);
+    }
+
+    .cta-card h3 {
+        font-size: 1.25rem;
+    }
+
+    .cta-card svg {
+        width: 32px;
+        height: 32px;
+    }
+
+    /* Newsletter */
+    .newsletter-content h3 {
+        font-size: 1.25rem;
     }
 
     .newsletter-form {
         flex-direction: column;
+        gap: var(--space-3);
+    }
+
+    .newsletter-form input {
+        width: 100%;
+    }
+
+    .newsletter-form .btn {
+        width: 100%;
+    }
+
+    /* Roadmap */
+    .roadmap-item {
+        padding: var(--space-5);
+    }
+
+    /* Footer */
+    .footer {
+        padding: 60px 0 var(--space-6);
+    }
+
+    .footer-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-8);
+        text-align: center;
+    }
+
+    .footer-brand {
+        text-align: center;
+    }
+
+    .footer-social {
+        justify-content: center;
+    }
+
+    .footer-links,
+    .footer-contact {
+        text-align: center;
+    }
+
+    .footer-links a,
+    .footer-contact a,
+    .footer-contact p {
+        justify-content: center;
+    }
+
+    .footer-logo {
+        justify-content: center;
+    }
+
+    /* Sections padding */
+    .features,
+    .how-it-works,
+    .services,
+    .platform-features,
+    .testimonials,
+    .benefits,
+    .roadmap,
+    .about {
+        padding: 60px 0;
+    }
+
+    .cta-dual,
+    .newsletter {
+        padding: 50px 0;
+    }
+
+    .value-prop {
+        padding: var(--space-8) 0;
+    }
+}
+
+/* Small Mobile (under 480px) */
+@media (max-width: 479px) {
+    .container {
+        padding: 0 var(--space-3);
+    }
+
+    .hero {
+        padding: 100px 0 40px;
+    }
+
+    .hero-title {
+        font-size: 1.75rem;
+    }
+
+    .hero-subtitle {
+        font-size: 0.9375rem;
+    }
+
+    .btn-lg {
+        padding: var(--space-3) var(--space-4);
+        font-size: 0.9375rem;
     }
 
     .section-title {
-        font-size: 2rem;
+        font-size: 1.5rem;
+    }
+
+    .feature-card h3,
+    .service-card h3,
+    .platform-card h4 {
+        font-size: 1rem;
+    }
+
+    .about-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-number {
+        font-size: 1.75rem;
+    }
+
+    .how-section-title {
+        font-size: 1.125rem;
+    }
+
+    .step-card h4 {
+        font-size: 0.9375rem;
+    }
+
+    .step-card p {
+        font-size: 0.8125rem;
     }
 }
