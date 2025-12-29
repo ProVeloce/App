@@ -196,8 +196,8 @@
 }
 
 .hero-card.card-3 {
-    bottom: 20%;
-    right: 20%;
+    top: 70%;
+    left: 25%;
     animation-delay: 1s;
 }
 
