@@ -58,39 +58,50 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-    border-radius: var(--radius-lg);
-    font-weight: 500;
-    font-size: 0.875rem;
-    transition: all var(--transition-fast);
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: var(--radius-xl);
+    font-family: var(--font-body);
+    font-weight: var(--font-medium);
+    font-size: 0.9375rem;
+    transition: all var(--transition-normal);
     border: none;
     cursor: pointer;
+    text-decoration: none;
 }
 
 .btn-lg {
-    padding: var(--space-3) var(--space-6);
+    padding: 14px 28px;
     font-size: 1rem;
+    border-radius: var(--radius-xl);
 }
 
 .btn-primary {
     background: var(--gradient-primary);
     color: white;
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-primary);
+}
+
+.btn-primary:active {
+    transform: translateY(-1px);
 }
 
 .btn-outline {
     background: transparent;
-    border: 2px solid var(--primary-600);
-    color: var(--primary-600);
+    border: 2px solid var(--primary-500);
+    color: var(--primary-500);
 }
 
 .btn-outline:hover {
     background: var(--primary-50);
+    border-color: var(--primary-600);
+    color: var(--primary-600);
+    transform: translateY(-2px);
 }
 
 .btn-ghost {
@@ -100,23 +111,25 @@
 
 .btn-ghost:hover {
     background: var(--bg-tertiary);
-    color: var(--text-primary);
+    color: var(--primary-500);
 }
 
 .btn-white {
     background: white;
-    color: var(--primary-600);
+    color: var(--primary-500);
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-white:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
     box-shadow: var(--shadow-lg);
+    color: var(--primary-600);
 }
 
 /* Hero Section */
 .hero {
     padding: 160px 0 80px;
-    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    background: var(--gradient-hero);
     overflow: visible;
     min-height: auto;
 }
