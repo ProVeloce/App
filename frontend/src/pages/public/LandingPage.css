@@ -273,6 +273,7 @@
     font-size: 2.5rem;
     font-weight: 700;
     margin-bottom: 16px;
+    text-align: center;
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -286,42 +287,7 @@
     margin: 0 auto;
 }
 
-/* Unique Section Title Colors */
-.how-it-works .section-title {
-    background: linear-gradient(135deg, #06b6d4, #0891b2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.services .section-title {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.features .section-title {
-    background: linear-gradient(135deg, #10b981, #059669);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.platform-features .section-title {
-    background: linear-gradient(135deg, #f97316, #ea580c);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.testimonials .section-title {
-    background: linear-gradient(135deg, #ec4899, #db2777);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.roadmap .section-title {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
+/* All section titles use the same primary gradient color scheme */
 
 /* Center Align All Section Content */
 .value-prop .container,
