@@ -259,8 +259,10 @@ const LandingPage: React.FC = () => {
                                 {customerSteps.map((item, index) => (
                                     <div key={index} className="step-card">
                                         <div className="step-number">{item.step}</div>
-                                        <h4>{item.title}</h4>
-                                        <p>{item.description}</p>
+                                        <div className="step-card-content">
+                                            <h4>{item.title}</h4>
+                                            <p>{item.description}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -275,8 +277,10 @@ const LandingPage: React.FC = () => {
                                 {expertSteps.map((item, index) => (
                                     <div key={index} className="step-card">
                                         <div className="step-number">{item.step}</div>
-                                        <h4>{item.title}</h4>
-                                        <p>{item.description}</p>
+                                        <div className="step-card-content">
+                                            <h4>{item.title}</h4>
+                                            <p>{item.description}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
