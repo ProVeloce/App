@@ -224,6 +224,18 @@ const ExpertApplication: React.FC = () => {
         { id: 6, title: 'Legal & Submit', icon: FileCheck },
     ];
 
+    // Update form when user data loads
+    useEffect(() => {
+        if (user) {
+            setFormData(prev => ({
+                ...prev,
+                fullName: user.name || prev.fullName,
+                email: user.email || prev.email,
+                phone: user.phone || prev.phone,
+            }));
+        }
+    }, [user]);
+
     // Load existing application on mount
     useEffect(() => {
         const loadApplication = async () => {
