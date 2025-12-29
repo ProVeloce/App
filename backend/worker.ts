@@ -448,16 +448,25 @@ export default {
 
                 const user = await env.proveloce_db.prepare(
                     "SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?"
-                ).bind(payload.userId).first();
+                ).bind(payload.userId).first() as any;
 
                 const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
-                ).bind(payload.userId).first();
+                ).bind(payload.userId).first() as any;
 
+                // Return user data with phone explicitly at top level
                 return jsonResponse({
                     success: true,
                     data: {
-                        user: { ...user, profile },
+                        user: {
+                            id: user?.id,
+                            name: user?.name,
+                            email: user?.email,
+                            phone: user?.phone || null,
+                            role: user?.role,
+                            created_at: user?.created_at,
+                            profile: profile || null
+                        },
                         profileCompletion: profile ? 80 : 20
                     }
                 });
