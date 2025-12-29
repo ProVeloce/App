@@ -447,7 +447,7 @@ export default {
                 }
 
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+                    "SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first();
 
                 const profile = await env.proveloce_db.prepare(

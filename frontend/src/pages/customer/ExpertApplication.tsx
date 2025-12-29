@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { applicationApi } from '../../services/api';
+import { applicationApi, profileApi } from '../../services/api';
 import {
     User,
     Briefcase,
@@ -224,16 +224,48 @@ const ExpertApplication: React.FC = () => {
         { id: 6, title: 'Legal & Submit', icon: FileCheck },
     ];
 
-    // Update form when user data loads
+    // Update form when user data loads + fetch profile data
     useEffect(() => {
-        if (user) {
-            setFormData(prev => ({
-                ...prev,
-                fullName: user.name || prev.fullName,
-                email: user.email || prev.email,
-                phone: user.phone || prev.phone,
-            }));
-        }
+        const loadUserProfile = async () => {
+            try {
+                // First set from auth context if available
+                if (user) {
+                    setFormData(prev => ({
+                        ...prev,
+                        fullName: user.name || prev.fullName,
+                        email: user.email || prev.email,
+                        phone: user.phone || prev.phone,
+                    }));
+                }
+
+                // Then fetch full profile from API for more details
+                const response = await profileApi.getMyProfile();
+                if (response.data.success && response.data.data?.user) {
+                    const userData = response.data.data.user;
+                    const profile: any = userData.profile || {};
+
+                    setFormData(prev => ({
+                        ...prev,
+                        fullName: userData.name || prev.fullName,
+                        email: userData.email || prev.email,
+                        phone: userData.phone || prev.phone,
+                        // Also load profile fields
+                        dob: profile.dob || prev.dob,
+                        gender: profile.gender || prev.gender,
+                        addressLine1: profile.address_line1 || prev.addressLine1,
+                        addressLine2: profile.address_line2 || prev.addressLine2,
+                        city: profile.city || prev.city,
+                        state: profile.state || prev.state,
+                        country: profile.country || prev.country,
+                        pincode: profile.pincode || prev.pincode,
+                    }));
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        };
+
+        loadUserProfile();
     }, [user]);
 
     // Load existing application on mount
@@ -588,7 +620,10 @@ const ExpertApplication: React.FC = () => {
                 </div>
                 <div className="form-group">
                     <label>Phone Number</label>
-                    <input type="tel" value={formData.phone} disabled className="disabled" />
+                    <input type="tel" value={formData.phone} disabled className="disabled" placeholder="Not set" />
+                    {!formData.phone && (
+                        <span className="warning-text">Please update your phone number in the Profile section before applying</span>
+                    )}
                 </div>
 
                 {/* User input fields */}
