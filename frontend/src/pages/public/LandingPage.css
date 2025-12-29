@@ -276,7 +276,7 @@
 .section-title {
     font-size: 2.5rem;
     font-weight: 700;
-    margin-bottom: 16px;
+    margin-bottom: 4px;
     text-align: center !important;
     width: 100%;
     display: block;
@@ -1184,8 +1184,8 @@
 }
 
 .footer-logo img {
-    width: 32px;
-    height: 32px;
+    width: 64px;
+    height: 64px;
     object-fit: contain;
 }
 
