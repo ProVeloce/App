@@ -31,3 +31,22 @@
         margin-left: 0;
     }
 }
+
+.dashboard-footer {
+    padding: var(--space-3) var(--space-6);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.session-id {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    user-select: all;
+}
