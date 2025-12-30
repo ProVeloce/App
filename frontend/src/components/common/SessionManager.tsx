@@ -33,10 +33,13 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
     useEffect(() => {
         if (isAuthenticated && user && !sessionId) {
             const newSessionId = startSession();
-            // Navigate to encoded URL after session starts
-            if (newSessionId) {
+            // Only update URL for protected routes, not public pages
+            if (newSessionId && isRouteMapped(location.pathname)) {
                 const encodedPath = encodeCurrentUrl(location.pathname);
-                window.history.replaceState(null, '', `/${encodedPath}`);
+                // Validate encoded path is a proper 128-char hex token
+                if (encodedPath && encodedPath.length === 128 && /^[a-f0-9]+$/i.test(encodedPath)) {
+                    window.history.replaceState(null, '', `/${encodedPath}`);
+                }
             }
         }
     }, [isAuthenticated, user, sessionId, startSession, encodeCurrentUrl, location.pathname]);
@@ -56,8 +59,10 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
         // Check if current path is a mapped route (should be encoded)
         if (isRouteMapped(location.pathname)) {
             const encodedPath = encodeCurrentUrl(location.pathname);
-            // Update URL without triggering navigation
-            window.history.replaceState(null, '', `/${encodedPath}`);
+            // Validate encoded path is a proper 128-char hex token before updating URL
+            if (encodedPath && encodedPath.length === 128 && /^[a-f0-9]+$/i.test(encodedPath)) {
+                window.history.replaceState(null, '', `/${encodedPath}`);
+            }
         }
     }, [location.pathname, isAuthenticated, sessionId, encodeCurrentUrl]);
 
