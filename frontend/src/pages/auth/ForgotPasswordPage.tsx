@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { authApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
+import AppLogo from '../../components/common/AppLogo';
 import './AuthPages.css';
 
 const forgotPasswordSchema = z.object({
