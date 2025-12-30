@@ -26,6 +26,7 @@ import {
     Calendar,
     TrendingUp,
 } from 'lucide-react';
+import AppLogo from '../../components/common/AppLogo';
 import './LandingPage.css';
 
 const LandingPage: React.FC = () => {
@@ -133,10 +134,7 @@ const LandingPage: React.FC = () => {
             <nav className="landing-nav">
                 <div className="container">
                     <div className="nav-content">
-                        <Link to="/" className="nav-logo">
-                            <img src="/logo.png" alt="ProVeloce Connect" className="nav-logo-img" />
-                            <span>ProVeloce Connect</span>
-                        </Link>
+                        <AppLogo showText={true} size="large" className="nav-logo" />
                         <div className="nav-links">
                             <a href="#how-it-works">How It Works</a>
                             <a href="#services">Services</a>
@@ -473,8 +471,7 @@ const LandingPage: React.FC = () => {
                     <div className="footer-grid">
                         <div className="footer-brand">
                             <h3 className="footer-logo">
-                                <img src="/footer-logo.png" alt="ProVeloce Connect" />
-                                ProVeloce Connect
+                                <AppLogo showText={true} size="large" logoPath="/images/footer-logo.png" clickable={true} />
                             </h3>
                             <p>Transform ideas into reality. Your trusted skill marketplace connecting verified experts with businesses worldwide.</p>
                             <div className="footer-social">

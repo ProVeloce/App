@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { setAccessToken } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import AppLogo from '../../components/common/AppLogo';
 import './AuthSuccess.css';
 
 const AuthSuccess: React.FC = () => {
@@ -79,6 +80,11 @@ const AuthSuccess: React.FC = () => {
 
     return (
         <div className="auth-success-container">
+            {/* Logo */}
+            <div className="auth-success-logo">
+                <AppLogo showText={true} size="large" clickable={false} />
+            </div>
+            
             {/* Animated Success Icon */}
             <div className="success-icon">
                 <svg viewBox="0 0 52 52" className="success-svg">

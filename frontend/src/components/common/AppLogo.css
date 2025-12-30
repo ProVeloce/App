@@ -1,0 +1,89 @@
+.app-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: transform var(--transition-fast, 0.2s ease);
+}
+
+.app-logo:hover {
+    transform: scale(1.05);
+}
+
+.app-logo-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-flex;
+}
+
+.app-logo-img {
+    object-fit: contain;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* Size variants */
+.app-logo.small .app-logo-img {
+    width: 32px;
+    height: 32px;
+}
+
+.app-logo.medium .app-logo-img {
+    width: 40px;
+    height: 40px;
+}
+
+.app-logo.large .app-logo-img {
+    width: 64px;
+    height: 64px;
+}
+
+.app-logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    white-space: nowrap;
+}
+
+/* Size-specific text */
+.app-logo.small .app-logo-text {
+    font-size: 1rem;
+}
+
+.app-logo.medium .app-logo-text {
+    font-size: 1.25rem;
+}
+
+.app-logo.large .app-logo-text {
+    font-size: 1.5rem;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .app-logo-img {
+    filter: brightness(1.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .app-logo.medium .app-logo-img {
+        width: 32px;
+        height: 32px;
+    }
+
+    .app-logo.medium .app-logo-text {
+        font-size: 1rem;
+    }
+
+    .app-logo.large .app-logo-img {
+        width: 48px;
+        height: 48px;
+    }
+
+    .app-logo.large .app-logo-text {
+        font-size: 1.25rem;
+    }
+}
+

@@ -29,13 +29,13 @@
 }
 
 .auth-logo {
-    display: inline-block;
-    font-size: 1.5rem;
-    font-weight: 700;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    display: flex;
+    justify-content: center;
     margin-bottom: var(--space-6);
+}
+
+.auth-logo .app-logo {
+    justify-content: center;
 }
 
 .auth-header h1 {

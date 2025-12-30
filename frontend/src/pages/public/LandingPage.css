@@ -28,21 +28,10 @@
 .nav-logo {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 1.5rem;
-    font-weight: 700;
-    font-family: var(--font-heading);
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
-.nav-logo-img {
-    width: 64px;
-    height: 64px;
-    object-fit: contain;
-    border-radius: var(--radius-lg);
+.nav-logo .app-logo {
+    align-items: center;
 }
 
 .nav-links {
@@ -1196,17 +1185,17 @@ section .container .section-header,
 .footer-logo {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    font-size: 1.5rem;
-    font-weight: 700;
     margin-bottom: var(--space-4);
-    color: white !important;
 }
 
-.footer-logo img {
-    width: 64px;
-    height: 64px;
-    object-fit: contain;
+.footer-logo .app-logo {
+    align-items: center;
+}
+
+.footer-logo .app-logo-text {
+    color: white !important;
+    -webkit-text-fill-color: white !important;
+    background: none !important;
 }
 
 .footer-tagline {

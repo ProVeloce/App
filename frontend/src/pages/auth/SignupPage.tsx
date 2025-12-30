@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Mail, Lock, User, Phone, Eye, EyeOff, ArrowRight, Check } from 'lucide-react';
+import AppLogo from '../../components/common/AppLogo';
 import './AuthPages.css';
 
 const signupSchema = z.object({
@@ -78,7 +79,7 @@ const SignupPage: React.FC = () => {
             <div className="auth-container">
                 <div className="auth-card signup-card">
                     <div className="auth-header">
-                        <Link to="/" className="auth-logo">ProVeloce Connect</Link>
+                        <AppLogo showText={true} size="large" className="auth-logo" />
                         <h1>Create Account</h1>
                         <p>Join the ProVeloce expert community</p>
                     </div>

@@ -21,6 +21,7 @@ import {
     ChevronRight,
     LogOut,
 } from 'lucide-react';
+import AppLogo from '../common/AppLogo';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -113,10 +114,11 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }
     return (
         <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-header">
-                <div className="logo">
-                    {!collapsed && <span className="logo-text">ProVeloce Connect</span>}
-                    {collapsed && <span className="logo-icon">PV</span>}
-                </div>
+                {collapsed ? (
+                    <AppLogo showText={false} size="small" className="sidebar-logo-collapsed" />
+                ) : (
+                    <AppLogo showText={true} size="medium" className="sidebar-logo" />
+                )}
                 <button className="collapse-btn" onClick={onToggle}>
                     {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
                 </button>

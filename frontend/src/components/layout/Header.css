@@ -16,6 +16,16 @@
     gap: var(--space-4);
 }
 
+.header-logo {
+    margin-right: var(--space-2);
+}
+
+@media (max-width: 768px) {
+    .header-logo .app-logo-text {
+        display: none;
+    }
+}
+
 .search-bar {
     display: flex;
     align-items: center;

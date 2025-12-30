@@ -40,16 +40,83 @@ function isJWTExpired(token: string): boolean {
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isInitialized, setIsInitialized] = useState(false);
 
+    // Restore session on mount - only run once
     useEffect(() => {
-        checkAuth();
-    }, []);
+        const restoreSession = async () => {
+            if (isInitialized) return;
+            
+            const token = getAccessToken();
+            if (!token) {
+                setIsLoading(false);
+                setIsInitialized(true);
+                return;
+            }
+
+            // Check if token is expired
+            if (isJWTExpired(token)) {
+                setAccessToken(null);
+                setRefreshToken(null);
+                setIsLoading(false);
+                setIsInitialized(true);
+                return;
+            }
+
+            // Decode JWT to get user info immediately
+            const payload = decodeJWT(token);
+            if (payload) {
+                // Create user object from JWT payload immediately
+                const userFromToken: User = {
+                    id: payload.userId || payload.id || '',
+                    name: payload.name || '',
+                    email: payload.email || '',
+                    role: (payload.role?.toUpperCase() as User['role']) || 'CUSTOMER',
+                    status: 'ACTIVE',
+                    emailVerified: true,
+                    createdAt: new Date().toISOString(),
+                };
+
+                // Set user immediately from token to prevent redirect loops
+                setUser(userFromToken);
+                setIsLoading(false);
+                setIsInitialized(true);
+
+                // Optionally try to fetch fresh user data from API in background
+                try {
+                    const response = await authApi.getCurrentUser();
+                    if (response.data?.success && response.data?.data?.user) {
+                        setUser(response.data.data.user);
+                    }
+                } catch (error) {
+                    // API call failed, but we still have user from JWT - that's fine
+                    console.log('Could not refresh user from API, using JWT data');
+                }
+            } else {
+                // Invalid token
+                setAccessToken(null);
+                setRefreshToken(null);
+                setIsLoading(false);
+                setIsInitialized(true);
+            }
+        };
+
+        restoreSession();
+    }, [isInitialized]);
 
     const checkAuth = async (): Promise<User | null> => {
+        // If already initialized and user exists, return immediately
+        if (isInitialized && user) {
+            return user;
+        }
+
         const token = getAccessToken();
 
         if (!token) {
-            setIsLoading(false);
+            if (!isInitialized) {
+                setIsLoading(false);
+                setIsInitialized(true);
+            }
             return null;
         }
 
@@ -57,7 +124,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (isJWTExpired(token)) {
             setAccessToken(null);
             setRefreshToken(null);
-            setIsLoading(false);
+            if (!isInitialized) {
+                setIsLoading(false);
+                setIsInitialized(true);
+            }
+            setUser(null);
             return null;
         }
 
@@ -76,8 +147,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 createdAt: new Date().toISOString(),
             };
 
-            setUser(userFromToken);
-            setIsLoading(false);
+            // Only update state if user changed or not initialized
+            if (!user || user.id !== userFromToken.id) {
+                setUser(userFromToken);
+            }
+            
+            if (!isInitialized) {
+                setIsLoading(false);
+                setIsInitialized(true);
+            }
 
             // Optionally try to fetch fresh user data from API (if available)
             try {
@@ -95,7 +173,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Invalid token
             setAccessToken(null);
             setRefreshToken(null);
-            setIsLoading(false);
+            if (!isInitialized) {
+                setIsLoading(false);
+                setIsInitialized(true);
+            }
+            setUser(null);
             return null;
         }
     };
@@ -109,6 +191,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setAccessToken(tokens.accessToken);
                 setRefreshToken(tokens.refreshToken);
                 setUser(userData);
+                setIsInitialized(true);
+                setIsLoading(false);
                 return { success: true };
             }
 
@@ -150,7 +234,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.removeItem('auth_token');
             localStorage.removeItem('userEmail');
             localStorage.removeItem('userName');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
             setUser(null);
+            setIsInitialized(false);
+            setIsLoading(false);
         }
     };
 

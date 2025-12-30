@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { User } from '../../services/api';
 import { notificationApi } from '../../services/api';
 import { Bell, Moon, Sun, LogOut, Search } from 'lucide-react';
+import AppLogo from '../common/AppLogo';
 import './Header.css';
 
 interface HeaderProps {
@@ -36,6 +37,7 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, onLogout })
     return (
         <header className="header">
             <div className="header-left">
+                <AppLogo showText={true} size="medium" className="header-logo" />
                 <div className="search-bar">
                     <Search size={18} className="search-icon" />
                     <input type="text" placeholder="Search..." />

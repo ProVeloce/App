@@ -53,7 +53,7 @@ const ForgotPasswordPage: React.FC = () => {
             <div className="auth-container">
                 <div className="auth-card">
                     <div className="auth-header">
-                        <Link to="/" className="auth-logo">ProVeloce Connect</Link>
+                        <AppLogo showText={true} size="large" className="auth-logo" />
                         <h1>Forgot Password</h1>
                         <p>
                             {emailSent
