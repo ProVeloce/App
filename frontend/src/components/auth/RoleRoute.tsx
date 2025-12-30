@@ -17,8 +17,9 @@ const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
         setHasToken(!!token);
     }, []);
 
-    // Show loading during initial token check (hasToken is null)
-    if (isLoading && hasToken === null) {
+    // Show loading during initial token check (hasToken is null) - protect against race condition
+    // This must check regardless of isLoading state to prevent unauthenticated access
+    if (hasToken === null) {
         return (
             <div className="loading-screen">
                 <div className="loading-spinner" />
@@ -37,13 +38,8 @@ const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
         );
     }
 
-    // Only redirect to login if we're sure there's no token (hasToken is explicitly false, not null)
-    // Having a token means we're authenticated, even if user object is temporarily null
-    if (!user && hasToken === false) {
-        return <Navigate to="/login" replace />;
-    }
-
     // If we have a token but user is not loaded yet, wait
+    // This prevents redirect loops during navigation
     if (hasToken && !user && isLoading) {
         return (
             <div className="loading-screen">
@@ -51,6 +47,13 @@ const RoleRoute: React.FC<RoleRouteProps> = ({ allowedRoles }) => {
                 <p>Loading...</p>
             </div>
         );
+    }
+
+    // Only redirect to login if we're sure there's no token (hasToken is explicitly false)
+    // Having a token means we're authenticated, even if user object is temporarily null
+    // This check must come after the null check above to prevent unauthenticated access
+    if (!user && hasToken === false) {
+        return <Navigate to="/login" replace />;
     }
 
     // If user is loaded, check role
