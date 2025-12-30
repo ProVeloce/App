@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
 import './AppLogo.css';
 
 interface AppLogoProps {
@@ -11,7 +12,7 @@ interface AppLogoProps {
     clickable?: boolean;
     /** Custom className */
     className?: string;
-    /** Logo image path - defaults to /images/logo.png */
+    /** Override logo path (ignores theme) */
     logoPath?: string;
 }
 
@@ -20,19 +21,26 @@ const AppLogo: React.FC<AppLogoProps> = ({
     size = 'medium',
     clickable = true,
     className = '',
-    logoPath = '/images/logo.png',
+    logoPath,
 }) => {
+    const { theme } = useTheme();
+
+    // Use theme-based logo: light mode = logo.png, dark mode = footer-logo.png
+    const themeLogo = theme === 'dark' ? '/images/footer-logo.png' : '/images/logo.png';
+    const currentLogo = logoPath || themeLogo;
+
     const logoContent = (
         <div className={`app-logo ${size} ${className}`}>
             <img
-                src={logoPath}
+                src={currentLogo}
                 alt="ProVeloce Connect"
                 className="app-logo-img"
                 onError={(e) => {
                     // Fallback to root logo if images/logo.png doesn't exist
                     const target = e.target as HTMLImageElement;
-                    if (target.src !== `${window.location.origin}/logo.png`) {
-                        target.src = '/logo.png';
+                    const fallback = theme === 'dark' ? '/footer-logo.png' : '/logo.png';
+                    if (!target.src.endsWith(fallback)) {
+                        target.src = fallback;
                     }
                 }}
             />
@@ -52,4 +60,3 @@ const AppLogo: React.FC<AppLogoProps> = ({
 };
 
 export default AppLogo;
-

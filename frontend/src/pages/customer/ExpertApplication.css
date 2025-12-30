@@ -866,3 +866,62 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border-medium);
 }
+
+/* Profile Info Notice */
+.profile-info-notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--info-50, #eff6ff);
+    border: 1px solid var(--info-200, #bfdbfe);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-6);
+    font-size: 0.875rem;
+    color: var(--info-700, #1d4ed8);
+}
+
+.profile-info-notice svg {
+    flex-shrink: 0;
+    color: var(--info-500, #3b82f6);
+}
+
+.profile-link {
+    color: var(--primary-600);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.profile-link:hover {
+    color: var(--primary-700);
+    text-decoration: underline;
+}
+
+.auto-filled {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.error-link {
+    color: var(--primary-600);
+    font-weight: 500;
+    text-decoration: underline;
+}
+
+.error-link:hover {
+    color: var(--primary-700);
+}
+
+/* Dark mode for profile notice */
+[data-theme="dark"] .profile-info-notice {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: var(--info-300, #93c5fd);
+}
+
+[data-theme="dark"] .profile-info-notice svg {
+    color: var(--info-400, #60a5fa);
+}

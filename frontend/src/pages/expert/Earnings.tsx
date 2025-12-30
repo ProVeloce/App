@@ -5,9 +5,9 @@ const Earnings: React.FC = () => (
     <div className="page">
         <div className="page-header"><h1>Earnings</h1><p>Track your income and withdrawals</p></div>
         <div className="stats-grid">
-            <div className="stat-card"><div className="stat-icon success"><DollarSign size={24} /></div><div className="stat-content"><span className="stat-value">$0.00</span><span className="stat-label">Available Balance</span></div></div>
-            <div className="stat-card"><div className="stat-icon primary"><TrendingUp size={24} /></div><div className="stat-content"><span className="stat-value">$0.00</span><span className="stat-label">Total Earned</span></div></div>
-            <div className="stat-card"><div className="stat-icon warning"><ArrowUpRight size={24} /></div><div className="stat-content"><span className="stat-value">$0.00</span><span className="stat-label">Pending</span></div></div>
+            <div className="stat-card"><div className="stat-icon success"><DollarSign size={24} /></div><div className="stat-content"><span className="stat-value">₹0.00</span><span className="stat-label">Available Balance</span></div></div>
+            <div className="stat-card"><div className="stat-icon primary"><TrendingUp size={24} /></div><div className="stat-content"><span className="stat-value">₹0.00</span><span className="stat-label">Total Earned</span></div></div>
+            <div className="stat-card"><div className="stat-icon warning"><ArrowUpRight size={24} /></div><div className="stat-content"><span className="stat-value">₹0.00</span><span className="stat-label">Pending</span></div></div>
         </div>
         <div className="empty-state">
             <Wallet size={48} />

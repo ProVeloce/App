@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import { encodeSessionUrl, decodeSessionUrl, isValidSessionToken } from '../utils/sessionUrl';
 
 interface SessionContextType {
     sessionId: string | null;
+    encodedToken: string | null;
     lastActivityTime: number;
     remainingTime: number; // in seconds
     isSessionExpired: boolean;
@@ -10,6 +12,8 @@ interface SessionContextType {
     startSession: () => string;
     endSession: () => void;
     dismissWarning: () => void;
+    encodeCurrentUrl: (route: string) => string;
+    decodeUrl: (token: string) => { sessionId: string | null; route: string | null };
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -35,6 +39,9 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
         // Restore session ID from sessionStorage if exists
         return sessionStorage.getItem('sessionId');
     });
+    const [encodedToken, setEncodedToken] = useState<string | null>(() => {
+        return sessionStorage.getItem('encodedToken');
+    });
     const [lastActivityTime, setLastActivityTime] = useState<number>(() => {
         const stored = sessionStorage.getItem('lastActivityTime');
         return stored ? parseInt(stored, 10) : Date.now();
@@ -49,14 +56,17 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
     const startSession = useCallback((): string => {
         const newSessionId = generateSessionId();
         const now = Date.now();
+        const initialToken = encodeSessionUrl(newSessionId, '/dashboard');
 
         setSessionId(newSessionId);
+        setEncodedToken(initialToken);
         setLastActivityTime(now);
         setIsSessionExpired(false);
         setShowTimeoutWarning(false);
         setRemainingTime(SESSION_TIMEOUT_MS / 1000);
 
         sessionStorage.setItem('sessionId', newSessionId);
+        sessionStorage.setItem('encodedToken', initialToken);
         sessionStorage.setItem('lastActivityTime', now.toString());
 
         return newSessionId;
@@ -65,12 +75,14 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
     // End the current session
     const endSession = useCallback(() => {
         setSessionId(null);
+        setEncodedToken(null);
         setLastActivityTime(0);
         setIsSessionExpired(false);
         setShowTimeoutWarning(false);
         setRemainingTime(0);
 
         sessionStorage.removeItem('sessionId');
+        sessionStorage.removeItem('encodedToken');
         sessionStorage.removeItem('lastActivityTime');
     }, []);
 
@@ -90,6 +102,20 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
     const dismissWarning = useCallback(() => {
         resetActivityTimer();
     }, [resetActivityTimer]);
+
+    // Encode current URL with session
+    const encodeCurrentUrl = useCallback((route: string): string => {
+        if (!sessionId) return route;
+        const token = encodeSessionUrl(sessionId, route);
+        setEncodedToken(token);
+        sessionStorage.setItem('encodedToken', token);
+        return token;
+    }, [sessionId]);
+
+    // Decode URL token
+    const decodeUrl = useCallback((token: string) => {
+        return decodeSessionUrl(token);
+    }, []);
 
     // Check session status periodically
     useEffect(() => {
@@ -168,6 +194,7 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
         <SessionContext.Provider
             value={{
                 sessionId,
+                encodedToken,
                 lastActivityTime,
                 remainingTime,
                 isSessionExpired,
@@ -176,6 +203,8 @@ export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children })
                 startSession,
                 endSession,
                 dismissWarning,
+                encodeCurrentUrl,
+                decodeUrl,
             }}
         >
             {children}

@@ -311,6 +311,8 @@ const ExpertApplication: React.FC = () => {
 
         switch (step) {
             case 1:
+                // Phone is required and must be set in profile
+                if (!formData.phone) newErrors.phone = 'Phone number is required. Please update it in your Profile.';
                 if (!formData.dob) newErrors.dob = 'Date of birth is required';
                 if (!formData.gender) newErrors.gender = 'Gender is required';
                 if (!formData.addressLine1) newErrors.addressLine1 = 'Address is required';
@@ -603,22 +605,40 @@ const ExpertApplication: React.FC = () => {
             </h2>
             <p className="section-desc">Please provide your personal details for verification</p>
 
+            {/* Profile Info Notice */}
+            <div className="profile-info-notice">
+                <AlertCircle size={18} />
+                <span>
+                    Basic details are fetched from your profile and cannot be edited here.
+                    <a href="/profile" className="profile-link"> Update in Profile →</a>
+                </span>
+            </div>
+
             <div className="form-grid">
-                {/* Auto-filled fields */}
+                {/* Auto-filled fields from profile (read-only) */}
                 <div className="form-group">
-                    <label>Full Name</label>
+                    <label>Full Name <span className="auto-filled">(from profile)</span></label>
                     <input type="text" value={formData.fullName} disabled className="disabled" />
                 </div>
                 <div className="form-group">
-                    <label>Email</label>
+                    <label>Email <span className="auto-filled">(from profile)</span></label>
                     <input type="email" value={formData.email} disabled className="disabled" />
                 </div>
                 <div className="form-group">
-                    <label>Phone Number</label>
-                    <input type="tel" value={formData.phone} disabled className="disabled" placeholder="Not set" />
+                    <label>Phone Number <span className="required">*</span> <span className="auto-filled">(from profile)</span></label>
+                    <input
+                        type="tel"
+                        value={formData.phone}
+                        disabled
+                        className={`disabled ${!formData.phone || errors.phone ? 'error' : ''}`}
+                        placeholder="Not set - update in Profile"
+                    />
                     {!formData.phone && (
-                        <span className="warning-text">Please update your phone number in the Profile section before applying</span>
+                        <span className="error-text">
+                            Phone number is required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
                     )}
+                    {errors.phone && formData.phone && <span className="error-text">{errors.phone}</span>}
                 </div>
 
                 {/* User input fields */}
