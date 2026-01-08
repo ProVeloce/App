@@ -1,224 +1,121 @@
+/**
+ * Document Routes
+ * API endpoints for expert document management with R2 storage
+ */
+
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../lib/prisma';
-import { authenticate, authorize, authorizeOwnerOrAdmin } from '../middleware/auth.middleware';
-import { handleValidation } from '../middleware/handleValidation';
-import { uuidParamValidator } from '../middleware/validators';
-import { logActivity, ACTIONS } from '../utils/activity';
-import { config } from '../config/index';
-import { AppError } from '../middleware/errorHandler';
-
-// Configure multer for document uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(config.uploadDir, 'documents'));
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${uuidv4()}${ext}`);
-    },
-});
-
-const upload = multer({
-    storage,
-    limits: { fileSize: config.maxFileSize },
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = [
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ];
-        if (allowedTypes.includes(file.mimetype)) {
-            cb(null, true);
-        } else {
-            cb(new Error('Invalid file type'));
-        }
-    },
-});
+import {
+    uploadDocument,
+    getDocumentUrl,
+    streamDocument,
+    getExpertDocuments,
+    reviewDocument,
+    deleteDocument,
+    submitDocuments,
+} from '../controllers/document.controller';
+import { authenticate, authorize } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// Configure multer for file uploads (memory storage for R2)
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB
+    },
+});
 
 // All routes require authentication
 router.use(authenticate);
 
-// Upload document
-router.post('/', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const userId = req.user!.userId;
-        const { type, name } = req.body;
+// ===================== EXPERT ROUTES =====================
 
-        if (!req.file) {
-            throw new AppError('No file uploaded', 400);
-        }
+/**
+ * Upload a document (saves as draft)
+ * POST /api/documents/upload
+ * Body: multipart/form-data with 'file' and 'documentType'
+ */
+router.post(
+    '/upload',
+    authorize('CUSTOMER'),
+    upload.single('file'),
+    uploadDocument
+);
 
-        const document = await prisma.document.create({
-            data: {
-                userId,
-                type: type || 'OTHER',
-                name: name || req.file.originalname,
-                fileUrl: `/uploads/documents/${req.file.filename}`,
-                mimeType: req.file.mimetype,
-                size: req.file.size,
-            },
-        });
+/**
+ * Submit all draft documents for review
+ * POST /api/documents/submit
+ * Transitions documents from 'draft' to 'submitted'
+ */
+router.post(
+    '/submit',
+    authorize('CUSTOMER'),
+    submitDocuments
+);
 
-        await logActivity({
-            userId,
-            action: ACTIONS.DOCUMENT_UPLOADED,
-            entityType: 'Document',
-            entityId: document.id,
-            req,
-        });
-
-        res.status(201).json({
-            success: true,
-            message: 'Document uploaded successfully',
-            data: { document },
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// Get user's documents
-router.get('/my-documents', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const userId = req.user!.userId;
-        const { type } = req.query;
-
-        const where: any = { userId };
-        if (type) {
-            where.type = type;
-        }
-
-        const documents = await prisma.document.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-        });
-
-        res.json({
-            success: true,
-            data: { documents },
-        });
-    } catch (error) {
-        next(error);
-    }
-});
-
-// Get document by ID
+/**
+ * Get user's own documents (includes drafts)
+ * GET /api/documents/my-documents
+ */
 router.get(
-    '/:id',
-    uuidParamValidator('id'),
-    handleValidation,
-    authorizeOwnerOrAdmin(async (req) => {
-        const doc = await prisma.document.findUnique({
-            where: { id: req.params.id },
-            select: { userId: true },
-        });
-        return doc?.userId || null;
-    }),
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const { id } = req.params;
-
-            const document = await prisma.document.findUnique({
-                where: { id },
-            });
-
-            if (!document) {
-                throw new AppError('Document not found', 404);
-            }
-
-            res.json({
-                success: true,
-                data: { document },
-            });
-        } catch (error) {
-            next(error);
-        }
+    '/my-documents',
+    authorize('CUSTOMER', 'EXPERT'),
+    async (req, res) => {
+        req.params.userId = req.user?.userId || '';
+        return getExpertDocuments(req, res);
     }
 );
 
-// Delete document
+// ===================== SHARED ROUTES =====================
+
+/**
+ * Get signed URL for document preview/download
+ * GET /api/documents/:id/url
+ */
+router.get(
+    '/:id/url',
+    authorize('CUSTOMER', 'EXPERT', 'ANALYST', 'ADMIN', 'SUPERADMIN'),
+    getDocumentUrl
+);
+
+/**
+ * Stream document content (token-based auth)
+ * GET /api/documents/:id/stream
+ */
+router.get('/:id/stream', streamDocument);
+
+// ===================== ADMIN ROUTES =====================
+
+/**
+ * Get all documents for a specific expert
+ * GET /api/documents/expert/:userId
+ */
+router.get(
+    '/expert/:userId',
+    authorize('ANALYST', 'ADMIN', 'SUPERADMIN'),
+    getExpertDocuments
+);
+
+/**
+ * Review document (approve/reject)
+ * PUT /api/documents/:id/review
+ * Body: { status: 'approved' | 'rejected', rejectionReason?: string }
+ */
+router.put(
+    '/:id/review',
+    authorize('ADMIN', 'SUPERADMIN'),
+    reviewDocument
+);
+
+/**
+ * Delete a document
+ * DELETE /api/documents/:id
+ */
 router.delete(
     '/:id',
-    uuidParamValidator('id'),
-    handleValidation,
-    authorizeOwnerOrAdmin(async (req) => {
-        const doc = await prisma.document.findUnique({
-            where: { id: req.params.id },
-            select: { userId: true },
-        });
-        return doc?.userId || null;
-    }),
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const { id } = req.params;
-            const userId = req.user!.userId;
-
-            await prisma.document.delete({
-                where: { id },
-            });
-
-            await logActivity({
-                userId,
-                action: ACTIONS.DOCUMENT_DELETED,
-                entityType: 'Document',
-                entityId: id,
-                req,
-            });
-
-            res.json({
-                success: true,
-                message: 'Document deleted successfully',
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
-);
-
-// Verify document (Admin)
-router.patch(
-    '/:id/verify',
-    authorize('ADMIN', 'SUPERADMIN'),
-    uuidParamValidator('id'),
-    handleValidation,
-    async (req: Request, res: Response, next: NextFunction) => {
-        try {
-            const { id } = req.params;
-            const adminId = req.user!.userId;
-
-            const document = await prisma.document.update({
-                where: { id },
-                data: {
-                    isVerified: true,
-                    verifiedBy: adminId,
-                    verifiedAt: new Date(),
-                },
-            });
-
-            await logActivity({
-                userId: adminId,
-                action: ACTIONS.DOCUMENT_VERIFIED,
-                entityType: 'Document',
-                entityId: id,
-                req,
-            });
-
-            res.json({
-                success: true,
-                message: 'Document verified',
-                data: { document },
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
+    authorize('CUSTOMER', 'ADMIN', 'SUPERADMIN'),
+    deleteDocument
 );
 
 export default router;

@@ -1,5 +1,11 @@
 import { Role } from '@prisma/client';
 
+// Cloudflare Worker bindings
+interface CloudflareBindings {
+    proveloce_db: D1Database;
+    EXPERT_DOCS: R2Bucket;
+}
+
 // Extend Express with our types
 declare global {
     namespace Express {
@@ -18,6 +24,11 @@ declare global {
             } | null;
             iat?: number;
             exp?: number;
+        }
+
+        // Cloudflare Worker environment bindings
+        interface Request {
+            env?: CloudflareBindings;
         }
     }
 }

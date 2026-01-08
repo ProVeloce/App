@@ -405,15 +405,27 @@ export const certificationApi = {
         api.delete<ApiResponse>(`/certifications/${id}`),
 };
 
-// Document API
+// Document API (R2 Storage)
 export const documentApi = {
-    uploadDocument: (data: FormData) =>
-        api.post<ApiResponse>('/documents', data, {
+    upload: (formData: FormData) =>
+        api.post<ApiResponse<{ document: { id: string; documentType: string; fileName: string; fileType: string; fileSize: number; reviewStatus: string } }>>('/documents/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         }),
 
-    getMyDocuments: (type?: string) =>
-        api.get<ApiResponse>('/documents/my-documents', { params: { type } }),
+    getMyDocuments: () =>
+        api.get<ApiResponse<{ documents: any[]; count: number }>>('/documents/my-documents'),
+
+    getDocumentUrl: (id: string) =>
+        api.get<ApiResponse<{ document: any; url: string; expiresIn: number }>>(`/documents/${id}/url`),
+
+    getExpertDocuments: (userId: string) =>
+        api.get<ApiResponse<{ documents: any[]; count: number }>>(`/documents/expert/${userId}`),
+
+    reviewDocument: (id: string, status: 'approved' | 'rejected', rejectionReason?: string) =>
+        api.put<ApiResponse>(`/documents/${id}/review`, { status, rejectionReason }),
+
+    submitDocuments: () =>
+        api.post<ApiResponse<{ submittedCount: number }>>('/documents/submit'),
 
     deleteDocument: (id: string) =>
         api.delete<ApiResponse>(`/documents/${id}`),

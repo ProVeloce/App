@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { applicationApi, profileApi } from '../../services/api';
+import { applicationApi, profileApi, documentApi } from '../../services/api';
 import {
     User,
     Briefcase,
@@ -27,6 +27,7 @@ import {
     Award,
     Globe,
     Languages,
+    Loader,
 } from 'lucide-react';
 import './ExpertApplication.css';
 
@@ -167,6 +168,16 @@ const ExpertApplication: React.FC = () => {
     const [portfolioLinkInput, setPortfolioLinkInput] = useState('');
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+    // Uploaded document tracking for R2 persistence
+    interface UploadedDoc {
+        id: string;
+        documentType: string;
+        fileName: string;
+        signedUrl?: string;
+    }
+    const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({});
+    const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
+
     const [formData, setFormData] = useState<FormData>({
         // Personal Info
         fullName: user?.name || '',
@@ -270,32 +281,32 @@ const ExpertApplication: React.FC = () => {
                 const response = await applicationApi.getMyApplication();
                 if (response.data.success && response.data.data?.application) {
                     const app = response.data.data.application;
-                    // Map database fields to form state
+                    // Map database fields to form state (Prisma returns camelCase)
                     setFormData(prev => ({
                         ...prev,
                         dob: app.dob || '',
                         gender: app.gender || '',
-                        addressLine1: app.address_line1 || '',
-                        addressLine2: app.address_line2 || '',
+                        addressLine1: app.addressLine1 || '',
+                        addressLine2: app.addressLine2 || '',
                         city: app.city || '',
                         state: app.state || '',
                         country: app.country || '',
                         pincode: app.pincode || '',
-                        governmentIdType: app.government_id_type || '',
-                        domains: JSON.parse(app.domains || '[]'),
-                        skills: JSON.parse(app.skills || '[]'),
-                        yearsOfExperience: app.years_of_experience || 0,
-                        summaryBio: app.summary_bio || '',
-                        portfolioLinks: JSON.parse(app.portfolio_urls || '[]'),
-                        workingType: app.working_type || '',
-                        expectedRate: app.hourly_rate || '',
-                        languages: JSON.parse(app.languages || '[]'),
-                        availableDays: JSON.parse(app.available_days || '[]'),
-                        availableTimeSlots: JSON.parse(app.available_time_slots || '[]'),
-                        workPreference: app.work_preference || '',
-                        communicationMode: app.communication_mode || '',
-                        termsAccepted: !!app.terms_accepted,
-                        ndaAccepted: !!app.nda_accepted,
+                        governmentIdType: app.governmentIdType || '',
+                        domains: Array.isArray(app.domains) ? app.domains : [],
+                        skills: Array.isArray(app.skills) ? app.skills : [],
+                        yearsOfExperience: app.yearsOfExperience || 0,
+                        summaryBio: app.summaryBio || '',
+                        portfolioLinks: Array.isArray(app.portfolioUrls) ? app.portfolioUrls : [],
+                        workingType: app.workingType || '',
+                        expectedRate: app.hourlyRate?.toString() || app.expectedRate || '',
+                        languages: Array.isArray(app.languages) ? app.languages : [],
+                        availableDays: Array.isArray(app.availableDays) ? app.availableDays : [],
+                        availableTimeSlots: Array.isArray(app.availableTimeSlots) ? app.availableTimeSlots : [],
+                        workPreference: app.workPreference || '',
+                        communicationMode: app.communicationMode || '',
+                        termsAccepted: !!app.termsAccepted,
+                        ndaAccepted: !!app.ndaAccepted,
                     }));
                 }
             } catch (error) {
@@ -303,6 +314,46 @@ const ExpertApplication: React.FC = () => {
             }
         };
         loadApplication();
+    }, []);
+
+    // Load uploaded documents from R2 on mount
+    useEffect(() => {
+        const fetchDraftDocuments = async () => {
+            try {
+                const response = await documentApi.getMyDocuments();
+                if (response.data.success && response.data.data?.documents) {
+                    const docs = response.data.data.documents;
+                    const docsMap: Record<string, UploadedDoc> = {};
+
+                    // Map documents by type for easy lookup
+                    for (const doc of docs) {
+                        // Get signed URL for each document
+                        try {
+                            const urlResponse = await documentApi.getDocumentUrl(doc.id);
+                            if (urlResponse.data.success && urlResponse.data.data) {
+                                docsMap[doc.document_type || doc.documentType] = {
+                                    id: doc.id,
+                                    documentType: doc.document_type || doc.documentType,
+                                    fileName: doc.file_name || doc.fileName,
+                                    signedUrl: urlResponse.data.data.url,
+                                };
+                            }
+                        } catch (urlError) {
+                            // Still track doc even without signed URL
+                            docsMap[doc.document_type || doc.documentType] = {
+                                id: doc.id,
+                                documentType: doc.document_type || doc.documentType,
+                                fileName: doc.file_name || doc.fileName,
+                            };
+                        }
+                    }
+                    setUploadedDocs(docsMap);
+                }
+            } catch (error) {
+                console.log('Error fetching documents:', error);
+            }
+        };
+        fetchDraftDocuments();
     }, []);
 
     // Validation functions
@@ -384,13 +435,64 @@ const ExpertApplication: React.FC = () => {
         }
     };
 
-    const handleFileChange = (field: keyof FormData, files: FileList | null) => {
-        if (files && files.length > 0) {
-            if (field === 'portfolioFiles' || field === 'certificationFiles') {
-                handleInputChange(field, [...(formData[field] as File[]), ...Array.from(files)]);
+    const handleFileChange = async (field: keyof FormData, files: FileList | null) => {
+        if (!files || files.length === 0) return;
+
+        const file = files[0];
+
+        // Map field to document type for R2
+        const docTypeMap: Record<string, string> = {
+            governmentIdFile: 'government_id',
+            profilePhoto: 'profile',
+            resumeFile: 'resume',
+            certificationFiles: 'certificate',
+            portfolioFiles: 'portfolio',
+            signatureFile: 'other',
+        };
+
+        const documentType = docTypeMap[field] || 'other';
+
+        // Set uploading state
+        setIsUploading(prev => ({ ...prev, [field]: true }));
+
+        try {
+            // Upload file to R2 via API
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('documentType', documentType);
+
+            const response = await documentApi.upload(formData);
+
+            if (response.data.success && response.data.data?.document) {
+                const doc = response.data.data.document;
+
+                // Track uploaded doc
+                setUploadedDocs(prev => ({
+                    ...prev,
+                    [documentType]: {
+                        id: doc.id,
+                        documentType: doc.documentType,
+                        fileName: doc.fileName,
+                    },
+                }));
+
+                // Also store in form state for UI display
+                if (field === 'portfolioFiles' || field === 'certificationFiles') {
+                    handleInputChange(field, [...((formData as any)[field] as File[] || []), file]);
+                } else {
+                    handleInputChange(field, file);
+                }
+
+                console.log(`File uploaded to R2: ${doc.fileName}`);
             } else {
-                handleInputChange(field, files[0]);
+                console.error('Upload failed:', response.data.error);
+                setErrors(prev => ({ ...prev, [field]: 'Upload failed' }));
             }
+        } catch (error: any) {
+            console.error('Upload error:', error);
+            setErrors(prev => ({ ...prev, [field]: error.message || 'Upload failed' }));
+        } finally {
+            setIsUploading(prev => ({ ...prev, [field]: false }));
         }
     };
 
