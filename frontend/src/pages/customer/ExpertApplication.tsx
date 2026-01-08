@@ -309,14 +309,19 @@ const ExpertApplication: React.FC = () => {
     // Load uploaded documents from R2 on mount
     useEffect(() => {
         const fetchDraftDocuments = async () => {
+            console.log('📄 Fetching draft documents from R2...');
             try {
                 const response = await documentApi.getMyDocuments();
+                console.log('📥 getMyDocuments response:', response.data);
+
                 if (response.data.success && response.data.data?.documents) {
                     const docs = response.data.data.documents;
+                    console.log(`📁 Found ${docs.length} documents`);
                     const docsMap: Record<string, UploadedDoc> = {};
 
                     // Map documents by type for easy lookup
                     for (const doc of docs) {
+                        console.log('  📄 Document:', doc.document_type || doc.documentType, doc.file_name || doc.fileName);
                         // Get signed URL for each document
                         try {
                             const urlResponse = await documentApi.getDocumentUrl(doc.id);
@@ -337,10 +342,13 @@ const ExpertApplication: React.FC = () => {
                             };
                         }
                     }
+                    console.log('✅ Uploaded docs map:', docsMap);
                     setUploadedDocs(docsMap);
+                } else {
+                    console.log('📭 No documents found or API returned error');
                 }
             } catch (error) {
-                console.log('Error fetching documents:', error);
+                console.error('❌ Error fetching documents:', error);
             }
         };
         fetchDraftDocuments();
@@ -551,9 +559,21 @@ const ExpertApplication: React.FC = () => {
 
     // Save draft
     const saveDraft = async () => {
+        console.log('💾 Save Draft started');
+        console.log('📁 Uploaded docs state:', uploadedDocs);
+        console.log('🔄 Uploading state:', isUploading);
+
+        // Check if any uploads are still in progress
+        const hasActiveUploads = Object.values(isUploading).some(v => v);
+        if (hasActiveUploads) {
+            console.warn('⚠️ Some files are still uploading, please wait...');
+            alert('Please wait for file uploads to complete before saving.');
+            return;
+        }
+
         setIsSaving(true);
         try {
-            // Prepare data for API (Files would need separate upload handling)
+            // Prepare data for API
             const applicationData = {
                 dob: formData.dob,
                 gender: formData.gender,
@@ -580,12 +600,20 @@ const ExpertApplication: React.FC = () => {
                 ndaAccepted: formData.ndaAccepted,
             };
 
-            await applicationApi.saveDraft(applicationData);
-            setShowDraftSaved(true);
-            // Auto-hide after 3 seconds
-            setTimeout(() => setShowDraftSaved(false), 3000);
-        } catch (error) {
-            console.error('Failed to save draft:', error);
+            console.log('🚀 Calling applicationApi.saveDraft...');
+            const response = await applicationApi.saveDraft(applicationData);
+            console.log('📥 Save Draft response:', response.data);
+
+            if (response.data.success) {
+                setShowDraftSaved(true);
+                setTimeout(() => setShowDraftSaved(false), 3000);
+            } else {
+                console.error('❌ Save failed:', response.data.error);
+                alert('Failed to save draft: ' + (response.data.error || 'Unknown error'));
+            }
+        } catch (error: any) {
+            console.error('❌ Failed to save draft:', error);
+            alert('Failed to save draft: ' + (error.message || 'Network error'));
         } finally {
             setIsSaving(false);
         }
