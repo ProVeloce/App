@@ -1159,6 +1159,230 @@ export default {
             // Expert Application Routes
             // =====================================================
 
+            // GET /api/applications - Admin: List all expert applications
+            if (url.pathname === "/api/applications" && request.method === "GET") {
+                console.log("📋 Admin: Fetching expert applications");
+
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                // Check admin role
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    console.log(`❌ Access denied for role: ${role}`);
+                    return jsonResponse({ success: false, error: "Access denied. Admin role required." }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Get status filter from query params
+                const statusFilter = url.searchParams.get("status");
+                console.log(`📊 Status filter: ${statusFilter || 'none'}`);
+
+                let query = `
+                    SELECT 
+                        ea.id,
+                        ea.user_id as userId,
+                        ea.status,
+                        ea.dob,
+                        ea.gender,
+                        ea.address_line1 as addressLine1,
+                        ea.city,
+                        ea.state,
+                        ea.country,
+                        ea.pincode,
+                        ea.domains,
+                        ea.skills,
+                        ea.years_of_experience as yearsOfExperience,
+                        ea.summary_bio as summaryBio,
+                        ea.working_type as workingType,
+                        ea.expected_rate as expectedRate,
+                        ea.available_days as availableDays,
+                        ea.available_time_slots as availableTimeSlots,
+                        ea.work_preference as workPreference,
+                        ea.communication_mode as communicationMode,
+                        ea.created_at as createdAt,
+                        ea.submitted_at as submittedAt,
+                        ea.updated_at as updatedAt,
+                        u.id as "user.id",
+                        u.name as "user.name",
+                        u.email as "user.email",
+                        u.phone as "user.phone"
+                    FROM expert_applications ea
+                    JOIN users u ON u.id = ea.user_id
+                `;
+                const params: any[] = [];
+
+                if (statusFilter && statusFilter !== "") {
+                    query += ` WHERE LOWER(ea.status) = LOWER(?)`;
+                    params.push(statusFilter);
+                }
+
+                query += ` ORDER BY ea.created_at DESC LIMIT 100`;
+
+                const result = await env.proveloce_db.prepare(query).bind(...params).all();
+                console.log(`✅ Found ${result.results.length} applications`);
+
+                // Transform to expected format with nested user object
+                const applications = result.results.map((row: any) => {
+                    // Parse JSON fields
+                    let domains = [];
+                    let skills = [];
+                    let availableDays = [];
+                    let availableTimeSlots = [];
+
+                    try { domains = row.domains ? JSON.parse(row.domains) : []; } catch { }
+                    try { skills = row.skills ? JSON.parse(row.skills) : []; } catch { }
+                    try { availableDays = row.availableDays ? JSON.parse(row.availableDays) : []; } catch { }
+                    try { availableTimeSlots = row.availableTimeSlots ? JSON.parse(row.availableTimeSlots) : []; } catch { }
+
+                    return {
+                        id: row.id,
+                        userId: row.userId,
+                        status: (row.status || 'DRAFT').toUpperCase(),
+                        dob: row.dob,
+                        gender: row.gender,
+                        addressLine1: row.addressLine1,
+                        city: row.city,
+                        state: row.state,
+                        country: row.country,
+                        pincode: row.pincode,
+                        domains,
+                        skills,
+                        yearsOfExperience: row.yearsOfExperience,
+                        summaryBio: row.summaryBio,
+                        workingType: row.workingType,
+                        expectedRate: row.expectedRate,
+                        availableDays,
+                        availableTimeSlots,
+                        workPreference: row.workPreference,
+                        communicationMode: row.communicationMode,
+                        createdAt: row.createdAt,
+                        submittedAt: row.submittedAt,
+                        updatedAt: row.updatedAt,
+                        user: {
+                            id: row["user.id"],
+                            name: row["user.name"],
+                            email: row["user.email"],
+                            phone: row["user.phone"],
+                        },
+                    };
+                });
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        applications,
+                        count: applications.length,
+                    },
+                });
+            }
+
+            // POST /api/applications/:id/approve - Approve application
+            if (url.pathname.match(/^\/api\/applications\/[^\/]+\/approve$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[3];
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Get the application to find user_id
+                const app = await env.proveloce_db.prepare(
+                    "SELECT user_id FROM expert_applications WHERE id = ?"
+                ).bind(applicationId).first() as any;
+
+                if (!app) {
+                    return jsonResponse({ success: false, error: "Application not found" }, 404);
+                }
+
+                // Update application status
+                await env.proveloce_db.prepare(
+                    "UPDATE expert_applications SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(applicationId).run();
+
+                // Update user role to EXPERT
+                await env.proveloce_db.prepare(
+                    "UPDATE users SET role = 'expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(app.user_id).run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), payload.userId, "APPROVE_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ approvedBy: payload.userId })).run();
+
+                return jsonResponse({ success: true, message: "Application approved" });
+            }
+
+            // POST /api/applications/:id/reject - Reject application
+            if (url.pathname.match(/^\/api\/applications\/[^\/]+\/reject$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[3];
+
+                const body = await request.json() as any;
+                const reason = body.reason || "No reason provided";
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                await env.proveloce_db.prepare(
+                    "UPDATE expert_applications SET status = 'rejected', rejection_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(reason, applicationId).run();
+
+                // Log activity
+                await env.proveloce_db.prepare(
+                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                ).bind(crypto.randomUUID(), payload.userId, "REJECT_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ rejectedBy: payload.userId, reason })).run();
+
+                return jsonResponse({ success: true, message: "Application rejected" });
+            }
+
             // GET /api/expert-application - Get current user's application
             if (url.pathname === "/api/expert-application" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization");
