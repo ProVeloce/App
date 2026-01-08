@@ -13,6 +13,7 @@ import {
     CheckCircle,
     Clock,
     AlertCircle,
+    XCircle,
 } from 'lucide-react';
 import './Dashboard.css';
 
@@ -28,6 +29,7 @@ const Dashboard: React.FC = () => {
     const { user } = useAuth();
     const [stats, setStats] = useState<DashboardStats>({});
     const [loading, setLoading] = useState(true);
+    const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
 
     useEffect(() => {
         fetchDashboardData();
@@ -42,6 +44,19 @@ const Dashboard: React.FC = () => {
             setStats({
                 unreadNotifications: notifRes.data.data?.unreadCount || 0,
             });
+
+            // Fetch application status for customers
+            if (user?.role === 'CUSTOMER') {
+                try {
+                    const appRes = await applicationApi.getMyApplication();
+                    if (appRes.data.success && appRes.data.data?.application) {
+                        setApplicationStatus(appRes.data.data.application.status);
+                    }
+                } catch (e) {
+                    // No application exists
+                    setApplicationStatus(null);
+                }
+            }
 
             // Fetch role-specific data
             if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
@@ -63,12 +78,46 @@ const Dashboard: React.FC = () => {
 
     const getQuickActions = () => {
         switch (user?.role) {
-            case 'CUSTOMER':
-                return [
-                    { label: 'Apply as Expert', path: '/customer/apply-expert', icon: <FileText size={20} />, color: 'primary' },
-                    { label: 'View Application', path: '/customer/application-status', icon: <Clock size={20} />, color: 'warning' },
-                    { label: 'Help Desk', path: '/help-desk', icon: <HelpCircle size={20} />, color: 'success' },
-                ];
+            case 'CUSTOMER': {
+                const actions = [];
+
+                // Show "Apply as Expert" only if no application or rejected
+                if (!applicationStatus || applicationStatus === 'REJECTED') {
+                    actions.push({
+                        label: applicationStatus === 'REJECTED' ? 'Re-Apply as Expert' : 'Apply as Expert',
+                        path: '/customer/apply-expert',
+                        icon: <FileText size={20} />,
+                        color: 'primary'
+                    });
+                }
+
+                // Show status if application exists
+                if (applicationStatus === 'PENDING' || applicationStatus === 'DRAFT') {
+                    actions.push({
+                        label: 'Application Pending',
+                        path: '/customer/application-status',
+                        icon: <Clock size={20} />,
+                        color: 'warning'
+                    });
+                } else if (applicationStatus === 'APPROVED') {
+                    actions.push({
+                        label: 'Application Approved',
+                        path: '/customer/application-status',
+                        icon: <CheckCircle size={20} />,
+                        color: 'success'
+                    });
+                } else if (applicationStatus === 'REJECTED') {
+                    actions.push({
+                        label: 'View Rejection Details',
+                        path: '/customer/application-status',
+                        icon: <XCircle size={20} />,
+                        color: 'danger'
+                    });
+                }
+
+                actions.push({ label: 'Help Desk', path: '/help-desk', icon: <HelpCircle size={20} />, color: 'success' });
+                return actions;
+            }
             case 'EXPERT':
                 return [
                     { label: 'View Tasks', path: '/expert/tasks', icon: <Briefcase size={20} />, color: 'primary' },
