@@ -415,9 +415,14 @@ const ExpertApplication: React.FC = () => {
     };
 
     const handleFileChange = async (field: keyof FormData, files: FileList | null) => {
-        if (!files || files.length === 0) return;
+        console.log('🔄 handleFileChange called', { field, files });
+        if (!files || files.length === 0) {
+            console.log('❌ No files provided');
+            return;
+        }
 
         const file = files[0];
+        console.log('📄 File selected:', { name: file.name, type: file.type, size: file.size });
 
         // Map field to document type for R2
         const docTypeMap: Record<string, string> = {
@@ -430,6 +435,7 @@ const ExpertApplication: React.FC = () => {
         };
 
         const documentType = docTypeMap[field] || 'other';
+        console.log('📁 Document type:', documentType);
 
         // Set uploading state
         setIsUploading(prev => ({ ...prev, [field]: true }));
@@ -440,7 +446,9 @@ const ExpertApplication: React.FC = () => {
             formData.append('file', file);
             formData.append('documentType', documentType);
 
+            console.log('🚀 Calling documentApi.upload...');
             const response = await documentApi.upload(formData);
+            console.log('📥 Upload response:', response.data);
 
             if (response.data.success && response.data.data?.document) {
                 const doc = response.data.data.document;
