@@ -31,4 +31,3 @@ GOOGLE_CALLBACK_URL="https://backend.proveloce.com/api/auth/google/callback"
 [[r2_buckets]]
 binding = "EXPERT_DOCS"
 bucket_name = "expertdetails"
- 
