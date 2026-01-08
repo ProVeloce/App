@@ -29,5 +29,11 @@
 			"database_id": "3b3261c1-a83c-49dc-82df-4688cbdc785c",
 			"remote": true
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "EXPERT_DOCS",
+			"bucket_name": "expertdetails"
+		}
 	]
 }

@@ -1310,6 +1310,284 @@ export default {
             }
 
             // =====================================================
+            // Document Upload Routes (R2 Storage)
+            // =====================================================
+
+            // POST /api/documents/upload - Upload file to R2
+            if (url.pathname === "/api/documents/upload" && request.method === "POST") {
+                console.log("📁 Document upload request received");
+
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                // Check R2 bucket binding
+                if (!env.EXPERT_DOCS) {
+                    console.error("❌ R2 bucket EXPERT_DOCS not bound");
+                    return jsonResponse({ success: false, error: "R2 storage not configured" }, 500);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Parse multipart form data
+                    const formData = await request.formData();
+                    const file = formData.get("file") as File | null;
+                    const documentType = formData.get("documentType") as string || "other";
+
+                    if (!file) {
+                        return jsonResponse({ success: false, error: "No file provided" }, 400);
+                    }
+
+                    console.log(`📄 Uploading file: ${file.name}, type: ${file.type}, size: ${file.size}`);
+
+                    // Validate file size (10MB max)
+                    const MAX_SIZE = 10 * 1024 * 1024;
+                    if (file.size > MAX_SIZE) {
+                        return jsonResponse({ success: false, error: "File size exceeds 10MB limit" }, 400);
+                    }
+
+                    // Validate file type
+                    const allowedTypes = [
+                        'image/jpeg', 'image/png', 'image/webp',
+                        'application/pdf',
+                        'application/msword',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    ];
+                    if (!allowedTypes.includes(file.type)) {
+                        return jsonResponse({ success: false, error: `File type ${file.type} not allowed` }, 400);
+                    }
+
+                    // Generate unique object key
+                    const timestamp = Date.now();
+                    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                    const objectKey = `experts/${payload.userId}/${documentType}/${timestamp}_${sanitizedName}`;
+
+                    console.log(`🔑 R2 Object Key: ${objectKey}`);
+
+                    // Upload to R2
+                    await env.EXPERT_DOCS.put(objectKey, file.stream(), {
+                        httpMetadata: {
+                            contentType: file.type,
+                        },
+                        customMetadata: {
+                            userId: payload.userId,
+                            documentType: documentType,
+                            originalName: file.name,
+                        },
+                    });
+
+                    console.log(`✅ File uploaded to R2: ${objectKey}`);
+
+                    // Save metadata to D1
+                    const docId = crypto.randomUUID();
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO expert_documents (
+                            id, user_id, document_type, file_name, 
+                            file_type, file_size, r2_object_key, 
+                            review_status, application_status, uploaded_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'draft', datetime('now'), datetime('now'))
+                    `).bind(
+                        docId,
+                        payload.userId,
+                        documentType,
+                        file.name,
+                        file.type,
+                        file.size,
+                        objectKey
+                    ).run();
+
+                    console.log(`✅ Document metadata saved to D1: ${docId}`);
+
+                    return jsonResponse({
+                        success: true,
+                        message: "File uploaded successfully",
+                        data: {
+                            document: {
+                                id: docId,
+                                documentType,
+                                fileName: file.name,
+                                fileType: file.type,
+                                fileSize: file.size,
+                                reviewStatus: "pending",
+                            },
+                        },
+                    });
+                } catch (err: any) {
+                    console.error("❌ Upload error:", err);
+                    return jsonResponse({ success: false, error: err.message || "Upload failed" }, 500);
+                }
+            }
+
+            // GET /api/documents/my-documents - Get user's documents
+            if (url.pathname === "/api/documents/my-documents" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const docs = await env.proveloce_db.prepare(`
+                    SELECT id, document_type, file_name, file_type, file_size, 
+                           r2_object_key, review_status, application_status, uploaded_at
+                    FROM expert_documents 
+                    WHERE user_id = ? 
+                    ORDER BY uploaded_at DESC
+                `).bind(payload.userId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        documents: docs.results,
+                        count: docs.results.length,
+                    },
+                });
+            }
+
+            // GET /api/documents/:id/url - Get signed URL for document
+            if (url.pathname.match(/^\/api\/documents\/[^\/]+\/url$/) && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const docId = pathParts[3];
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const doc = await env.proveloce_db.prepare(`
+                    SELECT id, user_id, document_type, file_name, file_type, r2_object_key
+                    FROM expert_documents 
+                    WHERE id = ?
+                `).bind(docId).first() as any;
+
+                if (!doc) {
+                    return jsonResponse({ success: false, error: "Document not found" }, 404);
+                }
+
+                // Check access: user can only access their own documents
+                const role = (payload.role || "").toLowerCase();
+                if (doc.user_id !== payload.userId && role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                // Generate signed URL token (10 min expiry)
+                const expiresAt = Date.now() + (10 * 60 * 1000);
+                const signedPayload = {
+                    docId: doc.id,
+                    objectKey: doc.r2_object_key,
+                    expiresAt,
+                };
+                const signedToken = btoa(JSON.stringify(signedPayload));
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        document: doc,
+                        url: `/api/documents/${doc.id}/stream?token=${signedToken}`,
+                        expiresIn: 600,
+                    },
+                });
+            }
+
+            // GET /api/documents/:id/stream - Stream document content
+            if (url.pathname.match(/^\/api\/documents\/[^\/]+\/stream$/) && request.method === "GET") {
+                const signedToken = url.searchParams.get("token");
+                if (!signedToken) {
+                    return jsonResponse({ success: false, error: "Missing token" }, 401);
+                }
+
+                try {
+                    const tokenData = JSON.parse(atob(signedToken));
+
+                    if (Date.now() > tokenData.expiresAt) {
+                        return jsonResponse({ success: false, error: "Token expired" }, 401);
+                    }
+
+                    if (!env.EXPERT_DOCS) {
+                        return jsonResponse({ success: false, error: "R2 not configured" }, 500);
+                    }
+
+                    const object = await env.EXPERT_DOCS.get(tokenData.objectKey);
+                    if (!object) {
+                        return jsonResponse({ success: false, error: "File not found" }, 404);
+                    }
+
+                    return new Response(object.body, {
+                        headers: {
+                            "Content-Type": object.httpMetadata?.contentType || "application/octet-stream",
+                            "Content-Disposition": `inline; filename="${tokenData.objectKey.split('/').pop()}"`,
+                            ...corsHeaders,
+                        },
+                    });
+                } catch {
+                    return jsonResponse({ success: false, error: "Invalid token" }, 401);
+                }
+            }
+
+            // POST /api/documents/submit - Submit all draft documents
+            if (url.pathname === "/api/documents/submit" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Update all draft documents to submitted
+                const result = await env.proveloce_db.prepare(`
+                    UPDATE expert_documents 
+                    SET application_status = 'submitted', updated_at = datetime('now')
+                    WHERE user_id = ? AND application_status = 'draft'
+                `).bind(payload.userId).run();
+
+                return jsonResponse({
+                    success: true,
+                    message: `${result.changes} document(s) submitted for review`,
+                    data: { submittedCount: result.changes },
+                });
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 

@@ -42,14 +42,7 @@ interface WorkHistory {
     proofUrl?: string;
 }
 
-interface Reference {
-    id: string;
-    fullName: string;
-    relationship: string;
-    phone: string;
-    email: string;
-    organization?: string;
-}
+
 
 interface FormData {
     // Section 1: Personal Information
@@ -84,8 +77,7 @@ interface FormData {
     // Section 3: Work History
     workHistory: WorkHistory[];
 
-    // Section 4: References
-    references: Reference[];
+
 
     // Section 5: Availability
     availableDays: string[];
@@ -211,8 +203,7 @@ const ExpertApplication: React.FC = () => {
         // Work History
         workHistory: [],
 
-        // References
-        references: [],
+
 
         // Availability
         availableDays: [],
@@ -230,9 +221,8 @@ const ExpertApplication: React.FC = () => {
         { id: 1, title: 'Personal Info', icon: User },
         { id: 2, title: 'Professional', icon: Briefcase },
         { id: 3, title: 'Work History', icon: History },
-        { id: 4, title: 'References', icon: Users },
-        { id: 5, title: 'Availability', icon: Clock },
-        { id: 6, title: 'Legal & Submit', icon: FileCheck },
+        { id: 4, title: 'Availability', icon: Clock },
+        { id: 5, title: 'Legal & Submit', icon: FileCheck },
     ];
 
     // Update form when user data loads + fetch profile data
@@ -388,22 +378,11 @@ const ExpertApplication: React.FC = () => {
                 // Work history is optional but if added, validate entries
                 break;
             case 4:
-                if (formData.references.length < 2) {
-                    newErrors.references = 'At least 2 references are required';
-                }
-                formData.references.forEach((ref, index) => {
-                    if (!ref.fullName) newErrors[`ref_${index}_name`] = 'Name is required';
-                    if (!ref.relationship) newErrors[`ref_${index}_relationship`] = 'Relationship is required';
-                    if (!ref.phone) newErrors[`ref_${index}_phone`] = 'Phone is required';
-                    if (!ref.email) newErrors[`ref_${index}_email`] = 'Email is required';
-                });
-                break;
-            case 5:
                 if (formData.availableDays.length === 0) newErrors.availableDays = 'Select availability';
                 if (!formData.workPreference) newErrors.workPreference = 'Work preference is required';
                 if (!formData.communicationMode) newErrors.communicationMode = 'Communication mode is required';
                 break;
-            case 6:
+            case 5:
                 if (!formData.termsAccepted) newErrors.termsAccepted = 'Accept terms to continue';
                 if (!formData.ndaAccepted) newErrors.ndaAccepted = 'Accept NDA to continue';
                 if (!formData.signatureFile) newErrors.signatureFile = 'Digital signature is required';
@@ -552,30 +531,6 @@ const ExpertApplication: React.FC = () => {
         handleInputChange('workHistory', formData.workHistory.filter(item => item.id !== id));
     };
 
-    // References management
-    const addReference = () => {
-        const newRef: Reference = {
-            id: Date.now().toString(),
-            fullName: '',
-            relationship: '',
-            phone: '',
-            email: '',
-            organization: '',
-        };
-        handleInputChange('references', [...formData.references, newRef]);
-    };
-
-    const updateReference = (id: string, field: keyof Reference, value: string) => {
-        const updated = formData.references.map(ref =>
-            ref.id === id ? { ...ref, [field]: value } : ref
-        );
-        handleInputChange('references', updated);
-    };
-
-    const removeReference = (id: string) => {
-        handleInputChange('references', formData.references.filter(ref => ref.id !== id));
-    };
-
     // Toggle array values
     const toggleArrayValue = (field: 'domains' | 'languages' | 'availableDays' | 'availableTimeSlots', value: string) => {
         const current = formData[field];
@@ -688,10 +643,8 @@ const ExpertApplication: React.FC = () => {
             case 3:
                 return renderWorkHistory();
             case 4:
-                return renderReferences();
-            case 5:
                 return renderAvailability();
-            case 6:
+            case 5:
                 return renderLegal();
             default:
                 return null;
@@ -1159,88 +1112,7 @@ const ExpertApplication: React.FC = () => {
         </div>
     );
 
-    // Section 4: References
-    const renderReferences = () => (
-        <div className="form-section">
-            <h2 className="section-title">
-                <Users size={24} />
-                References
-            </h2>
-            <p className="section-desc">Provide at least 2 professional references</p>
-            {errors.references && <div className="alert error"><AlertCircle size={18} />{errors.references}</div>}
-
-            <div className="dynamic-entries">
-                {formData.references.map((ref, index) => (
-                    <div key={ref.id} className="entry-card">
-                        <div className="entry-header">
-                            <h4>Reference #{index + 1}</h4>
-                            <button type="button" className="remove-btn" onClick={() => removeReference(ref.id)}>
-                                <Trash2 size={18} />
-                            </button>
-                        </div>
-                        <div className="form-grid">
-                            <div className="form-group">
-                                <label>Full Name <span className="required">*</span></label>
-                                <input
-                                    type="text"
-                                    value={ref.fullName}
-                                    onChange={e => updateReference(ref.id, 'fullName', e.target.value)}
-                                    placeholder="Reference's full name"
-                                    className={errors[`ref_${index}_name`] ? 'error' : ''}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Relationship <span className="required">*</span></label>
-                                <input
-                                    type="text"
-                                    value={ref.relationship}
-                                    onChange={e => updateReference(ref.id, 'relationship', e.target.value)}
-                                    placeholder="e.g., Former Manager"
-                                    className={errors[`ref_${index}_relationship`] ? 'error' : ''}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Phone Number <span className="required">*</span></label>
-                                <input
-                                    type="tel"
-                                    value={ref.phone}
-                                    onChange={e => updateReference(ref.id, 'phone', e.target.value)}
-                                    placeholder="+91 9999999999"
-                                    className={errors[`ref_${index}_phone`] ? 'error' : ''}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Email <span className="required">*</span></label>
-                                <input
-                                    type="email"
-                                    value={ref.email}
-                                    onChange={e => updateReference(ref.id, 'email', e.target.value)}
-                                    placeholder="reference@email.com"
-                                    className={errors[`ref_${index}_email`] ? 'error' : ''}
-                                />
-                            </div>
-                            <div className="form-group full-width">
-                                <label>Organization (Optional)</label>
-                                <input
-                                    type="text"
-                                    value={ref.organization || ''}
-                                    onChange={e => updateReference(ref.id, 'organization', e.target.value)}
-                                    placeholder="Company/Organization name"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                ))}
-
-                <button type="button" className="add-entry-btn" onClick={addReference}>
-                    <Plus size={20} />
-                    Add Reference
-                </button>
-            </div>
-        </div>
-    );
-
-    // Section 5: Availability
+    // Section 4: Availability
     const renderAvailability = () => (
         <div className="form-section">
             <h2 className="section-title">
