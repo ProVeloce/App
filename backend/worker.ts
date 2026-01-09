@@ -1187,7 +1187,16 @@ export default {
                 }
 
                 // Get status filter from query params
-                const statusFilter = url.searchParams.get("status");
+                // Handle malformed status values like "PENDING:1" (cache-busting suffixes)
+                let statusFilter = url.searchParams.get("status");
+                if (statusFilter && statusFilter.includes(":")) {
+                    statusFilter = statusFilter.split(":")[0];
+                }
+                // Validate status is one of the allowed values
+                const validStatuses = ["PENDING", "APPROVED", "REJECTED", "DRAFT", "UNDER_REVIEW", "REQUIRES_CLARIFICATION", ""];
+                if (statusFilter && !validStatuses.includes(statusFilter.toUpperCase())) {
+                    statusFilter = null;
+                }
                 console.log(`📊 Status filter: ${statusFilter || 'none'}`);
 
                 let query = `
