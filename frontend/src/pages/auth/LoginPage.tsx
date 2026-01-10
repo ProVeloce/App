@@ -159,7 +159,7 @@ const LoginPage: React.FC = () => {
                 <div className="auth-panel non-input-panel">
                     <div className="visual-content">
                         <h2>Connect with Verified Experts</h2>
-                        <p>Join thousands of professionals on the ProVeloce platform</p>
+                        <p>Join thousands of professionals on the ProVeloce Connect platform</p>
                     </div>
                 </div>
             </div>

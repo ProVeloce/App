@@ -3,64 +3,64 @@ import { config } from '../config/index';
 
 // Create transporter
 const transporter = nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.port === 465,
-    auth: {
-        user: config.smtp.user,
-        pass: config.smtp.pass,
-    },
+  host: config.smtp.host,
+  port: config.smtp.port,
+  secure: config.smtp.port === 465,
+  auth: {
+    user: config.smtp.user,
+    pass: config.smtp.pass,
+  },
 });
 
 interface EmailOptions {
-    to: string;
-    subject: string;
-    html: string;
-    text?: string;
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 /**
  * Send email using configured SMTP
  */
 export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
-    try {
-        await transporter.sendMail({
-            from: config.smtp.from,
-            to: options.to,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ''),
-        });
-        console.log(`✉️ Email sent to: ${options.to}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Email sending failed:', error);
-        return false;
-    }
+  try {
+    await transporter.sendMail({
+      from: config.smtp.from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text || options.html.replace(/<[^>]*>/g, ''),
+    });
+    console.log(`✉️ Email sent to: ${options.to}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Email sending failed:', error);
+    return false;
+  }
 };
 
 /**
  * Send OTP verification email
  */
 export const sendOTPEmail = async (
-    email: string,
-    otp: string,
-    type: 'email_verification' | 'password_reset'
+  email: string,
+  otp: string,
+  type: 'email_verification' | 'password_reset'
 ): Promise<boolean> => {
-    const subjects = {
-        email_verification: 'Verify Your Email - ProVeloce',
-        password_reset: 'Reset Your Password - ProVeloce',
-    };
+  const subjects = {
+    email_verification: 'Verify Your Email - ProVeloce Connect',
+    password_reset: 'Reset Your Password - ProVeloce Connect',
+  };
 
-    const messages = {
-        email_verification: `
+  const messages = {
+    email_verification: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">ProVeloce</h1>
+          <h1 style="color: white; margin: 0;">ProVeloce Connect</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1a1a2e;">Verify Your Email</h2>
-          <p>Welcome to ProVeloce! Use the following OTP to verify your email address:</p>
+          <p>Welcome to ProVeloce Connect! Use the following OTP to verify your email address:</p>
           <div style="background: #1a1a2e; color: white; font-size: 32px; padding: 20px; text-align: center; letter-spacing: 8px; border-radius: 8px; margin: 20px 0;">
             ${otp}
           </div>
@@ -69,10 +69,10 @@ export const sendOTPEmail = async (
         </div>
       </div>
     `,
-        password_reset: `
+    password_reset: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">ProVeloce</h1>
+          <h1 style="color: white; margin: 0;">ProVeloce Connect</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1a1a2e;">Reset Your Password</h2>
@@ -85,30 +85,30 @@ export const sendOTPEmail = async (
         </div>
       </div>
     `,
-    };
+  };
 
-    return sendEmail({
-        to: email,
-        subject: subjects[type],
-        html: messages[type],
-    });
+  return sendEmail({
+    to: email,
+    subject: subjects[type],
+    html: messages[type],
+  });
 };
 
 /**
  * Send welcome email after signup
  */
 export const sendWelcomeEmail = async (email: string, name: string): Promise<boolean> => {
-    return sendEmail({
-        to: email,
-        subject: 'Welcome to ProVeloce!',
-        html: `
+  return sendEmail({
+    to: email,
+    subject: 'Welcome to ProVeloce Connect!',
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0;">ProVeloce</h1>
+          <h1 style="color: white; margin: 0;">ProVeloce Connect</h1>
         </div>
         <div style="padding: 30px; background: #f9fafb;">
           <h2 style="color: #1a1a2e;">Welcome, ${name}!</h2>
-          <p>Thank you for joining ProVeloce. We're excited to have you on board.</p>
+          <p>Thank you for joining ProVeloce Connect. We're excited to have you on board.</p>
           <p>Here's what you can do next:</p>
           <ul style="color: #333;">
             <li>Complete your profile</li>
@@ -119,24 +119,24 @@ export const sendWelcomeEmail = async (email: string, name: string): Promise<boo
         </div>
       </div>
     `,
-    });
+  });
 };
 
 /**
  * Send application status update email
  */
 export const sendApplicationStatusEmail = async (
-    email: string,
-    name: string,
-    status: 'approved' | 'rejected',
-    reason?: string
+  email: string,
+  name: string,
+  status: 'approved' | 'rejected',
+  reason?: string
 ): Promise<boolean> => {
-    const subject = status === 'approved'
-        ? 'Congratulations! Your Expert Application is Approved'
-        : 'Expert Application Status Update';
+  const subject = status === 'approved'
+    ? 'Congratulations! Your Expert Application is Approved'
+    : 'Expert Application Status Update';
 
-    const message = status === 'approved'
-        ? `
+  const message = status === 'approved'
+    ? `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; text-align: center;">
           <h1 style="color: white; margin: 0;">🎉 Congratulations!</h1>
@@ -154,7 +154,7 @@ export const sendApplicationStatusEmail = async (
         </div>
       </div>
     `
-        : `
+    : `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
           <h1 style="color: white; margin: 0;">Application Update</h1>
@@ -169,9 +169,9 @@ export const sendApplicationStatusEmail = async (
       </div>
     `;
 
-    return sendEmail({
-        to: email,
-        subject,
-        html: message,
-    });
+  return sendEmail({
+    to: email,
+    subject,
+    html: message,
+  });
 };

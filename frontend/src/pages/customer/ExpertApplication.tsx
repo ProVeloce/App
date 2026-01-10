@@ -1313,7 +1313,7 @@ const ExpertApplication: React.FC = () => {
         <div className="expert-application">
             <div className="page-header">
                 <h1>Expert Application</h1>
-                <p>Complete all sections to apply as a ProVeloce Expert</p>
+                <p>Complete all sections to apply as a ProVeloce Connect Expert</p>
             </div>
 
             {/* Progress Steps */}

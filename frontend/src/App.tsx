@@ -63,7 +63,7 @@ function App() {
         return (
             <div className="loading-screen">
                 <div className="loading-spinner" />
-                <p>Loading ProVeloce...</p>
+                <p>Loading ProVeloce Connect...</p>
             </div>
         );
     }

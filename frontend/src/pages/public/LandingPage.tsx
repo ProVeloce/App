@@ -30,7 +30,7 @@ import AppLogo from '../../components/common/AppLogo';
 import './LandingPage.css';
 
 const LandingPage: React.FC = () => {
-    // Why Choose ProVeloce Features
+    // Why Choose ProVeloce Connect Features
     const features = [
         {
             image: 'images/expert-marketplace.png',
@@ -95,14 +95,14 @@ const LandingPage: React.FC = () => {
         {
             name: 'Priya Sharma',
             role: 'Founder, FinTech Startup',
-            content: 'ProVeloce connected us with a financial advisor who helped structure our Series A funding. The verification process gave us complete confidence.',
+            content: 'ProVeloce Connect matched us with a financial advisor who helped structure our Series A funding. The verification process gave us complete confidence.',
             rating: 5,
             avatar: 'PS',
         },
         {
             name: 'Rajesh Kumar',
             role: 'Product Director, TechCorp',
-            content: 'Finding specialized consultants used to take weeks. With ProVeloce, we had three qualified proposals within 24 hours. Game-changer!',
+            content: 'Finding specialized consultants used to take weeks. With ProVeloce Connect, we had three qualified proposals within 24 hours. Game-changer!',
             rating: 5,
             avatar: 'RK',
         },
@@ -161,7 +161,7 @@ const LandingPage: React.FC = () => {
                             Transform Ideas Into Reality with <span className="gradient-text">Verified Experts</span>
                         </h1>
                         <p className="hero-subtitle">
-                            ProVeloce is the premier skill marketplace connecting you with verified professionals for consultations,
+                            ProVeloce Connect is the premier skill marketplace connecting you with verified professionals for consultations,
                             projects, and services. From concept to completion — we ensure excellence at every step.
                         </p>
                         <div className="hero-actions">
@@ -234,7 +234,7 @@ const LandingPage: React.FC = () => {
             <section id="how-it-works" className="how-it-works">
                 <div className="container">
                     <div className="section-header">
-                        <h2 className="section-title">How ProVeloce Works</h2>
+                        <h2 className="section-title">How ProVeloce Connect Works</h2>
                         <p className="section-subtitle">
                             Simple, transparent process for both clients and professionals
                         </p>
@@ -324,7 +324,7 @@ const LandingPage: React.FC = () => {
             <section id="features" className="features">
                 <div className="container">
                     <div className="section-header">
-                        <h2 className="section-title">Why Choose ProVeloce?</h2>
+                        <h2 className="section-title">Why Choose ProVeloce Connect?</h2>
                         <p className="section-subtitle">
                             Everything you need to find and work with verified professionals
                         </p>
@@ -400,7 +400,7 @@ const LandingPage: React.FC = () => {
                 <div className="container">
                     <div className="benefits-grid">
                         <div className="benefits-content">
-                            <h2>Why 5,000+ Businesses Choose ProVeloce</h2>
+                            <h2>Why 5,000+ Businesses Choose ProVeloce Connect</h2>
                             <ul className="benefits-list">
                                 {benefits.map((benefit, index) => (
                                     <li key={index}>

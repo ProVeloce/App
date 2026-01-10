@@ -94,7 +94,7 @@ const SignupPage: React.FC = () => {
                         <div className="auth-header">
                             <AppLogo showText={true} size="large" className="auth-logo" />
                             <h1>Create Account</h1>
-                            <p>Join the ProVeloce expert community</p>
+                            <p>Join the ProVeloce Connect expert community</p>
                         </div>
 
                         <form onSubmit={handleSubmit(onSubmit)} className="auth-form">

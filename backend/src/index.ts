@@ -33,7 +33,7 @@ async function main() {
 
         // Start server
         app.listen(PORT, () => {
-            console.log(`🚀 ProVeloce API Server running on port ${PORT}`);
+            console.log(`🚀 ProVeloce Connect API Server running on port ${PORT}`);
             console.log(`📍 Environment: ${config.nodeEnv}`);
             console.log(`🔗 Health check: http://localhost:${PORT}/health`);
         });

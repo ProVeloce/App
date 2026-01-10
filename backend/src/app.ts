@@ -53,7 +53,7 @@ app.use('/uploads', (req, res, next) => {
 app.get('/', (req, res) => {
     res.json({
         success: true,
-        message: 'ProVeloce API Server',
+        message: 'ProVeloce Connect API Server',
         version: '1.0.0',
         endpoints: {
             health: '/health',

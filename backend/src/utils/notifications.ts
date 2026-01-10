@@ -113,7 +113,7 @@ export const cleanupOldNotifications = async (): Promise<number> => {
 export const NOTIFICATION_TEMPLATES = {
     welcomeUser: (name: string) => ({
         type: 'SUCCESS' as NotificationType,
-        title: 'Welcome to ProVeloce!',
+        title: 'Welcome to ProVeloce Connect!',
         message: `Hi ${name}, welcome aboard! Complete your profile to get started.`,
         link: '/profile',
     }),
