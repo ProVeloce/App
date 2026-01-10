@@ -737,7 +737,13 @@ const ExpertApplication: React.FC = () => {
             }
         } catch (error: any) {
             console.error('❌ Failed to save draft:', error);
-            showGlobalError('Save Failed', error.message || 'Network error - could not save draft');
+            // Extract the actual error message from axios response
+            const backendError = error.response?.data?.error
+                || error.response?.data?.message
+                || error.message
+                || 'Network error - could not save draft';
+            console.error('Backend error message:', backendError);
+            showGlobalError('Save Failed', backendError);
         } finally {
             setIsSaving(false);
         }
