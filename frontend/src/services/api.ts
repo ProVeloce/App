@@ -1,5 +1,15 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
+// Expert Application Status Type
+export type ExpertApplicationStatus = 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
+
+export interface ExpertApplication {
+    status: ExpertApplicationStatus;
+    applicationId: string | null;
+    submittedAt: string | null;
+    rejectionReason: string | null;
+}
+
 // Types
 export interface User {
     id: string;
@@ -12,6 +22,8 @@ export interface User {
     lastLoginAt?: string;
     createdAt: string;
     profile?: UserProfile;
+    // Expert application state (source of truth for UI rendering)
+    expertApplication?: ExpertApplication;
 }
 
 export interface UserProfile {
@@ -212,7 +224,7 @@ export const authApi = {
         api.post<ApiResponse>('/auth/logout', { refreshToken }),
 
     getCurrentUser: () =>
-        api.get<ApiResponse<{ user: User }>>('/auth/me'),
+        api.get<ApiResponse<{ user: User; expertApplication: ExpertApplication }>>('/auth/me'),
 };
 
 // User API

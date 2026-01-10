@@ -248,6 +248,75 @@ export default {
             }
 
             // =====================================================
+            // GET /api/auth/me - Current User with Application Status
+            // =====================================================
+
+            if (url.pathname === "/api/auth/me" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Fetch user from database
+                    const user = await env.proveloce_db.prepare(
+                        "SELECT id, name, email, phone, role, status, email_verified, created_at FROM users WHERE id = ?"
+                    ).bind(payload.userId).first() as any;
+
+                    if (!user) {
+                        return jsonResponse({ success: false, error: "User not found" }, 404);
+                    }
+
+                    // Fetch expert application status
+                    const application = await env.proveloce_db.prepare(
+                        "SELECT id, status, submitted_at, rejection_reason FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first() as any;
+
+                    // Determine application status (NONE if no application exists)
+                    const applicationStatus = application
+                        ? (application.status || 'DRAFT').toUpperCase()
+                        : 'NONE';
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            user: {
+                                id: user.id,
+                                name: user.name,
+                                email: user.email,
+                                phone: user.phone,
+                                role: (user.role || 'customer').toUpperCase(),
+                                status: user.status || 'ACTIVE',
+                                emailVerified: !!user.email_verified,
+                                createdAt: user.created_at,
+                            },
+                            // Application state for UI control
+                            expertApplication: {
+                                status: applicationStatus,
+                                applicationId: application?.id || null,
+                                submittedAt: application?.submitted_at || null,
+                                rejectionReason: application?.rejection_reason || null,
+                            }
+                        }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching user:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch user" }, 500);
+                }
+            }
+
+            // =====================================================
             // Google OAuth - Step 1: Redirect to Google
             // =====================================================
 

@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const restoreSession = async () => {
             if (isInitialized) return;
-            
+
             const token = getAccessToken();
             if (!token) {
                 setIsLoading(false);
@@ -85,8 +85,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Optionally try to fetch fresh user data from API in background
                 try {
                     const response = await authApi.getCurrentUser();
-                    if (response.data?.success && response.data?.data?.user) {
-                        setUser(response.data.data.user);
+                    if (response.data?.success && response.data?.data) {
+                        const { user: apiUser, expertApplication } = response.data.data;
+                        // Merge expertApplication into user object
+                        setUser({
+                            ...apiUser,
+                            expertApplication,
+                        });
                     }
                 } catch (error) {
                     // API call failed, but we still have user from JWT - that's fine
@@ -151,7 +156,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!user || user.id !== userFromToken.id) {
                 setUser(userFromToken);
             }
-            
+
             if (!isInitialized) {
                 setIsLoading(false);
                 setIsInitialized(true);
@@ -160,9 +165,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Optionally try to fetch fresh user data from API (if available)
             try {
                 const response = await authApi.getCurrentUser();
-                if (response.data?.success && response.data?.data?.user) {
-                    setUser(response.data.data.user);
-                    return response.data.data.user;
+                if (response.data?.success && response.data?.data) {
+                    const { user: apiUser, expertApplication } = response.data.data;
+                    const mergedUser = { ...apiUser, expertApplication };
+                    setUser(mergedUser);
+                    return mergedUser;
                 }
             } catch (error) {
                 // API call failed, but we still have user from JWT - that's fine
@@ -246,7 +253,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const response = await authApi.getCurrentUser();
             if (response.data.success && response.data.data) {
-                setUser(response.data.data.user);
+                const { user: apiUser, expertApplication } = response.data.data;
+                setUser({ ...apiUser, expertApplication });
             }
         } catch (error) {
             // If API fails, try to get user from JWT
