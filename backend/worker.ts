@@ -1199,103 +1199,115 @@ export default {
                 }
                 console.log(`📊 Status filter: ${statusFilter || 'none'}`);
 
-                let query = `
-                    SELECT 
-                        ea.id,
-                        ea.user_id as userId,
-                        ea.status,
-                        ea.dob,
-                        ea.gender,
-                        ea.address_line1 as addressLine1,
-                        ea.city,
-                        ea.state,
-                        ea.country,
-                        ea.pincode,
-                        ea.domains,
-                        ea.skills,
-                        ea.years_of_experience as yearsOfExperience,
-                        ea.summary_bio as summaryBio,
-                        ea.working_type as workingType,
-                        ea.expected_rate as expectedRate,
-                        ea.available_days as availableDays,
-                        ea.available_time_slots as availableTimeSlots,
-                        ea.work_preference as workPreference,
-                        ea.communication_mode as communicationMode,
-                        ea.created_at as createdAt,
-                        ea.submitted_at as submittedAt,
-                        ea.updated_at as updatedAt,
-                        u.id as "user.id",
-                        u.name as "user.name",
-                        u.email as "user.email",
-                        u.phone as "user.phone"
-                    FROM expert_applications ea
-                    JOIN users u ON u.id = ea.user_id
-                `;
-                const params: any[] = [];
+                try {
+                    let query = `
+                        SELECT 
+                            ea.id,
+                            ea.user_id as userId,
+                            ea.status,
+                            ea.dob,
+                            ea.gender,
+                            ea.address_line1 as addressLine1,
+                            ea.city,
+                            ea.state,
+                            ea.country,
+                            ea.pincode,
+                            ea.domains,
+                            ea.skills,
+                            ea.years_of_experience as yearsOfExperience,
+                            ea.summary_bio as summaryBio,
+                            ea.working_type as workingType,
+                            ea.expected_rate as expectedRate,
+                            ea.available_days as availableDays,
+                            ea.available_time_slots as availableTimeSlots,
+                            ea.work_preference as workPreference,
+                            ea.communication_mode as communicationMode,
+                            ea.created_at as createdAt,
+                            ea.submitted_at as submittedAt,
+                            ea.updated_at as updatedAt,
+                            u.id as "user.id",
+                            u.name as "user.name",
+                            u.email as "user.email",
+                            u.phone as "user.phone"
+                        FROM expert_applications ea
+                        JOIN users u ON u.id = ea.user_id
+                    `;
+                    const params: any[] = [];
 
-                if (statusFilter && statusFilter !== "") {
-                    query += ` WHERE LOWER(ea.status) = LOWER(?)`;
-                    params.push(statusFilter);
-                }
+                    if (statusFilter && statusFilter !== "") {
+                        query += ` WHERE LOWER(ea.status) = LOWER(?)`;
+                        params.push(statusFilter);
+                    }
 
-                query += ` ORDER BY ea.created_at DESC LIMIT 100`;
+                    query += ` ORDER BY ea.created_at DESC LIMIT 100`;
 
-                const result = await env.proveloce_db.prepare(query).bind(...params).all();
-                console.log(`✅ Found ${result.results.length} applications`);
+                    const result = await env.proveloce_db.prepare(query).bind(...params).all();
+                    console.log(`✅ Found ${result.results.length} applications`);
 
-                // Transform to expected format with nested user object
-                const applications = result.results.map((row: any) => {
-                    // Parse JSON fields
-                    let domains = [];
-                    let skills = [];
-                    let availableDays = [];
-                    let availableTimeSlots = [];
+                    // Transform to expected format with nested user object
+                    const applications = result.results.map((row: any) => {
+                        // Parse JSON fields
+                        let domains = [];
+                        let skills = [];
+                        let availableDays = [];
+                        let availableTimeSlots = [];
 
-                    try { domains = row.domains ? JSON.parse(row.domains) : []; } catch { }
-                    try { skills = row.skills ? JSON.parse(row.skills) : []; } catch { }
-                    try { availableDays = row.availableDays ? JSON.parse(row.availableDays) : []; } catch { }
-                    try { availableTimeSlots = row.availableTimeSlots ? JSON.parse(row.availableTimeSlots) : []; } catch { }
+                        try { domains = row.domains ? JSON.parse(row.domains) : []; } catch { }
+                        try { skills = row.skills ? JSON.parse(row.skills) : []; } catch { }
+                        try { availableDays = row.availableDays ? JSON.parse(row.availableDays) : []; } catch { }
+                        try { availableTimeSlots = row.availableTimeSlots ? JSON.parse(row.availableTimeSlots) : []; } catch { }
 
-                    return {
-                        id: row.id,
-                        userId: row.userId,
-                        status: (row.status || 'DRAFT').toUpperCase(),
-                        dob: row.dob,
-                        gender: row.gender,
-                        addressLine1: row.addressLine1,
-                        city: row.city,
-                        state: row.state,
-                        country: row.country,
-                        pincode: row.pincode,
-                        domains,
-                        skills,
-                        yearsOfExperience: row.yearsOfExperience,
-                        summaryBio: row.summaryBio,
-                        workingType: row.workingType,
-                        expectedRate: row.expectedRate,
-                        availableDays,
-                        availableTimeSlots,
-                        workPreference: row.workPreference,
-                        communicationMode: row.communicationMode,
-                        createdAt: row.createdAt,
-                        submittedAt: row.submittedAt,
-                        updatedAt: row.updatedAt,
-                        user: {
-                            id: row["user.id"],
-                            name: row["user.name"],
-                            email: row["user.email"],
-                            phone: row["user.phone"],
+                        return {
+                            id: row.id,
+                            userId: row.userId,
+                            status: (row.status || 'DRAFT').toUpperCase(),
+                            dob: row.dob,
+                            gender: row.gender,
+                            addressLine1: row.addressLine1,
+                            city: row.city,
+                            state: row.state,
+                            country: row.country,
+                            pincode: row.pincode,
+                            domains,
+                            skills,
+                            yearsOfExperience: row.yearsOfExperience,
+                            summaryBio: row.summaryBio,
+                            workingType: row.workingType,
+                            expectedRate: row.expectedRate,
+                            availableDays,
+                            availableTimeSlots,
+                            workPreference: row.workPreference,
+                            communicationMode: row.communicationMode,
+                            createdAt: row.createdAt,
+                            submittedAt: row.submittedAt,
+                            updatedAt: row.updatedAt,
+                            user: {
+                                id: row["user.id"],
+                                name: row["user.name"],
+                                email: row["user.email"],
+                                phone: row["user.phone"],
+                            },
+                        };
+                    });
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            applications,
+                            count: applications.length,
                         },
-                    };
-                });
-
-                return jsonResponse({
-                    success: true,
-                    data: {
-                        applications,
-                        count: applications.length,
-                    },
-                });
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching applications:", error);
+                    // Return empty array instead of 500 error
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            applications: [],
+                            count: 0,
+                        },
+                    });
+                }
             }
 
             // POST /api/applications/:id/approve - Approve application
@@ -1410,14 +1422,37 @@ export default {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
-                const application = await env.proveloce_db.prepare(
-                    "SELECT * FROM expert_applications WHERE user_id = ?"
-                ).bind(payload.userId).first();
+                try {
+                    let application = await env.proveloce_db.prepare(
+                        "SELECT * FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first();
 
-                return jsonResponse({
-                    success: true,
-                    data: { application: application || null }
-                });
+                    // AUTO-CREATE: If no application exists, create one with DRAFT status
+                    if (!application) {
+                        const newId = crypto.randomUUID();
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO expert_applications (id, user_id, status, created_at, updated_at)
+                            VALUES (?, ?, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        `).bind(newId, payload.userId).run();
+
+                        application = {
+                            id: newId,
+                            user_id: payload.userId,
+                            status: 'draft',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        };
+                        console.log(`✅ Auto-created DRAFT application for user ${payload.userId}`);
+                    }
+
+                    return jsonResponse({
+                        success: true,
+                        data: { application }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching/creating application:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch application" }, 500);
+                }
             }
 
             // POST /api/expert-application - Save/update draft
@@ -1438,71 +1473,93 @@ export default {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
-                const body = await request.json() as any;
+                try {
+                    const body = await request.json() as any;
 
-                // Check if application exists
-                const existing = await env.proveloce_db.prepare(
-                    "SELECT id FROM expert_applications WHERE user_id = ?"
-                ).bind(payload.userId).first();
+                    // Check if application exists and its current status
+                    const existing = await env.proveloce_db.prepare(
+                        "SELECT id, status FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first() as any;
 
-                if (existing) {
-                    // Update existing application
-                    await env.proveloce_db.prepare(`
-                        UPDATE expert_applications SET
-                            dob = ?, gender = ?, address_line1 = ?, address_line2 = ?,
-                            city = ?, state = ?, country = ?, pincode = ?,
-                            government_id_type = ?, government_id_url = ?, profile_photo_url = ?,
-                            domains = ?, years_of_experience = ?, summary_bio = ?, skills = ?,
-                            resume_url = ?, portfolio_urls = ?, certification_urls = ?,
-                            working_type = ?, hourly_rate = ?, languages = ?,
-                            available_days = ?, available_time_slots = ?,
-                            work_preference = ?, communication_mode = ?,
-                            terms_accepted = ?, nda_accepted = ?, signature_url = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE user_id = ?
-                    `).bind(
-                        body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
-                        body.city || null, body.state || null, body.country || null, body.pincode || null,
-                        body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
-                        JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
-                        body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
-                        body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
-                        JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
-                        body.workPreference || null, body.communicationMode || null,
-                        body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null,
-                        payload.userId
-                    ).run();
-                } else {
-                    // Create new application
-                    const id = crypto.randomUUID();
-                    await env.proveloce_db.prepare(`
-                        INSERT INTO expert_applications (
-                            id, user_id, status,
-                            dob, gender, address_line1, address_line2,
-                            city, state, country, pincode,
-                            government_id_type, government_id_url, profile_photo_url,
-                            domains, years_of_experience, summary_bio, skills,
-                            resume_url, portfolio_urls, certification_urls,
-                            working_type, hourly_rate, languages,
-                            available_days, available_time_slots,
-                            work_preference, communication_mode,
-                            terms_accepted, nda_accepted, signature_url
-                        ) VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `).bind(
-                        id, payload.userId,
-                        body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
-                        body.city || null, body.state || null, body.country || null, body.pincode || null,
-                        body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
-                        JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
-                        body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
-                        body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
-                        JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
-                        body.workPreference || null, body.communicationMode || null,
-                        body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null
-                    ).run();
+                    // GUARD: Don't allow overwriting PENDING or APPROVED applications
+                    if (existing) {
+                        const currentStatus = (existing.status || '').toLowerCase();
+                        if (currentStatus === 'pending') {
+                            return jsonResponse({
+                                success: false,
+                                error: "Cannot modify application while it's under review"
+                            }, 400);
+                        }
+                        if (currentStatus === 'approved') {
+                            return jsonResponse({
+                                success: false,
+                                error: "Your application has already been approved"
+                            }, 400);
+                        }
+
+                        // Update existing application - ALWAYS set status to 'draft' when saving
+                        await env.proveloce_db.prepare(`
+                            UPDATE expert_applications SET
+                                status = 'draft',
+                                dob = ?, gender = ?, address_line1 = ?, address_line2 = ?,
+                                city = ?, state = ?, country = ?, pincode = ?,
+                                government_id_type = ?, government_id_url = ?, profile_photo_url = ?,
+                                domains = ?, years_of_experience = ?, summary_bio = ?, skills = ?,
+                                resume_url = ?, portfolio_urls = ?, certification_urls = ?,
+                                working_type = ?, hourly_rate = ?, languages = ?,
+                                available_days = ?, available_time_slots = ?,
+                                work_preference = ?, communication_mode = ?,
+                                terms_accepted = ?, nda_accepted = ?, signature_url = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = ?
+                        `).bind(
+                            body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
+                            body.city || null, body.state || null, body.country || null, body.pincode || null,
+                            body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
+                            JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
+                            body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
+                            body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
+                            JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
+                            body.workPreference || null, body.communicationMode || null,
+                            body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null,
+                            payload.userId
+                        ).run();
+                    } else {
+                        // Create new application with DRAFT status
+                        const id = crypto.randomUUID();
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO expert_applications (
+                                id, user_id, status,
+                                dob, gender, address_line1, address_line2,
+                                city, state, country, pincode,
+                                government_id_type, government_id_url, profile_photo_url,
+                                domains, years_of_experience, summary_bio, skills,
+                                resume_url, portfolio_urls, certification_urls,
+                                working_type, hourly_rate, languages,
+                                available_days, available_time_slots,
+                                work_preference, communication_mode,
+                                terms_accepted, nda_accepted, signature_url
+                            ) VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `).bind(
+                            id, payload.userId,
+                            body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
+                            body.city || null, body.state || null, body.country || null, body.pincode || null,
+                            body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
+                            JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
+                            body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
+                            body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
+                            JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
+                            body.workPreference || null, body.communicationMode || null,
+                            body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null
+                        ).run();
+                    }
+
+                    console.log(`✅ Draft saved for user ${payload.userId}`);
+                    return jsonResponse({ success: true, message: "Application saved successfully" });
+                } catch (error: any) {
+                    console.error("Error saving application draft:", error);
+                    return jsonResponse({ success: false, error: "Failed to save application" }, 500);
                 }
-
-                return jsonResponse({ success: true, message: "Application saved successfully" });
             }
 
             // POST /api/expert-application/submit - Submit application
@@ -1523,23 +1580,53 @@ export default {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
-                // Update status to pending
-                const result = await env.proveloce_db.prepare(`
-                    UPDATE expert_applications 
-                    SET status = 'pending', submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                    WHERE user_id = ?
-                `).bind(payload.userId).run();
+                try {
+                    // First check if application exists and its current status
+                    const existing = await env.proveloce_db.prepare(
+                        "SELECT id, status FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first() as any;
 
-                if (result.changes === 0) {
-                    return jsonResponse({ success: false, error: "No application found to submit" }, 404);
+                    if (!existing) {
+                        return jsonResponse({
+                            success: false,
+                            error: "No application found. Please save a draft first."
+                        }, 404);
+                    }
+
+                    const currentStatus = (existing.status || '').toLowerCase();
+
+                    // GUARD: Only allow submitting if status is DRAFT or REJECTED (reapply)
+                    if (currentStatus === 'pending') {
+                        return jsonResponse({
+                            success: false,
+                            error: "Application already submitted and under review"
+                        }, 400);
+                    }
+                    if (currentStatus === 'approved') {
+                        return jsonResponse({
+                            success: false,
+                            error: "Your application has already been approved"
+                        }, 400);
+                    }
+
+                    // Update status to pending
+                    await env.proveloce_db.prepare(`
+                        UPDATE expert_applications 
+                        SET status = 'pending', submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = ?
+                    `).bind(payload.userId).run();
+
+                    // Log activity
+                    await env.proveloce_db.prepare(
+                        "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                    ).bind(crypto.randomUUID(), payload.userId, "SUBMIT_EXPERT_APPLICATION", "expert_application", existing.id, JSON.stringify({ timestamp: new Date().toISOString() })).run();
+
+                    console.log(`✅ Application submitted for user ${payload.userId}`);
+                    return jsonResponse({ success: true, message: "Application submitted successfully" });
+                } catch (error: any) {
+                    console.error("Error submitting application:", error);
+                    return jsonResponse({ success: false, error: "Failed to submit application" }, 500);
                 }
-
-                // Log activity
-                await env.proveloce_db.prepare(
-                    "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), payload.userId, "SUBMIT_EXPERT_APPLICATION", "expert_application", payload.userId, JSON.stringify({ timestamp: new Date().toISOString() })).run();
-
-                return jsonResponse({ success: true, message: "Application submitted successfully" });
             }
 
             // =====================================================
