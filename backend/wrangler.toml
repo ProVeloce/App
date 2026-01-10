@@ -27,9 +27,17 @@ JWT_REFRESH_EXPIRES_IN="7d"
 FRONTEND_URL="https://app.proveloce.com"
 GOOGLE_CALLBACK_URL="https://backend.proveloce.com/api/auth/google/callback"
 
-# ======================= R2 STORAGE BINDING =======================
-# PRIMARY_BUCKET: expertapplication (PRIVATE, APAC)
-# DEPRECATED: expertdetails - do not use
+# ======================= R2 STORAGE BINDINGS =======================
+# Dual-bucket architecture for Expert lifecycle
+
+# Bucket 1: Customer Expert Application Documents
+# Used by: Customer application form, Admin/Superadmin review
 [[r2_buckets]]
 binding = "EXPERT_APPLICATION"
-bucket_name = "expertapplication"
+bucket_name = "expertapplications"
+
+# Bucket 2: Approved Expert Operational Files  
+# Used by: Expert Portal uploads, Expert profile documents
+[[r2_buckets]]
+binding = "EXPERT_DOCS"
+bucket_name = "expertdetails"
