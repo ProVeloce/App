@@ -108,12 +108,23 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor with token refresh
+// Response interceptor with token refresh and global error handling
 api.interceptors.response.use(
-    (response) => response,
-    async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    (response) => {
+        // Check for success: false in response body
+        if (response.data && response.data.success === false) {
+            const { showGlobalError } = require('../context/ErrorContext');
+            showGlobalError(
+                'Request Failed',
+                response.data.error || response.data.message || 'An unexpected error occurred'
+            );
+        }
+        return response;
+    },
+    async (error: AxiosError<{ error?: string; message?: string }>) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _suppressError?: boolean };
 
+        // Handle 401 with token refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
@@ -134,7 +145,35 @@ api.interceptors.response.use(
                 setAccessToken(null);
                 setRefreshToken(null);
                 window.location.href = '/login';
+                return Promise.reject(error);
             }
+        }
+
+        // Show global error modal for all other errors (unless suppressed)
+        if (!originalRequest._suppressError) {
+            const { showGlobalError } = require('../context/ErrorContext');
+
+            // Determine error title based on status code
+            let title = 'Something went wrong';
+            const status = error.response?.status;
+
+            if (status === 400) title = 'Invalid Request';
+            else if (status === 401) title = 'Authentication Failed';
+            else if (status === 403) title = 'Access Denied';
+            else if (status === 404) title = 'Not Found';
+            else if (status === 409) title = 'Conflict';
+            else if (status === 422) title = 'Validation Error';
+            else if (status === 429) title = 'Too Many Requests';
+            else if (status && status >= 500) title = 'Server Error';
+            else if (!error.response) title = 'Connection Error';
+
+            // Get error message
+            const message = error.response?.data?.error
+                || error.response?.data?.message
+                || error.message
+                || 'An unexpected error occurred. Please try again.';
+
+            showGlobalError(title, message);
         }
 
         return Promise.reject(error);
@@ -427,8 +466,16 @@ export const documentApi = {
     submitDocuments: () =>
         api.post<ApiResponse<{ submittedCount: number }>>('/documents/submit'),
 
+
     deleteDocument: (id: string) =>
         api.delete<ApiResponse>(`/documents/${id}`),
+
+    // Admin endpoints
+    getApplicationDocuments: (applicationId: string) =>
+        api.get<ApiResponse<{ documents: any[]; count: number }>>(`/admin/applications/${applicationId}/documents`),
+
+    getAllDocuments: (params?: { status?: string }) =>
+        api.get<ApiResponse<{ documents: any[]; count: number }>>('/admin/documents', { params }),
 };
 
 export default api;

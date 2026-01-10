@@ -925,3 +925,116 @@
 [data-theme="dark"] .profile-info-notice svg {
     color: var(--info-400, #60a5fa);
 }
+
+/* Field Error Shake Animation */
+.field-error-shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-4px);
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(4px);
+    }
+}
+
+/* File Upload Loading State */
+.file-label.uploading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.file-label.uploading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-upload-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--primary-600);
+}
+
+.file-upload-spinner svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Uploaded file success state */
+.file-uploaded {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--success-50);
+    border: 1px solid var(--success-200);
+    border-radius: var(--radius-lg);
+    color: var(--success-700);
+    font-size: 0.875rem;
+}
+
+.file-uploaded svg {
+    color: var(--success-500);
+}
+
+.file-uploaded .file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-uploaded .remove-file-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.file-uploaded .remove-file-btn:hover {
+    color: var(--error-500);
+    background: var(--error-50);
+}
+
+/* Dark mode for uploaded files */
+[data-theme="dark"] .file-uploaded {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--success-300);
+}

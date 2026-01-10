@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { applicationApi, profileApi, documentApi } from '../../services/api';
+import { showGlobalError } from '../../context/ErrorContext';
 import {
     User,
     Briefcase,
@@ -398,6 +399,19 @@ const ExpertApplication: React.FC = () => {
         }
 
         setErrors(newErrors);
+
+        // Scroll to first error field
+        if (Object.keys(newErrors).length > 0) {
+            const firstErrorField = Object.keys(newErrors)[0];
+            const element = document.querySelector(`[name="${firstErrorField}"], [data-field="${firstErrorField}"], #${firstErrorField}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Add shake animation
+                element.classList.add('field-error-shake');
+                setTimeout(() => element.classList.remove('field-error-shake'), 500);
+            }
+        }
+
         return Object.keys(newErrors).length === 0;
     };
 
@@ -567,35 +581,39 @@ const ExpertApplication: React.FC = () => {
         const hasActiveUploads = Object.values(isUploading).some(v => v);
         if (hasActiveUploads) {
             console.warn('⚠️ Some files are still uploading, please wait...');
-            alert('Please wait for file uploads to complete before saving.');
+            showGlobalError('Upload In Progress', 'Please wait for file uploads to complete before saving.');
             return;
         }
 
         setIsSaving(true);
         try {
-            // Prepare data for API
+            // Prepare data for API - include document URLs
             const applicationData = {
-                dob: formData.dob,
-                gender: formData.gender,
-                addressLine1: formData.addressLine1,
-                addressLine2: formData.addressLine2,
-                city: formData.city,
-                state: formData.state,
-                country: formData.country,
-                pincode: formData.pincode,
-                governmentIdType: formData.governmentIdType,
-                domains: formData.domains,
-                skills: formData.skills,
-                yearsOfExperience: formData.yearsOfExperience,
-                summaryBio: formData.summaryBio,
-                portfolioLinks: formData.portfolioLinks,
-                workingType: formData.workingType,
-                expectedRate: formData.expectedRate,
-                languages: formData.languages,
-                availableDays: formData.availableDays,
-                availableTimeSlots: formData.availableTimeSlots,
-                workPreference: formData.workPreference,
-                communicationMode: formData.communicationMode,
+                dob: formData.dob || undefined,
+                gender: formData.gender || undefined,
+                addressLine1: formData.addressLine1 || undefined,
+                addressLine2: formData.addressLine2 || undefined,
+                city: formData.city || undefined,
+                state: formData.state || undefined,
+                country: formData.country || undefined,
+                pincode: formData.pincode || undefined,
+                governmentIdType: formData.governmentIdType || undefined,
+                // Include document URLs from uploadedDocs
+                governmentIdUrl: uploadedDocs.government_id?.signedUrl || uploadedDocs.government_id?.id || undefined,
+                profilePhotoUrl: uploadedDocs.profile?.signedUrl || uploadedDocs.profile?.id || undefined,
+                resumeUrl: uploadedDocs.resume?.signedUrl || uploadedDocs.resume?.id || undefined,
+                domains: formData.domains.length > 0 ? formData.domains : undefined,
+                skills: formData.skills.length > 0 ? formData.skills : undefined,
+                yearsOfExperience: formData.yearsOfExperience || undefined,
+                summaryBio: formData.summaryBio || undefined,
+                portfolioLinks: formData.portfolioLinks.length > 0 ? formData.portfolioLinks : undefined,
+                workingType: formData.workingType || undefined,
+                expectedRate: formData.expectedRate || undefined,
+                languages: formData.languages.length > 0 ? formData.languages : undefined,
+                availableDays: formData.availableDays.length > 0 ? formData.availableDays : undefined,
+                availableTimeSlots: formData.availableTimeSlots.length > 0 ? formData.availableTimeSlots : undefined,
+                workPreference: formData.workPreference || undefined,
+                communicationMode: formData.communicationMode || undefined,
                 termsAccepted: formData.termsAccepted,
                 ndaAccepted: formData.ndaAccepted,
             };
@@ -609,11 +627,11 @@ const ExpertApplication: React.FC = () => {
                 setTimeout(() => setShowDraftSaved(false), 3000);
             } else {
                 console.error('❌ Save failed:', response.data.error);
-                alert('Failed to save draft: ' + (response.data.error || 'Unknown error'));
+                showGlobalError('Save Failed', response.data.error || 'Failed to save draft');
             }
         } catch (error: any) {
             console.error('❌ Failed to save draft:', error);
-            alert('Failed to save draft: ' + (error.message || 'Network error'));
+            showGlobalError('Save Failed', error.message || 'Network error - could not save draft');
         } finally {
             setIsSaving(false);
         }
@@ -845,7 +863,7 @@ const ExpertApplication: React.FC = () => {
                     {errors.governmentIdType && <span className="error-text">{errors.governmentIdType}</span>}
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" data-field="governmentIdFile">
                     <label>Government ID Upload <span className="required">*</span></label>
                     <div className="file-upload">
                         <input
@@ -853,16 +871,34 @@ const ExpertApplication: React.FC = () => {
                             accept="image/*,.pdf"
                             onChange={e => handleFileChange('governmentIdFile', e.target.files)}
                             id="govtId"
+                            name="governmentIdFile"
+                            disabled={isUploading.governmentIdFile}
                         />
-                        <label htmlFor="govtId" className={`file-label ${errors.governmentIdFile ? 'error' : ''}`}>
-                            <Upload size={20} />
-                            {formData.governmentIdFile ? formData.governmentIdFile.name : 'Upload ID'}
-                        </label>
+                        {uploadedDocs.government_id ? (
+                            <div className="file-uploaded">
+                                <CheckCircle size={18} />
+                                <span className="file-name">{uploadedDocs.government_id.fileName}</span>
+                            </div>
+                        ) : (
+                            <label htmlFor="govtId" className={`file-label ${errors.governmentIdFile ? 'error' : ''} ${isUploading.governmentIdFile ? 'uploading' : ''}`}>
+                                {isUploading.governmentIdFile ? (
+                                    <span className="file-upload-spinner">
+                                        <Loader size={20} />
+                                        Uploading...
+                                    </span>
+                                ) : (
+                                    <>
+                                        <Upload size={20} />
+                                        {formData.governmentIdFile ? formData.governmentIdFile.name : 'Upload ID'}
+                                    </>
+                                )}
+                            </label>
+                        )}
                     </div>
                     {errors.governmentIdFile && <span className="error-text">{errors.governmentIdFile}</span>}
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" data-field="profilePhoto">
                     <label>Profile Photo (Optional)</label>
                     <div className="file-upload">
                         <input
@@ -870,11 +906,29 @@ const ExpertApplication: React.FC = () => {
                             accept="image/*"
                             onChange={e => handleFileChange('profilePhoto', e.target.files)}
                             id="profilePhoto"
+                            name="profilePhoto"
+                            disabled={isUploading.profilePhoto}
                         />
-                        <label htmlFor="profilePhoto" className="file-label">
-                            <Upload size={20} />
-                            {formData.profilePhoto ? formData.profilePhoto.name : 'Upload Photo'}
-                        </label>
+                        {uploadedDocs.profile ? (
+                            <div className="file-uploaded">
+                                <CheckCircle size={18} />
+                                <span className="file-name">{uploadedDocs.profile.fileName}</span>
+                            </div>
+                        ) : (
+                            <label htmlFor="profilePhoto" className={`file-label ${isUploading.profilePhoto ? 'uploading' : ''}`}>
+                                {isUploading.profilePhoto ? (
+                                    <span className="file-upload-spinner">
+                                        <Loader size={20} />
+                                        Uploading...
+                                    </span>
+                                ) : (
+                                    <>
+                                        <Upload size={20} />
+                                        {formData.profilePhoto ? formData.profilePhoto.name : 'Upload Photo'}
+                                    </>
+                                )}
+                            </label>
+                        )}
                     </div>
                 </div>
             </div>
@@ -987,7 +1041,7 @@ const ExpertApplication: React.FC = () => {
                     {errors.summaryBio && <span className="error-text">{errors.summaryBio}</span>}
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" data-field="resumeFile">
                     <label>Resume Upload <span className="required">*</span> (PDF only)</label>
                     <div className="file-upload">
                         <input
@@ -995,11 +1049,29 @@ const ExpertApplication: React.FC = () => {
                             accept=".pdf"
                             onChange={e => handleFileChange('resumeFile', e.target.files)}
                             id="resume"
+                            name="resumeFile"
+                            disabled={isUploading.resumeFile}
                         />
-                        <label htmlFor="resume" className={`file-label ${errors.resumeFile ? 'error' : ''}`}>
-                            <FileText size={20} />
-                            {formData.resumeFile ? formData.resumeFile.name : 'Upload Resume (PDF)'}
-                        </label>
+                        {uploadedDocs.resume ? (
+                            <div className="file-uploaded">
+                                <CheckCircle size={18} />
+                                <span className="file-name">{uploadedDocs.resume.fileName}</span>
+                            </div>
+                        ) : (
+                            <label htmlFor="resume" className={`file-label ${errors.resumeFile ? 'error' : ''} ${isUploading.resumeFile ? 'uploading' : ''}`}>
+                                {isUploading.resumeFile ? (
+                                    <span className="file-upload-spinner">
+                                        <Loader size={20} />
+                                        Uploading...
+                                    </span>
+                                ) : (
+                                    <>
+                                        <FileText size={20} />
+                                        {formData.resumeFile ? formData.resumeFile.name : 'Upload Resume (PDF)'}
+                                    </>
+                                )}
+                            </label>
+                        )}
                     </div>
                     {errors.resumeFile && <span className="error-text">{errors.resumeFile}</span>}
                 </div>

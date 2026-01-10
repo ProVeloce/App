@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, X, FileText, Image, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { documentApi } from '../../services/api';
+import { showGlobalError } from '../../context/ErrorContext';
 import './FileUploader.css';
 
 interface UploadedFile {
@@ -107,7 +108,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         const availableSlots = maxFiles - currentCount;
 
         if (availableSlots <= 0) {
-            alert(`Maximum ${maxFiles} files allowed`);
+            showGlobalError('Upload Limit Reached', `Maximum ${maxFiles} files allowed`);
             return;
         }
 

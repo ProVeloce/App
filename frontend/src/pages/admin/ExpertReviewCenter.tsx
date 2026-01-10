@@ -16,6 +16,7 @@ import {
   Loader
 } from 'lucide-react';
 import { applicationApi, documentApi } from '../../services/api';
+import { showGlobalError } from '../../context/ErrorContext';
 import './ExpertReviewCenter.css';
 
 interface Application {
@@ -77,10 +78,10 @@ const ExpertReviewCenter: React.FC = () => {
         // Refresh list
         fetchApplications();
       } else {
-        alert(response.data.error || 'Failed to approve');
+        showGlobalError('Approval Failed', response.data.error || 'Failed to approve application');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to approve');
+      showGlobalError('Approval Failed', err.message || 'Failed to approve application');
     } finally {
       setActionLoading(null);
     }
@@ -96,10 +97,10 @@ const ExpertReviewCenter: React.FC = () => {
       if (response.data.success) {
         fetchApplications();
       } else {
-        alert(response.data.error || 'Failed to reject');
+        showGlobalError('Rejection Failed', response.data.error || 'Failed to reject application');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to reject');
+      showGlobalError('Rejection Failed', err.message || 'Failed to reject application');
     } finally {
       setActionLoading(null);
     }

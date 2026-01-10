@@ -1709,17 +1709,28 @@ export default {
 
                     console.log(`✅ File uploaded to R2: ${objectKey}`);
 
-                    // Save metadata to D1
+                    // Get or create application_id for this user
+                    let applicationId: string | null = null;
+                    const existingApp = await env.proveloce_db.prepare(
+                        "SELECT id FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first() as any;
+
+                    if (existingApp) {
+                        applicationId = existingApp.id;
+                    }
+
+                    // Save metadata to D1 with application_id
                     const docId = crypto.randomUUID();
                     await env.proveloce_db.prepare(`
                         INSERT INTO expert_documents (
-                            id, user_id, document_type, file_name, 
+                            id, user_id, application_id, document_type, file_name, 
                             file_type, file_size, r2_object_key, 
                             review_status, application_status, uploaded_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'draft', datetime('now'), datetime('now'))
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'draft', datetime('now'), datetime('now'))
                     `).bind(
                         docId,
                         payload.userId,
+                        applicationId,
                         documentType,
                         file.name,
                         file.type,
@@ -1727,7 +1738,7 @@ export default {
                         objectKey
                     ).run();
 
-                    console.log(`✅ Document metadata saved to D1: ${docId}`);
+                    console.log(`✅ Document metadata saved to D1: ${docId}, linked to application: ${applicationId}`);
 
                     return jsonResponse({
                         success: true,
@@ -1904,6 +1915,103 @@ export default {
                     success: true,
                     message: `${result.changes} document(s) submitted for review`,
                     data: { submittedCount: result.changes },
+                });
+            }
+
+            // GET /api/admin/applications/:id/documents - Admin get documents for an application
+            if (url.pathname.match(/^\/api\/admin\/applications\/[^\/]+\/documents$/) && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                // Check admin role
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Admin access required" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[4];
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Get all documents for this application
+                const docs = await env.proveloce_db.prepare(`
+                    SELECT ed.*, ea.status as application_status_main, u.name as user_name, u.email as user_email
+                    FROM expert_documents ed
+                    LEFT JOIN expert_applications ea ON ed.application_id = ea.id
+                    LEFT JOIN users u ON ed.user_id = u.id
+                    WHERE ed.application_id = ?
+                    ORDER BY ed.uploaded_at DESC
+                `).bind(applicationId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        documents: docs.results,
+                        count: docs.results.length,
+                    },
+                });
+            }
+
+            // GET /api/admin/documents - Admin get all documents with application info
+            if (url.pathname === "/api/admin/documents" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                // Check admin role
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Admin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Get filter from query params
+                const status = url.searchParams.get("status") || "";
+
+                let query = `
+                    SELECT ed.*, ea.status as app_status, u.name as user_name, u.email as user_email
+                    FROM expert_documents ed
+                    LEFT JOIN expert_applications ea ON ed.application_id = ea.id
+                    LEFT JOIN users u ON ed.user_id = u.id
+                `;
+
+                if (status) {
+                    query += ` WHERE ea.status = '${status}'`;
+                }
+
+                query += ` ORDER BY ed.uploaded_at DESC LIMIT 100`;
+
+                const docs = await env.proveloce_db.prepare(query).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        documents: docs.results,
+                        count: docs.results.length,
+                    },
                 });
             }
 
