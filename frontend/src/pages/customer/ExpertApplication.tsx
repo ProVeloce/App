@@ -176,6 +176,7 @@ const ExpertApplication: React.FC = () => {
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({});
     const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
     const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({});
+    const [isFetchingDocs, setIsFetchingDocs] = useState(true); // For skeleton loaders
 
     // Delete confirmation modal state
     const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -379,6 +380,8 @@ const ExpertApplication: React.FC = () => {
                 }
             } catch (error) {
                 console.error('❌ Error fetching documents:', error);
+            } finally {
+                setIsFetchingDocs(false);
             }
         };
         fetchDraftDocuments();
