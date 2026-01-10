@@ -1,14 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
-
-// Loading component for Suspense fallback
-const FullPageLoader = () => (
-    <div className="loading-screen">
-        <div className="loading-spinner" />
-        <p>Loading ProVeloce Connect...</p>
-    </div>
-);
+import PremiumLoader from './components/common/PremiumLoader';
 
 // Layouts (keep sync - they're small and needed immediately)
 import PublicLayout from './layouts/PublicLayout';
@@ -75,11 +68,11 @@ function App() {
     const { isAuthenticated, isLoading } = useAuth();
 
     if (isLoading) {
-        return <FullPageLoader />;
+        return <PremiumLoader />;
     }
 
     return (
-        <Suspense fallback={<FullPageLoader />}>
+        <Suspense fallback={<PremiumLoader />}>
             <Routes>
                 {/* Public Routes */}
                 <Route element={<PublicLayout />}>
