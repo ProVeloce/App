@@ -1467,9 +1467,9 @@ export default {
                     const documents: any[] = [];
                     for (const doc of docsResult.results as any[]) {
                         let signedUrl = null;
-                        if (doc.r2_object_key && env.EXPERT_APPLICATION) {
+                        if (doc.r2_object_key && env.EXPERT_DOCS) {
                             try {
-                                const object = await env.EXPERT_APPLICATION.head(doc.r2_object_key);
+                                const object = await env.EXPERT_DOCS.head(doc.r2_object_key);
                                 if (object) {
                                     // Generate a simple presigned-like URL (for display)
                                     signedUrl = `https://backend.proveloce.com/api/documents/${doc.id}/download`;
@@ -2001,8 +2001,8 @@ export default {
                 }
 
                 // Check R2 bucket binding
-                if (!env.EXPERT_APPLICATION) {
-                    console.error("❌ R2 bucket EXPERT_APPLICATION not bound");
+                if (!env.EXPERT_DOCS) {
+                    console.error("❌ R2 bucket EXPERT_DOCS not bound");
                     return jsonResponse({ success: false, error: "R2 storage not configured" }, 500);
                 }
 
@@ -2047,7 +2047,7 @@ export default {
                     console.log(`🔑 R2 Object Key: ${objectKey}`);
 
                     // Upload to R2
-                    await env.EXPERT_APPLICATION.put(objectKey, file.stream(), {
+                    await env.EXPERT_DOCS.put(objectKey, file.stream(), {
                         httpMetadata: {
                             contentType: file.type,
                         },
@@ -2216,11 +2216,11 @@ export default {
                         return jsonResponse({ success: false, error: "Token expired" }, 401);
                     }
 
-                    if (!env.EXPERT_APPLICATION) {
+                    if (!env.EXPERT_DOCS) {
                         return jsonResponse({ success: false, error: "R2 not configured" }, 500);
                     }
 
-                    const object = await env.EXPERT_APPLICATION.get(tokenData.objectKey);
+                    const object = await env.EXPERT_DOCS.get(tokenData.objectKey);
                     if (!object) {
                         return jsonResponse({ success: false, error: "File not found" }, 404);
                     }
@@ -2383,7 +2383,7 @@ export default {
                 const pathParts = url.pathname.split("/");
                 const documentId = pathParts[3];
 
-                if (!env.proveloce_db || !env.EXPERT_APPLICATION) {
+                if (!env.proveloce_db || !env.EXPERT_DOCS) {
                     return jsonResponse({ success: false, error: "Storage not configured" }, 500);
                 }
 
@@ -2410,7 +2410,7 @@ export default {
                     console.log(`🗑️ Deleting from R2: ${r2Key}`);
 
                     try {
-                        await env.EXPERT_APPLICATION.delete(r2Key);
+                        await env.EXPERT_DOCS.delete(r2Key);
                         console.log(`✅ R2 deletion successful: ${r2Key}`);
                     } catch (r2Error: any) {
                         console.error(`❌ R2 deletion failed: ${r2Error.message}`);
