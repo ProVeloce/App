@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { applicationApi, profileApi, documentApi } from '../../services/api';
 import { showGlobalError } from '../../context/ErrorContext';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import {
     User,
     Briefcase,
@@ -29,6 +30,7 @@ import {
     Globe,
     Languages,
     Loader,
+    Info,
 } from 'lucide-react';
 import './ExpertApplication.css';
 
@@ -161,6 +163,9 @@ const ExpertApplication: React.FC = () => {
     const [portfolioLinkInput, setPortfolioLinkInput] = useState('');
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+    // Application status (draft, pending, approved, rejected)
+    const [applicationStatus, setApplicationStatus] = useState<string>('draft');
+
     // Uploaded document tracking for R2 persistence
     interface UploadedDoc {
         id: string;
@@ -170,6 +175,15 @@ const ExpertApplication: React.FC = () => {
     }
     const [uploadedDocs, setUploadedDocs] = useState<Record<string, UploadedDoc>>({});
     const [isUploading, setIsUploading] = useState<Record<string, boolean>>({});
+    const [isDeleting, setIsDeleting] = useState<Record<string, boolean>>({});
+
+    // Delete confirmation modal state
+    const [deleteConfirm, setDeleteConfirm] = useState<{
+        isOpen: boolean;
+        documentType: string;
+        documentId: string;
+        fileName: string;
+    }>({ isOpen: false, documentType: '', documentId: '', fileName: '' });
 
     const [formData, setFormData] = useState<FormData>({
         // Personal Info
@@ -272,6 +286,10 @@ const ExpertApplication: React.FC = () => {
                 const response = await applicationApi.getMyApplication();
                 if (response.data.success && response.data.data?.application) {
                     const app = response.data.data.application;
+
+                    // Load application status
+                    setApplicationStatus((app.status || 'draft').toLowerCase());
+
                     // Map database fields to form state (Prisma returns camelCase)
                     setFormData(prev => ({
                         ...prev,
@@ -509,6 +527,67 @@ const ExpertApplication: React.FC = () => {
         const newFiles = [...formData[field]];
         newFiles.splice(index, 1);
         handleInputChange(field, newFiles);
+    };
+
+    // Open delete confirmation modal
+    const openDeleteConfirm = (documentType: string, documentId: string, fileName: string) => {
+        // Don't allow delete if application is submitted
+        if (applicationStatus !== 'draft') {
+            showGlobalError('Cannot Delete', 'You cannot delete files after submitting your application.');
+            return;
+        }
+        setDeleteConfirm({ isOpen: true, documentType, documentId, fileName });
+    };
+
+    // Handle confirmed file deletion
+    const handleDeleteFile = async () => {
+        const { documentType, documentId } = deleteConfirm;
+        if (!documentId) return;
+
+        setIsDeleting(prev => ({ ...prev, [documentType]: true }));
+
+        try {
+            // Delete from R2 + D1
+            const response = await documentApi.deleteDocument(documentId);
+
+            if (response.data.success) {
+                // Remove from local state
+                setUploadedDocs(prev => {
+                    const updated = { ...prev };
+                    delete updated[documentType];
+                    return updated;
+                });
+
+                // Clear form field for single files
+                if (['governmentIdFile', 'profilePhoto', 'resumeFile', 'signatureFile'].includes(documentType.replace('_', ''))) {
+                    const fieldMap: Record<string, string> = {
+                        'government_id': 'governmentIdFile',
+                        'profile': 'profilePhoto',
+                        'resume': 'resumeFile',
+                        'signature': 'signatureFile',
+                    };
+                    const formField = fieldMap[documentType];
+                    if (formField) {
+                        handleInputChange(formField as keyof FormData, null);
+                    }
+                }
+
+                console.log(`✅ File deleted: ${deleteConfirm.fileName}`);
+            } else {
+                showGlobalError('Delete Failed', response.data.error || 'Failed to delete file');
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            showGlobalError('Delete Failed', error.message || 'Failed to delete file');
+        } finally {
+            setIsDeleting(prev => ({ ...prev, [documentType]: false }));
+            setDeleteConfirm({ isOpen: false, documentType: '', documentId: '', fileName: '' });
+        }
+    };
+
+    // Cancel delete confirmation
+    const cancelDeleteConfirm = () => {
+        setDeleteConfirm({ isOpen: false, documentType: '', documentId: '', fileName: '' });
     };
 
     // Skills management
@@ -878,6 +957,17 @@ const ExpertApplication: React.FC = () => {
                             <div className="file-uploaded">
                                 <CheckCircle size={18} />
                                 <span className="file-name">{uploadedDocs.government_id.fileName}</span>
+                                {applicationStatus === 'draft' && (
+                                    <button
+                                        type="button"
+                                        className="remove-file-btn"
+                                        onClick={() => openDeleteConfirm('government_id', uploadedDocs.government_id.id, uploadedDocs.government_id.fileName)}
+                                        disabled={isDeleting.government_id}
+                                        title="Delete file"
+                                    >
+                                        {isDeleting.government_id ? <Loader size={16} /> : <Trash2 size={16} />}
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <label htmlFor="govtId" className={`file-label ${errors.governmentIdFile ? 'error' : ''} ${isUploading.governmentIdFile ? 'uploading' : ''}`}>
@@ -913,6 +1003,17 @@ const ExpertApplication: React.FC = () => {
                             <div className="file-uploaded">
                                 <CheckCircle size={18} />
                                 <span className="file-name">{uploadedDocs.profile.fileName}</span>
+                                {applicationStatus === 'draft' && (
+                                    <button
+                                        type="button"
+                                        className="remove-file-btn"
+                                        onClick={() => openDeleteConfirm('profile', uploadedDocs.profile.id, uploadedDocs.profile.fileName)}
+                                        disabled={isDeleting.profile}
+                                        title="Delete file"
+                                    >
+                                        {isDeleting.profile ? <Loader size={16} /> : <Trash2 size={16} />}
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <label htmlFor="profilePhoto" className={`file-label ${isUploading.profilePhoto ? 'uploading' : ''}`}>
@@ -1056,6 +1157,17 @@ const ExpertApplication: React.FC = () => {
                             <div className="file-uploaded">
                                 <CheckCircle size={18} />
                                 <span className="file-name">{uploadedDocs.resume.fileName}</span>
+                                {applicationStatus === 'draft' && (
+                                    <button
+                                        type="button"
+                                        className="remove-file-btn"
+                                        onClick={() => openDeleteConfirm('resume', uploadedDocs.resume.id, uploadedDocs.resume.fileName)}
+                                        disabled={isDeleting.resume}
+                                        title="Delete file"
+                                    >
+                                        {isDeleting.resume ? <Loader size={16} /> : <Trash2 size={16} />}
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <label htmlFor="resume" className={`file-label ${errors.resumeFile ? 'error' : ''} ${isUploading.resumeFile ? 'uploading' : ''}`}>
@@ -1466,6 +1578,19 @@ const ExpertApplication: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal
+                isOpen={deleteConfirm.isOpen}
+                title="Delete this file?"
+                message={`"${deleteConfirm.fileName}" will be removed from your application. You can upload it again if needed.`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteFile}
+                onCancel={cancelDeleteConfirm}
+                isLoading={isDeleting[deleteConfirm.documentType] || false}
+            />
         </div>
     );
 };

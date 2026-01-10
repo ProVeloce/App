@@ -1,0 +1,193 @@
+/* Confirm Modal Styles */
+
+.confirm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease-out;
+    padding: var(--space-4);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-modal {
+    position: relative;
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.confirm-modal-close {
+    position: absolute;
+    top: var(--space-4);
+    right: var(--space-4);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.confirm-modal-close:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.confirm-modal-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-5);
+}
+
+.confirm-modal-icon.danger {
+    background: var(--error-50);
+    color: var(--error-500);
+}
+
+.confirm-modal-icon.warning {
+    background: var(--warning-50);
+    color: var(--warning-500);
+}
+
+.confirm-modal-icon.info {
+    background: var(--primary-50);
+    color: var(--primary-500);
+}
+
+.confirm-modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.confirm-modal-message {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: var(--space-6);
+}
+
+.confirm-modal-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+}
+
+.confirm-modal-actions .btn {
+    min-width: 100px;
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.confirm-modal-actions .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+}
+
+.confirm-modal-actions .btn-outline:hover:not(:disabled) {
+    border-color: var(--border-medium);
+    color: var(--text-primary);
+}
+
+.confirm-modal-actions .btn-danger {
+    background: var(--error-500);
+    border: none;
+    color: white;
+}
+
+.confirm-modal-actions .btn-danger:hover:not(:disabled) {
+    background: var(--error-600);
+}
+
+.confirm-modal-actions .btn-warning {
+    background: var(--warning-500);
+    border: none;
+    color: white;
+}
+
+.confirm-modal-actions .btn-warning:hover:not(:disabled) {
+    background: var(--warning-600);
+}
+
+.confirm-modal-actions .btn-info {
+    background: var(--primary-500);
+    border: none;
+    color: white;
+}
+
+.confirm-modal-actions .btn-info:hover:not(:disabled) {
+    background: var(--primary-600);
+}
+
+.confirm-modal-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Dark mode */
+[data-theme="dark"] .confirm-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
+}
+
+[data-theme="dark"] .confirm-modal-icon.danger {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+[data-theme="dark"] .confirm-modal-icon.warning {
+    background: rgba(245, 158, 11, 0.15);
+}
+
+[data-theme="dark"] .confirm-modal-icon.info {
+    background: rgba(99, 102, 241, 0.15);
+}

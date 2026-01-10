@@ -2015,6 +2015,89 @@ export default {
                 });
             }
 
+            // DELETE /api/documents/:id - Delete document from R2 and D1 (atomic)
+            if (url.pathname.match(/^\/api\/documents\/[^\/]+$/) && request.method === "DELETE") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const documentId = pathParts[3];
+
+                if (!env.proveloce_db || !env.EXPERT_DOCS) {
+                    return jsonResponse({ success: false, error: "Storage not configured" }, 500);
+                }
+
+                try {
+                    // 1. First lookup the document to get R2 key and verify ownership
+                    const doc = await env.proveloce_db.prepare(`
+                        SELECT id, user_id, r2_object_key, file_name, document_type
+                        FROM expert_documents
+                        WHERE id = ?
+                    `).bind(documentId).first() as any;
+
+                    if (!doc) {
+                        return jsonResponse({ success: false, error: "Document not found" }, 404);
+                    }
+
+                    // Check access: user can only delete their own documents unless admin
+                    const role = (payload.role || "").toLowerCase();
+                    if (doc.user_id !== payload.userId && role !== "admin" && role !== "superadmin") {
+                        return jsonResponse({ success: false, error: "Access denied" }, 403);
+                    }
+
+                    // 2. Delete from R2 FIRST (before database)
+                    const r2Key = doc.r2_object_key;
+                    console.log(`🗑️ Deleting from R2: ${r2Key}`);
+
+                    try {
+                        await env.EXPERT_DOCS.delete(r2Key);
+                        console.log(`✅ R2 deletion successful: ${r2Key}`);
+                    } catch (r2Error: any) {
+                        console.error(`❌ R2 deletion failed: ${r2Error.message}`);
+                        return jsonResponse({
+                            success: false,
+                            error: "Failed to delete file from storage"
+                        }, 500);
+                    }
+
+                    // 3. After R2 success, delete from D1
+                    console.log(`🗑️ Deleting from D1: ${documentId}`);
+                    await env.proveloce_db.prepare(`
+                        DELETE FROM expert_documents WHERE id = ?
+                    `).bind(documentId).run();
+                    console.log(`✅ D1 deletion successful: ${documentId}`);
+
+                    // 4. Log the deletion for audit trail
+                    console.log(`📋 AUDIT: User ${payload.userId} (${role}) deleted document ${documentId} (${doc.file_name}) with R2 key ${r2Key}`);
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Document deleted successfully",
+                        data: {
+                            deletedId: documentId,
+                            deletedFile: doc.file_name,
+                            deletedBy: payload.userId,
+                            deletedAt: new Date().toISOString(),
+                        },
+                    });
+                } catch (error: any) {
+                    console.error("❌ Document deletion error:", error);
+                    return jsonResponse({
+                        success: false,
+                        error: error.message || "Failed to delete document"
+                    }, 500);
+                }
+            }
+
             // =====================================================
             // Default Route
             // =====================================================
