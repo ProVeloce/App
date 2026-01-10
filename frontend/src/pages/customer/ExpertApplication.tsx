@@ -246,21 +246,23 @@ const ExpertApplication: React.FC = () => {
             try {
                 // Fetch full profile from API
                 const response = await profileApi.getMyProfile();
-                console.log('Profile API response:', response.data);
+                console.log('📋 Profile API response:', response.data);
 
                 if (response.data.success && response.data.data?.user) {
                     const userData = response.data.data.user;
                     const profile: any = userData.profile || {};
 
-                    console.log('User data:', userData);
-                    console.log('Phone from API:', userData.phone);
+                    console.log('👤 User data:', userData);
+                    console.log('📞 Phone from API:', userData.phone);
+                    console.log('🎂 DOB from API:', profile.dob);
+                    console.log('📍 Address from API:', profile.address_line1, profile.city, profile.state, profile.country);
 
                     setFormData(prev => ({
                         ...prev,
                         fullName: userData.name || prev.fullName,
                         email: userData.email || prev.email,
                         phone: userData.phone || prev.phone,
-                        // Also load profile fields
+                        // Profile-bound fields (read-only from profile)
                         dob: profile.dob || prev.dob,
                         gender: profile.gender || prev.gender,
                         addressLine1: profile.address_line1 || prev.addressLine1,
@@ -270,6 +272,15 @@ const ExpertApplication: React.FC = () => {
                         country: profile.country || prev.country,
                         pincode: profile.pincode || prev.pincode,
                     }));
+
+                    // Check if profile is complete enough for expert application
+                    const isProfileComplete = userData.name && userData.email;
+                    if (!isProfileComplete) {
+                        showGlobalError(
+                            'Complete Your Profile',
+                            'Please complete your profile before applying as an Expert.'
+                        );
+                    }
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -389,7 +400,10 @@ const ExpertApplication: React.FC = () => {
                 if (!formData.country) newErrors.country = 'Country is required';
                 if (!formData.pincode) newErrors.pincode = 'Pincode is required';
                 if (!formData.governmentIdType) newErrors.governmentIdType = 'ID type is required';
-                if (!formData.governmentIdFile) newErrors.governmentIdFile = 'Government ID is required';
+                // Check BOTH formData (new upload) AND uploadedDocs (server-loaded)
+                if (!formData.governmentIdFile && !uploadedDocs.government_id) {
+                    newErrors.governmentIdFile = 'Government ID is required';
+                }
                 break;
             case 2:
                 if (formData.domains.length === 0) newErrors.domains = 'Select at least one domain';
@@ -398,7 +412,10 @@ const ExpertApplication: React.FC = () => {
                 if (!formData.summaryBio || formData.summaryBio.length < 100) {
                     newErrors.summaryBio = 'Bio must be at least 100 characters';
                 }
-                if (!formData.resumeFile) newErrors.resumeFile = 'Resume is required';
+                // Check BOTH formData (new upload) AND uploadedDocs (server-loaded)
+                if (!formData.resumeFile && !uploadedDocs.resume) {
+                    newErrors.resumeFile = 'Resume is required';
+                }
                 if (!formData.workingType) newErrors.workingType = 'Working type is required';
                 break;
             case 3:
@@ -829,101 +846,128 @@ const ExpertApplication: React.FC = () => {
                     {errors.phone && formData.phone && <span className="error-text">{errors.phone}</span>}
                 </div>
 
-                {/* User input fields */}
+                {/* Profile-bound fields (DOB, Gender, Address - read-only from profile) */}
                 <div className="form-group">
-                    <label>Date of Birth <span className="required">*</span></label>
+                    <label>Date of Birth <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="date"
                         value={formData.dob}
-                        onChange={e => handleInputChange('dob', e.target.value)}
-                        className={errors.dob ? 'error' : ''}
+                        disabled
+                        className={`disabled ${!formData.dob ? 'error' : ''}`}
+                        placeholder="Not set"
                     />
-                    {errors.dob && <span className="error-text">{errors.dob}</span>}
+                    {!formData.dob && (
+                        <span className="error-text">
+                            Date of birth required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group">
-                    <label>Gender <span className="required">*</span></label>
-                    <select
-                        value={formData.gender}
-                        onChange={e => handleInputChange('gender', e.target.value)}
-                        className={errors.gender ? 'error' : ''}
-                    >
-                        <option value="">Select Gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                    </select>
-                    {errors.gender && <span className="error-text">{errors.gender}</span>}
+                    <label>Gender <span className="auto-filled">(from profile)</span></label>
+                    <input
+                        type="text"
+                        value={formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : ''}
+                        disabled
+                        className={`disabled ${!formData.gender ? 'error' : ''}`}
+                        placeholder="Not set"
+                    />
+                    {!formData.gender && (
+                        <span className="error-text">
+                            Gender required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group full-width">
-                    <label>Address Line 1 <span className="required">*</span></label>
+                    <label>Address Line 1 <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="text"
                         value={formData.addressLine1}
-                        onChange={e => handleInputChange('addressLine1', e.target.value)}
-                        placeholder="Street address, building name"
-                        className={errors.addressLine1 ? 'error' : ''}
+                        disabled
+                        className={`disabled ${!formData.addressLine1 ? 'error' : ''}`}
+                        placeholder="Not set - update in Profile"
                     />
-                    {errors.addressLine1 && <span className="error-text">{errors.addressLine1}</span>}
+                    {!formData.addressLine1 && (
+                        <span className="error-text">
+                            Address required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group full-width">
-                    <label>Address Line 2</label>
+                    <label>Address Line 2 <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="text"
                         value={formData.addressLine2}
-                        onChange={e => handleInputChange('addressLine2', e.target.value)}
-                        placeholder="Apartment, suite, unit, etc. (optional)"
+                        disabled
+                        className="disabled"
+                        placeholder="Not set"
                     />
                 </div>
 
                 <div className="form-group">
-                    <label>City <span className="required">*</span></label>
+                    <label>City <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="text"
                         value={formData.city}
-                        onChange={e => handleInputChange('city', e.target.value)}
-                        className={errors.city ? 'error' : ''}
+                        disabled
+                        className={`disabled ${!formData.city ? 'error' : ''}`}
+                        placeholder="Not set"
                     />
-                    {errors.city && <span className="error-text">{errors.city}</span>}
+                    {!formData.city && (
+                        <span className="error-text">
+                            City required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group">
-                    <label>State <span className="required">*</span></label>
+                    <label>State <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="text"
                         value={formData.state}
-                        onChange={e => handleInputChange('state', e.target.value)}
-                        className={errors.state ? 'error' : ''}
+                        disabled
+                        className={`disabled ${!formData.state ? 'error' : ''}`}
+                        placeholder="Not set"
                     />
-                    {errors.state && <span className="error-text">{errors.state}</span>}
+                    {!formData.state && (
+                        <span className="error-text">
+                            State required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group">
-                    <label>Country <span className="required">*</span></label>
-                    <select
+                    <label>Country <span className="auto-filled">(from profile)</span></label>
+                    <input
+                        type="text"
                         value={formData.country}
-                        onChange={e => handleInputChange('country', e.target.value)}
-                        className={errors.country ? 'error' : ''}
-                    >
-                        <option value="">Select Country</option>
-                        {COUNTRIES.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                    {errors.country && <span className="error-text">{errors.country}</span>}
+                        disabled
+                        className={`disabled ${!formData.country ? 'error' : ''}`}
+                        placeholder="Not set"
+                    />
+                    {!formData.country && (
+                        <span className="error-text">
+                            Country required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group">
-                    <label>Pincode/Zipcode <span className="required">*</span></label>
+                    <label>Pincode/Zipcode <span className="auto-filled">(from profile)</span></label>
                     <input
                         type="text"
                         value={formData.pincode}
-                        onChange={e => handleInputChange('pincode', e.target.value)}
-                        className={errors.pincode ? 'error' : ''}
+                        disabled
+                        className={`disabled ${!formData.pincode ? 'error' : ''}`}
+                        placeholder="Not set"
                     />
-                    {errors.pincode && <span className="error-text">{errors.pincode}</span>}
+                    {!formData.pincode && (
+                        <span className="error-text">
+                            Pincode required. <a href="/profile" className="error-link">Update in Profile →</a>
+                        </span>
+                    )}
                 </div>
 
                 <div className="form-group">
