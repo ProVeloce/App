@@ -404,17 +404,27 @@ const ExpertApplication: React.FC = () => {
                 if (!formData.governmentIdFile && !uploadedDocs.government_id) {
                     newErrors.governmentIdFile = 'Government ID is required';
                 }
+                // Profile photo is MANDATORY per POML spec
+                if (!formData.profilePhoto && !uploadedDocs.profile) {
+                    newErrors.profilePhoto = 'Profile photo is required';
+                }
                 break;
             case 2:
                 if (formData.domains.length === 0) newErrors.domains = 'Select at least one domain';
                 if (formData.skills.length === 0) newErrors.skills = 'Add at least one skill';
-                if (!formData.yearsOfExperience) newErrors.yearsOfExperience = 'Experience is required';
+                if (!formData.yearsOfExperience && formData.yearsOfExperience !== 0) {
+                    newErrors.yearsOfExperience = 'Experience is required';
+                }
                 if (!formData.summaryBio || formData.summaryBio.length < 100) {
                     newErrors.summaryBio = 'Bio must be at least 100 characters';
                 }
                 // Check BOTH formData (new upload) AND uploadedDocs (server-loaded)
                 if (!formData.resumeFile && !uploadedDocs.resume) {
                     newErrors.resumeFile = 'Resume is required';
+                }
+                // Certificate is MANDATORY per POML spec
+                if (formData.certificationFiles.length === 0 && !uploadedDocs.certificate) {
+                    newErrors.certificationFiles = 'At least one certification is required';
                 }
                 if (!formData.workingType) newErrors.workingType = 'Working type is required';
                 break;
