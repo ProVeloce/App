@@ -28,7 +28,8 @@ FRONTEND_URL="https://app.proveloce.com"
 GOOGLE_CALLBACK_URL="https://backend.proveloce.com/api/auth/google/callback"
 
 # ======================= R2 STORAGE BINDING =======================
-# ACTIVE_BUCKET: expertdetails (PRIVATE)
+# PRIMARY_BUCKET: expertapplication (PRIVATE, APAC)
+# DEPRECATED: expertdetails - do not use
 [[r2_buckets]]
-binding = "EXPERT_DOCS"
-bucket_name = "expertdetails"
+binding = "EXPERT_APPLICATION"
+bucket_name = "expertapplication"
