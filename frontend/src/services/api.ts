@@ -317,6 +317,9 @@ export const applicationApi = {
 
     getApplicationStats: () =>
         api.get<ApiResponse>('/applications/stats'),
+
+    removeExpert: (id: string, reason: string, permanentBan: boolean = false) =>
+        api.post<ApiResponse>(`/applications/${id}/remove`, { reason, permanentBan }),
 };
 
 // Task API

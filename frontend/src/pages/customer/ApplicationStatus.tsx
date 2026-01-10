@@ -93,6 +93,14 @@ const ApplicationStatus: React.FC = () => {
                         </Link>
                     )
                 };
+            case 'REVOKED':
+                return {
+                    icon: <XCircle size={48} />,
+                    title: 'Expert Access Revoked',
+                    description: application?.rejectionReason || 'Your expert account has been disabled by ProVeloce. If you believe this is an error, please contact support.',
+                    iconClass: 'revoked',
+                    action: null
+                };
             default:
                 return {
                     icon: <Clock size={48} />,
@@ -216,6 +224,7 @@ const ApplicationStatus: React.FC = () => {
         .status-icon.pending { background: var(--warning-50); color: var(--warning-600); }
         .status-icon.approved { background: var(--success-50); color: var(--success-600); }
         .status-icon.rejected { background: var(--error-50); color: var(--error-500); }
+        .status-icon.revoked { background: var(--gray-800); color: var(--gray-200); }
         .status-card h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: var(--space-2); }
         .status-card p { color: var(--text-muted); margin-bottom: var(--space-6); max-width: 500px; margin-left: auto; margin-right: auto; }
         .submitted-date { font-size: 0.875rem; color: var(--text-secondary); margin-top: var(--space-2); }

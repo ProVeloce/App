@@ -1346,6 +1346,165 @@ export default {
                 }
             }
 
+            // GET /api/applications/:id - Admin: Get single application with all details and documents
+            if (url.pathname.match(/^\/api\/applications\/[^\/]+$/) && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[3];
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Fetch complete application with user info
+                    const app = await env.proveloce_db.prepare(`
+                        SELECT 
+                            ea.*,
+                            u.name as user_name,
+                            u.email as user_email,
+                            u.phone as user_phone
+                        FROM expert_applications ea
+                        JOIN users u ON u.id = ea.user_id
+                        WHERE ea.id = ?
+                    `).bind(applicationId).first() as any;
+
+                    if (!app) {
+                        return jsonResponse({ success: false, error: "Application not found" }, 404);
+                    }
+
+                    // Fetch all documents for this application
+                    const docsResult = await env.proveloce_db.prepare(`
+                        SELECT * FROM expert_documents WHERE application_id = ? OR user_id = ?
+                    `).bind(applicationId, app.user_id).all();
+
+                    // Generate signed URLs for each document
+                    const documents: any[] = [];
+                    for (const doc of docsResult.results as any[]) {
+                        let signedUrl = null;
+                        if (doc.r2_object_key && env.EXPERT_DOCS) {
+                            try {
+                                const object = await env.EXPERT_DOCS.head(doc.r2_object_key);
+                                if (object) {
+                                    // Generate a simple presigned-like URL (for display)
+                                    signedUrl = `https://backend.proveloce.com/api/documents/${doc.id}/download`;
+                                }
+                            } catch (e) {
+                                console.log(`Could not find R2 object: ${doc.r2_object_key}`);
+                            }
+                        }
+                        documents.push({
+                            id: doc.id,
+                            type: doc.document_type,
+                            fileName: doc.file_name,
+                            r2Key: doc.r2_object_key,
+                            url: signedUrl,
+                            reviewStatus: doc.review_status,
+                            uploadedAt: doc.uploaded_at,
+                        });
+                    }
+
+                    // Parse JSON fields
+                    let domains = [], skills = [], languages = [], availableDays = [], availableTimeSlots = [];
+                    let portfolioUrls = [], certificationUrls = [];
+                    try { domains = app.domains ? JSON.parse(app.domains) : []; } catch { }
+                    try { skills = app.skills ? JSON.parse(app.skills) : []; } catch { }
+                    try { languages = app.languages ? JSON.parse(app.languages) : []; } catch { }
+                    try { availableDays = app.available_days ? JSON.parse(app.available_days) : []; } catch { }
+                    try { availableTimeSlots = app.available_time_slots ? JSON.parse(app.available_time_slots) : []; } catch { }
+                    try { portfolioUrls = app.portfolio_urls ? JSON.parse(app.portfolio_urls) : []; } catch { }
+                    try { certificationUrls = app.certification_urls ? JSON.parse(app.certification_urls) : []; } catch { }
+
+                    const application = {
+                        id: app.id,
+                        userId: app.user_id,
+                        status: (app.status || 'DRAFT').toUpperCase(),
+
+                        // Personal Info
+                        user: {
+                            name: app.user_name,
+                            email: app.user_email,
+                            phone: app.user_phone,
+                        },
+                        dob: app.dob,
+                        gender: app.gender,
+                        address: {
+                            line1: app.address_line1,
+                            line2: app.address_line2,
+                            city: app.city,
+                            state: app.state,
+                            country: app.country,
+                            pincode: app.pincode,
+                        },
+
+                        // Professional Info
+                        governmentIdType: app.government_id_type,
+                        domains,
+                        skills,
+                        yearsOfExperience: app.years_of_experience,
+                        summaryBio: app.summary_bio,
+                        workingType: app.working_type,
+                        hourlyRate: app.hourly_rate,
+                        projectRate: app.project_rate,
+                        languages,
+                        portfolioUrls,
+
+                        // Availability
+                        availableDays,
+                        availableTimeSlots,
+                        workPreference: app.work_preference,
+                        communicationMode: app.communication_mode,
+
+                        // Legal
+                        termsAccepted: !!app.terms_accepted,
+                        ndaAccepted: !!app.nda_accepted,
+                        signatureUrl: app.signature_url,
+
+                        // Documents (from R2)
+                        documents,
+                        profilePhotoUrl: app.profile_photo_url,
+                        governmentIdUrl: app.government_id_url,
+                        resumeUrl: app.resume_url,
+                        certificationUrls,
+
+                        // Timestamps
+                        createdAt: app.created_at,
+                        updatedAt: app.updated_at,
+                        submittedAt: app.submitted_at,
+
+                        // Review Info
+                        reviewedBy: app.reviewed_by,
+                        reviewedAt: app.reviewed_at,
+                        rejectionReason: app.rejection_reason,
+                        internalNotes: app.internal_notes,
+                    };
+
+                    return jsonResponse({
+                        success: true,
+                        data: { application }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching application details:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch application" }, 500);
+                }
+            }
+
             // POST /api/applications/:id/approve - Approve application
             if (url.pathname.match(/^\/api\/applications\/[^\/]+\/approve$/) && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization");
@@ -1438,6 +1597,93 @@ export default {
                 ).bind(crypto.randomUUID(), payload.userId, "REJECT_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ rejectedBy: payload.userId, reason })).run();
 
                 return jsonResponse({ success: true, message: "Application rejected" });
+            }
+
+            // POST /api/applications/:id/remove - Remove/revoke an approved expert
+            if (url.pathname.match(/^\/api\/applications\/[^\/]+\/remove$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const role = (payload.role || "").toLowerCase();
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[3];
+
+                const body = await request.json() as any;
+                const reason = body.reason || "No reason provided";
+                const permanentBan = body.permanentBan || false;
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Get the application to find user_id
+                    const app = await env.proveloce_db.prepare(
+                        "SELECT user_id, status FROM expert_applications WHERE id = ?"
+                    ).bind(applicationId).first() as any;
+
+                    if (!app) {
+                        return jsonResponse({ success: false, error: "Application not found" }, 404);
+                    }
+
+                    // Only allow removing approved experts
+                    if ((app.status || '').toLowerCase() !== 'approved') {
+                        return jsonResponse({
+                            success: false,
+                            error: "Can only remove approved experts. Current status: " + app.status
+                        }, 400);
+                    }
+
+                    // Update application status to REVOKED
+                    await env.proveloce_db.prepare(`
+                        UPDATE expert_applications 
+                        SET status = 'revoked', 
+                            rejection_reason = ?, 
+                            reviewed_by = ?,
+                            reviewed_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `).bind(reason, payload.userId, applicationId).run();
+
+                    // Revert user role back to customer (or suspended if permanent ban)
+                    const newRole = permanentBan ? 'suspended' : 'customer';
+                    await env.proveloce_db.prepare(
+                        "UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).bind(newRole, app.user_id).run();
+
+                    // Log activity
+                    await env.proveloce_db.prepare(
+                        "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                    ).bind(
+                        crypto.randomUUID(),
+                        payload.userId,
+                        "REMOVE_EXPERT",
+                        "expert_application",
+                        applicationId,
+                        JSON.stringify({ removedBy: payload.userId, reason, permanentBan })
+                    ).run();
+
+                    return jsonResponse({
+                        success: true,
+                        message: permanentBan ? "Expert removed and permanently banned" : "Expert removed"
+                    });
+                } catch (error: any) {
+                    console.error("Error removing expert:", error);
+                    return jsonResponse({ success: false, error: "Failed to remove expert" }, 500);
+                }
             }
 
             // GET /api/expert-application - Get current user's application
