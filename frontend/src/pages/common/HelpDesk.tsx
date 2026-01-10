@@ -4,6 +4,7 @@ import { ticketApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { HelpCircle, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, X } from 'lucide-react';
 import './HelpDesk.css';
+import '../../styles/AdvancedModalAnimations.css';
 
 interface Ticket { id: string; subject: string; category: string; priority: string; status: string; createdAt: string; messages?: any[]; }
 
@@ -12,6 +13,8 @@ const HelpDesk: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showNewTicket, setShowNewTicket] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+    const [isClosingNewTicket, setIsClosingNewTicket] = useState(false);
+    const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const { success, error } = useToast();
     const { register, handleSubmit, reset } = useForm();
@@ -25,6 +28,22 @@ const HelpDesk: React.FC = () => {
         } catch (err) { error('Failed to load tickets'); } finally { setLoading(false); }
     };
 
+    const closeNewTicket = () => {
+        setIsClosingNewTicket(true);
+        setTimeout(() => {
+            setShowNewTicket(false);
+            setIsClosingNewTicket(false);
+        }, 300);
+    };
+
+    const closeViewTicket = () => {
+        setIsClosingViewTicket(true);
+        setTimeout(() => {
+            setSelectedTicket(null);
+            setIsClosingViewTicket(false);
+        }, 300);
+    };
+
     const handleCreateTicket = async (data: any) => {
         setSubmitting(true);
         try {
@@ -35,7 +54,7 @@ const HelpDesk: React.FC = () => {
             formData.append('description', data.description);
             await ticketApi.createTicket(formData);
             success('Ticket created');
-            setShowNewTicket(false);
+            closeNewTicket();
             reset();
             fetchTickets();
         } catch (err) { error('Failed to create ticket'); } finally { setSubmitting(false); }
@@ -69,24 +88,24 @@ const HelpDesk: React.FC = () => {
                 )}
             </div>
             {showNewTicket && (
-                <div className="modal-overlay" onClick={() => setShowNewTicket(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header"><h2>New Ticket</h2><button className="close-btn" onClick={() => setShowNewTicket(false)}><X size={20} /></button></div>
+                <div className={`modal-overlay modal-overlay-advanced ${isClosingNewTicket ? 'closing' : ''}`} onClick={closeNewTicket}>
+                    <div className={`modal modal-content-advanced ${isClosingNewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header"><h2 className="modal-title-advanced">New Ticket</h2><button className="close-btn modal-close-button-advanced" onClick={closeNewTicket}><X size={20} /></button></div>
                         <form onSubmit={handleSubmit(handleCreateTicket)} className="modal-form">
                             <div className="form-group"><label>Category</label><select {...register('category', { required: true })}><option value="">Select</option><option value="ACCOUNT">Account</option><option value="TECHNICAL">Technical</option><option value="GENERAL">General</option></select></div>
                             <div className="form-group"><label>Priority</label><select {...register('priority', { required: true })}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></div>
                             <div className="form-group"><label>Subject</label><input type="text" {...register('subject', { required: true })} /></div>
                             <div className="form-group"><label>Description</label><textarea rows={4} {...register('description', { required: true })} /></div>
-                            <div className="modal-actions"><button type="button" className="btn btn-ghost" onClick={() => setShowNewTicket(false)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</button></div>
+                            <div className="modal-actions modal-buttons-advanced"><button type="button" className="btn btn-ghost modal-button-advanced modal-button-hover" onClick={closeNewTicket}>Cancel</button><button type="submit" className="btn btn-primary modal-button-advanced modal-button-hover" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</button></div>
                         </form>
                     </div>
                 </div>
             )}
             {selectedTicket && (
-                <div className="modal-overlay" onClick={() => setSelectedTicket(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header"><h2>{selectedTicket.subject}</h2><button className="close-btn" onClick={() => setSelectedTicket(null)}><X size={20} /></button></div>
-                        <div className="ticket-messages"><p className="no-messages">Waiting for response...</p></div>
+                <div className={`modal-overlay modal-overlay-advanced ${isClosingViewTicket ? 'closing' : ''}`} onClick={closeViewTicket}>
+                    <div className={`modal modal-content-advanced ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header"><h2 className="modal-title-advanced">{selectedTicket.subject}</h2><button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button></div>
+                        <div className="ticket-messages modal-text-advanced"><p className="no-messages">Waiting for response...</p></div>
                     </div>
                 </div>
             )}

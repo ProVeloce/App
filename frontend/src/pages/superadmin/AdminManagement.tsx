@@ -4,6 +4,7 @@ import { adminApi, User } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import './AdminManagement.css';
+import '../../styles/AdvancedModalAnimations.css';
 
 interface UserFormData {
     name: string;
@@ -27,6 +28,9 @@ const AdminManagement: React.FC = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isClosingAdd, setIsClosingAdd] = useState(false);
+    const [isClosingEdit, setIsClosingEdit] = useState(false);
+    const [isClosingDelete, setIsClosingDelete] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -88,6 +92,30 @@ const AdminManagement: React.FC = () => {
         setShowDeleteModal(true);
     };
 
+    const closeAddModal = () => {
+        setIsClosingAdd(true);
+        setTimeout(() => {
+            setShowAddModal(false);
+            setIsClosingAdd(false);
+        }, 300);
+    };
+
+    const closeEditModal = () => {
+        setIsClosingEdit(true);
+        setTimeout(() => {
+            setShowEditModal(false);
+            setIsClosingEdit(false);
+        }, 300);
+    };
+
+    const closeDeleteModal = () => {
+        setIsClosingDelete(true);
+        setTimeout(() => {
+            setShowDeleteModal(false);
+            setIsClosingDelete(false);
+        }, 300);
+    };
+
     const handleCreate = async () => {
         if (!formData.name || !formData.email || !formData.phone || !formData.password) {
             error('All fields are required');
@@ -97,7 +125,7 @@ const AdminManagement: React.FC = () => {
         try {
             await adminApi.createUser(formData);
             success('User created successfully');
-            setShowAddModal(false);
+            closeAddModal();
             fetchUsers();
         } catch (err: any) {
             error(err.response?.data?.error || 'Failed to create user');
@@ -112,7 +140,7 @@ const AdminManagement: React.FC = () => {
         try {
             await adminApi.updateUser(selectedUser.id, formData);
             success('User updated successfully');
-            setShowEditModal(false);
+            closeEditModal();
             fetchUsers();
         } catch (err: any) {
             error(err.response?.data?.error || 'Failed to update user');
@@ -127,7 +155,7 @@ const AdminManagement: React.FC = () => {
         try {
             await adminApi.deleteUser(selectedUser.id);
             success('User deactivated successfully');
-            setShowDeleteModal(false);
+            closeDeleteModal();
             fetchUsers();
         } catch (err: any) {
             error(err.response?.data?.error || 'Failed to delete user');
@@ -244,11 +272,11 @@ const AdminManagement: React.FC = () => {
 
             {/* Add Modal */}
             {showAddModal && (
-                <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className={`modal-overlay modal-overlay-advanced ${isClosingAdd ? 'closing' : ''}`} onClick={closeAddModal}>
+                    <div className={`modal modal-content-advanced ${isClosingAdd ? 'closing' : ''}`} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2><UserCog size={20} /> Add New User</h2>
-                            <button className="close-btn" onClick={() => setShowAddModal(false)}><X size={20} /></button>
+                            <h2 className="modal-title-advanced"><UserCog size={20} /> Add New User</h2>
+                            <button className="close-btn modal-close-button-advanced" onClick={closeAddModal}><X size={20} /></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-group">
@@ -291,9 +319,9 @@ const AdminManagement: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={handleCreate} disabled={submitting}>
+                        <div className="modal-footer modal-buttons-advanced">
+                            <button className="btn btn-secondary modal-button-advanced modal-button-hover" onClick={closeAddModal}>Cancel</button>
+                            <button className="btn btn-primary modal-button-advanced modal-button-hover" onClick={handleCreate} disabled={submitting}>
                                 {submitting ? 'Creating...' : 'Create User'}
                             </button>
                         </div>
@@ -303,11 +331,11 @@ const AdminManagement: React.FC = () => {
 
             {/* Edit Modal */}
             {showEditModal && selectedUser && (
-                <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className={`modal-overlay modal-overlay-advanced ${isClosingEdit ? 'closing' : ''}`} onClick={closeEditModal}>
+                    <div className={`modal modal-content-advanced ${isClosingEdit ? 'closing' : ''}`} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2><Edit2 size={20} /> Edit User</h2>
-                            <button className="close-btn" onClick={() => setShowEditModal(false)}><X size={20} /></button>
+                            <h2 className="modal-title-advanced"><Edit2 size={20} /> Edit User</h2>
+                            <button className="close-btn modal-close-button-advanced" onClick={closeEditModal}><X size={20} /></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-group">
@@ -347,9 +375,9 @@ const AdminManagement: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={handleUpdate} disabled={submitting}>
+                        <div className="modal-footer modal-buttons-advanced">
+                            <button className="btn btn-secondary modal-button-advanced modal-button-hover" onClick={closeEditModal}>Cancel</button>
+                            <button className="btn btn-primary modal-button-advanced modal-button-hover" onClick={handleUpdate} disabled={submitting}>
                                 {submitting ? 'Saving...' : 'Save Changes'}
                             </button>
                         </div>
@@ -359,19 +387,19 @@ const AdminManagement: React.FC = () => {
 
             {/* Delete Confirmation Modal */}
             {showDeleteModal && selectedUser && (
-                <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
-                    <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className={`modal-overlay modal-overlay-advanced ${isClosingDelete ? 'closing' : ''}`} onClick={closeDeleteModal}>
+                    <div className={`modal modal-sm modal-content-advanced ${isClosingDelete ? 'closing' : ''}`} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2><Trash2 size={20} /> Confirm Delete</h2>
-                            <button className="close-btn" onClick={() => setShowDeleteModal(false)}><X size={20} /></button>
+                            <h2 className="modal-title-advanced"><Trash2 size={20} /> Confirm Delete</h2>
+                            <button className="close-btn modal-close-button-advanced" onClick={closeDeleteModal}><X size={20} /></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="modal-body modal-text-advanced">
                             <p>Are you sure you want to deactivate <strong>{selectedUser.name || selectedUser.email}</strong>?</p>
                             <p className="text-muted">This action will set the user's status to "deactivated".</p>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                            <button className="btn btn-danger" onClick={handleDelete} disabled={submitting}>
+                        <div className="modal-footer modal-buttons-advanced">
+                            <button className="btn btn-secondary modal-button-advanced modal-button-hover" onClick={closeDeleteModal}>Cancel</button>
+                            <button className="btn btn-danger modal-button-advanced modal-button-hover critical-action" onClick={handleDelete} disabled={submitting}>
                                 {submitting ? 'Deleting...' : 'Deactivate User'}
                             </button>
                         </div>
