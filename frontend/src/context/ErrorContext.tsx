@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 // Error type
 export interface AppError {
@@ -39,6 +39,21 @@ export const ErrorProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const clearError = useCallback(() => {
         setErrorState(defaultError);
     }, []);
+
+    // Listen for custom 'api-error' events from axios interceptor
+    useEffect(() => {
+        const handleApiError = (event: CustomEvent<{ title: string; message: string }>) => {
+            setError({
+                title: event.detail.title,
+                message: event.detail.message,
+            });
+        };
+
+        window.addEventListener('api-error', handleApiError as EventListener);
+        return () => {
+            window.removeEventListener('api-error', handleApiError as EventListener);
+        };
+    }, [setError]);
 
     return (
         <ErrorContext.Provider value={{ error, setError, clearError }}>

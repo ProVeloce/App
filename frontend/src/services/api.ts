@@ -151,8 +151,6 @@ api.interceptors.response.use(
 
         // Show global error modal for all other errors (unless suppressed)
         if (!originalRequest._suppressError) {
-            const { showGlobalError } = require('../context/ErrorContext');
-
             // Determine error title based on status code
             let title = 'Something went wrong';
             const status = error.response?.status;
@@ -173,7 +171,11 @@ api.interceptors.response.use(
                 || error.message
                 || 'An unexpected error occurred. Please try again.';
 
-            showGlobalError(title, message);
+            // Dispatch custom event for global error handling
+            // This is captured by ErrorContext's event listener
+            window.dispatchEvent(new CustomEvent('api-error', {
+                detail: { title, message }
+            }));
         }
 
         return Promise.reject(error);
