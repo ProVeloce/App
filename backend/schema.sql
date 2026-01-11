@@ -167,15 +167,16 @@ CREATE TABLE IF NOT EXISTS tickets (
 -- EXPERT HELPDESK (new role-based ticket routing system)
 CREATE TABLE IF NOT EXISTS expert_helpdesk (
   id TEXT PRIMARY KEY,
+  ticket_number TEXT UNIQUE,            -- Format: PV-TKT-YYYYMMDD-XXXXXX
   sender_id TEXT NOT NULL,
   sender_role TEXT NOT NULL,           -- SuperAdmin/Admin/Expert/Customer
   receiver_role TEXT NOT NULL,         -- SuperAdmin/Admin/Expert/Customer
   receiver_id TEXT,                    -- NULL for role queue, specific user ID for targeted
-  category TEXT DEFAULT 'Other',       -- Billing/Task/Account/Technical/Other
-  priority TEXT DEFAULT 'MEDIUM',      -- LOW/MEDIUM/HIGH
+  category TEXT DEFAULT 'Other',       -- Billing/Tasks/Payments/Technical/Account/Other
+  priority TEXT DEFAULT 'MEDIUM',      -- Low/Medium/High
   subject TEXT NOT NULL,
   message TEXT,
-  status TEXT DEFAULT 'OPEN',          -- OPEN/IN_REVIEW/RESOLVED/CLOSED
+  status TEXT DEFAULT 'OPEN',          -- OPEN/IN_PROGRESS/CLOSED
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,

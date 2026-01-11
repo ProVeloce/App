@@ -1,0 +1,457 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    X, Headphones, CreditCard, ClipboardList, DollarSign,
+    Cpu, UserCircle, MoreHorizontal, Loader2, CheckCircle, AlertTriangle, Paperclip, Copy, Check, PartyPopper
+} from 'lucide-react';
+import './NewTicketModal.css';
+
+interface NewTicketModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (data: TicketFormData) => Promise<{ ticketId: string }>;
+}
+
+interface TicketFormData {
+    category: string;
+    priority: string;
+    subject: string;
+    description: string;
+    attachment?: File | null;
+}
+
+const CATEGORIES = [
+    { value: 'Billing', icon: CreditCard, label: 'Billing' },
+    { value: 'Tasks', icon: ClipboardList, label: 'Tasks' },
+    { value: 'Payments', icon: DollarSign, label: 'Payments' },
+    { value: 'Technical', icon: Cpu, label: 'Technical' },
+    { value: 'Account', icon: UserCircle, label: 'Account' },
+    { value: 'Other', icon: MoreHorizontal, label: 'Other' },
+];
+
+const PRIORITIES = [
+    { value: 'Low', label: 'Low', color: '#6B7280' },
+    { value: 'Medium', label: 'Medium', color: '#F59E0B' },
+    { value: 'High', label: 'High', color: '#EF4444' },
+];
+
+const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubmit }) => {
+    const [isClosing, setIsClosing] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [formData, setFormData] = useState<TicketFormData>({
+        category: '',
+        priority: 'Medium',
+        subject: '',
+        description: '',
+        attachment: null,
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [touched, setTouched] = useState<Record<string, boolean>>({});
+    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+
+    // Success popup state
+    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+    const [createdTicketId, setCreatedTicketId] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    const modalRef = useRef<HTMLDivElement>(null);
+    const firstFocusableRef = useRef<HTMLButtonElement>(null);
+
+    // Focus trap and ESC to close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !showSuccessPopup) {
+                handleClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = 'hidden';
+            setTimeout(() => firstFocusableRef.current?.focus(), 100);
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = '';
+        };
+    }, [isOpen, showSuccessPopup]);
+
+    const handleClose = () => {
+        if (showSuccessPopup) {
+            // Close success popup and modal together
+            setShowSuccessPopup(false);
+            setCreatedTicketId('');
+        }
+        setIsClosing(true);
+        setTimeout(() => {
+            setIsClosing(false);
+            onClose();
+            resetForm();
+        }, 160);
+    };
+
+    const resetForm = () => {
+        setFormData({ category: '', priority: 'Medium', subject: '', description: '', attachment: null });
+        setErrors({});
+        setTouched({});
+        setErrorMessage('');
+        setShowSuccessPopup(false);
+        setCreatedTicketId('');
+        setCopied(false);
+    };
+
+    const validate = (): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        if (!formData.category) newErrors.category = 'Please choose a category';
+        if (!formData.priority) newErrors.priority = 'Please set a priority';
+        if (!formData.subject.trim()) newErrors.subject = 'Subject is required';
+        if (formData.subject.length > 180) newErrors.subject = 'Subject must be 180 characters or less';
+        if (!formData.description.trim()) newErrors.description = 'Description is required';
+        if (formData.description.length > 5000) newErrors.description = 'Description must be 5000 characters or less';
+
+        setErrors(newErrors);
+        setTouched({ category: true, priority: true, subject: true, description: true });
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMessage('');
+
+        if (!validate()) {
+            // Scroll to first error
+            const firstError = document.querySelector('.ntm-field-error');
+            firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const result = await onSubmit(formData);
+            // Show success popup with ticket ID
+            setCreatedTicketId(result.ticketId);
+            setShowSuccessPopup(true);
+        } catch (err) {
+            setErrorMessage("We couldn't create your ticket. Please try again.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleCopyTicketId = async () => {
+        try {
+            await navigator.clipboard.writeText(createdTicketId);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
+    const handleContinue = () => {
+        handleClose();
+    };
+
+    const handleBlur = (field: string) => {
+        setTouched(prev => ({ ...prev, [field]: true }));
+    };
+
+    const getFieldState = (field: string): 'default' | 'valid' | 'error' => {
+        if (!touched[field]) return 'default';
+        if (errors[field]) return 'error';
+        const value = formData[field as keyof TicketFormData];
+        if (value && (typeof value === 'string' ? value.trim() : true)) return 'valid';
+        return 'default';
+    };
+
+    const getCategoryIcon = () => {
+        const cat = CATEGORIES.find(c => c.value === formData.category);
+        return cat ? <cat.icon size={18} /> : null;
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div
+            className={`ntm-overlay ${isClosing ? 'ntm-closing' : ''}`}
+            onClick={showSuccessPopup ? undefined : handleClose}
+            role="dialog"
+            aria-modal="true"
+            aria-label="New Support Ticket"
+        >
+            {/* Success Popup */}
+            {showSuccessPopup && (
+                <div className="ntm-success-popup" onClick={(e) => e.stopPropagation()}>
+                    <div className="ntm-success-icon">
+                        <PartyPopper size={48} />
+                    </div>
+                    <h2>🎉 Ticket Created Successfully</h2>
+                    <p>Your support ticket has been registered.</p>
+
+                    <div className="ntm-ticket-id-box">
+                        <label>Ticket ID</label>
+                        <div className="ntm-ticket-id-value">
+                            <code>{createdTicketId}</code>
+                            <button
+                                className="ntm-copy-btn"
+                                onClick={handleCopyTicketId}
+                                aria-label={copied ? 'Copied!' : 'Copy ticket ID'}
+                            >
+                                {copied ? <Check size={18} /> : <Copy size={18} />}
+                            </button>
+                        </div>
+                        {copied && <span className="ntm-copied-message">Copied to clipboard!</span>}
+                    </div>
+
+                    <button className="ntm-btn ntm-btn-primary ntm-continue-btn" onClick={handleContinue}>
+                        Continue
+                    </button>
+                </div>
+            )}
+
+            {/* Main Form Modal */}
+            {!showSuccessPopup && (
+                <div
+                    ref={modalRef}
+                    className={`ntm-container ${isClosing ? 'ntm-closing' : ''}`}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Gradient accent bar */}
+                    <div className="ntm-gradient-bar" />
+
+                    {/* Header */}
+                    <div className="ntm-header">
+                        <div className="ntm-header-content">
+                            <div className="ntm-header-icon">
+                                <Headphones size={24} />
+                            </div>
+                            <div className="ntm-header-text">
+                                <h2>Support Ticket</h2>
+                                <p>Tell us how we can help you</p>
+                            </div>
+                        </div>
+                        <button
+                            ref={firstFocusableRef}
+                            className="ntm-close-btn"
+                            onClick={handleClose}
+                            aria-label="Close"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="ntm-form">
+                        {/* Error Banner */}
+                        {errorMessage && (
+                            <div className="ntm-error-banner">
+                                <AlertTriangle size={18} />
+                                <div>
+                                    <strong>Submission failed</strong>
+                                    <p>{errorMessage}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="ntm-form-grid">
+                            {/* Left Column */}
+                            <div className="ntm-form-column">
+                                {/* Category Dropdown */}
+                                <div className={`ntm-field ${getFieldState('category')}`}>
+                                    <label className="ntm-label">Category <span className="ntm-required">*</span></label>
+                                    <div
+                                        className="ntm-category-dropdown"
+                                        onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                        onBlur={() => { setTimeout(() => setShowCategoryDropdown(false), 150); handleBlur('category'); }}
+                                        tabIndex={0}
+                                    >
+                                        <div className="ntm-category-selected">
+                                            {formData.category ? (
+                                                <>
+                                                    {getCategoryIcon()}
+                                                    <span>{formData.category}</span>
+                                                </>
+                                            ) : (
+                                                <span className="ntm-placeholder">Select a category</span>
+                                            )}
+                                        </div>
+                                        <svg className={`ntm-dropdown-arrow ${showCategoryDropdown ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="6 9 12 15 18 9" />
+                                        </svg>
+
+                                        {showCategoryDropdown && (
+                                            <div className="ntm-category-options">
+                                                {CATEGORIES.map((cat) => (
+                                                    <div
+                                                        key={cat.value}
+                                                        className={`ntm-category-option ${formData.category === cat.value ? 'selected' : ''}`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFormData(prev => ({ ...prev, category: cat.value }));
+                                                            setShowCategoryDropdown(false);
+                                                            setTouched(prev => ({ ...prev, category: true }));
+                                                            if (errors.category) setErrors(prev => ({ ...prev, category: '' }));
+                                                        }}
+                                                    >
+                                                        <cat.icon size={18} />
+                                                        <span>{cat.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {getFieldState('category') === 'error' && (
+                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.category}</span>
+                                    )}
+                                </div>
+
+                                {/* Priority Pills */}
+                                <div className={`ntm-field ${getFieldState('priority')}`}>
+                                    <label className="ntm-label">Priority <span className="ntm-required">*</span></label>
+                                    <div className="ntm-priority-pills">
+                                        {PRIORITIES.map((p) => (
+                                            <button
+                                                key={p.value}
+                                                type="button"
+                                                className={`ntm-priority-pill ${formData.priority === p.value ? 'selected' : ''}`}
+                                                style={{
+                                                    '--pill-color': p.color,
+                                                    borderColor: formData.priority === p.value ? p.color : undefined,
+                                                    color: formData.priority === p.value ? p.color : undefined,
+                                                } as React.CSSProperties}
+                                                onClick={() => {
+                                                    setFormData(prev => ({ ...prev, priority: p.value }));
+                                                    setTouched(prev => ({ ...prev, priority: true }));
+                                                }}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {getFieldState('priority') === 'error' && (
+                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.priority}</span>
+                                    )}
+                                </div>
+
+                                {/* Subject */}
+                                <div className={`ntm-field ${getFieldState('subject')}`}>
+                                    <label className="ntm-label">Subject <span className="ntm-required">*</span></label>
+                                    <input
+                                        type="text"
+                                        className="ntm-input"
+                                        placeholder="Brief summary of your issue"
+                                        value={formData.subject}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, subject: e.target.value }));
+                                            if (errors.subject && e.target.value.trim()) {
+                                                setErrors(prev => ({ ...prev, subject: '' }));
+                                            }
+                                        }}
+                                        onBlur={() => handleBlur('subject')}
+                                        maxLength={180}
+                                    />
+                                    {getFieldState('subject') === 'valid' && <CheckCircle className="ntm-field-icon valid" size={18} />}
+                                    {getFieldState('subject') === 'error' && (
+                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.subject}</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="ntm-form-column">
+                                {/* Description */}
+                                <div className={`ntm-field ntm-field-textarea ${getFieldState('description')}`}>
+                                    <label className="ntm-label">Description <span className="ntm-required">*</span></label>
+                                    <textarea
+                                        className="ntm-textarea"
+                                        placeholder="Please describe your issue in detail..."
+                                        value={formData.description}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, description: e.target.value }));
+                                            if (errors.description && e.target.value.trim()) {
+                                                setErrors(prev => ({ ...prev, description: '' }));
+                                            }
+                                        }}
+                                        onBlur={() => handleBlur('description')}
+                                        rows={5}
+                                        maxLength={5000}
+                                    />
+                                    {getFieldState('description') === 'error' && (
+                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.description}</span>
+                                    )}
+                                </div>
+
+                                {/* Attachment */}
+                                <div className="ntm-field">
+                                    <label className="ntm-label">Attachment <span className="ntm-optional">(optional)</span></label>
+                                    <div className="ntm-file-upload">
+                                        <input
+                                            type="file"
+                                            id="ntm-file-input"
+                                            className="ntm-file-input"
+                                            accept=".png,.jpg,.jpeg,.pdf,.txt,.log"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0] || null;
+                                                if (file && file.size > 15 * 1024 * 1024) {
+                                                    setErrors(prev => ({ ...prev, attachment: 'File exceeds the 15 MB limit' }));
+                                                    return;
+                                                }
+                                                setFormData(prev => ({ ...prev, attachment: file }));
+                                                setErrors(prev => ({ ...prev, attachment: '' }));
+                                            }}
+                                        />
+                                        <label htmlFor="ntm-file-input" className="ntm-file-label">
+                                            <Paperclip size={18} />
+                                            <span>{formData.attachment ? formData.attachment.name : 'Add logs, screenshots, or documents'}</span>
+                                        </label>
+                                        {formData.attachment && (
+                                            <button
+                                                type="button"
+                                                className="ntm-file-clear"
+                                                onClick={() => setFormData(prev => ({ ...prev, attachment: null }))}
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {errors.attachment && (
+                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.attachment}</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    {/* Footer */}
+                    <div className="ntm-footer">
+                        <div className="ntm-footer-divider" />
+                        <div className="ntm-footer-buttons">
+                            <button type="button" className="ntm-btn ntm-btn-ghost" onClick={handleClose}>
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="ntm-btn ntm-btn-primary"
+                                disabled={submitting}
+                                onClick={handleSubmit}
+                            >
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="ntm-spinner" size={18} />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    'Create Ticket'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default NewTicketModal;

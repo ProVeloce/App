@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
 import { ticketApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { HelpCircle, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, X } from 'lucide-react';
+import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
 
@@ -13,11 +13,8 @@ const HelpDesk: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showNewTicket, setShowNewTicket] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-    const [isClosingNewTicket, setIsClosingNewTicket] = useState(false);
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
     const { success, error } = useToast();
-    const { register, handleSubmit, reset } = useForm();
 
     useEffect(() => { fetchTickets(); }, []);
 
@@ -28,14 +25,6 @@ const HelpDesk: React.FC = () => {
         } catch (err) { error('Failed to load tickets'); } finally { setLoading(false); }
     };
 
-    const closeNewTicket = () => {
-        setIsClosingNewTicket(true);
-        setTimeout(() => {
-            setShowNewTicket(false);
-            setIsClosingNewTicket(false);
-        }, 300);
-    };
-
     const closeViewTicket = () => {
         setIsClosingViewTicket(true);
         setTimeout(() => {
@@ -44,20 +33,20 @@ const HelpDesk: React.FC = () => {
         }, 300);
     };
 
-    const handleCreateTicket = async (data: any) => {
-        setSubmitting(true);
-        try {
-            const formData = new FormData();
-            formData.append('category', data.category);
-            formData.append('priority', data.priority);
-            formData.append('subject', data.subject);
-            formData.append('description', data.description);
-            await ticketApi.createTicket(formData);
-            success('Ticket created');
-            closeNewTicket();
-            reset();
-            fetchTickets();
-        } catch (err) { error('Failed to create ticket'); } finally { setSubmitting(false); }
+    const handleCreateTicket = async (data: { category: string; priority: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketId: string }> => {
+        const formData = new FormData();
+        formData.append('category', data.category);
+        formData.append('priority', data.priority);
+        formData.append('subject', data.subject);
+        formData.append('description', data.description);
+        if (data.attachment) {
+            formData.append('attachment', data.attachment);
+        }
+        const response = await ticketApi.createTicket(formData);
+        const ticketId = response.data?.data?.ticketId || 'UNKNOWN';
+        success('Ticket submitted successfully');
+        fetchTickets();
+        return { ticketId };
     };
 
     const handleViewTicket = async (ticket: Ticket) => {
@@ -67,45 +56,80 @@ const HelpDesk: React.FC = () => {
         } catch (err) { error('Failed to load ticket'); }
     };
 
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'OPEN': return <AlertCircle size={16} className="status-open" />;
+            case 'IN_PROGRESS':
+            case 'IN_REVIEW': return <Clock size={16} className="status-progress" />;
+            case 'RESOLVED':
+            case 'CLOSED': return <CheckCircle size={16} className="status-resolved" />;
+            default: return <AlertCircle size={16} />;
+        }
+    };
+
     return (
         <div className="helpdesk-page">
             <div className="page-header">
-                <div className="header-left"><h1><HelpCircle size={24} /> Help Desk</h1><p>Get support</p></div>
-                <button className="btn btn-primary" onClick={() => setShowNewTicket(true)}><Plus size={18} /> New Ticket</button>
+                <div className="header-left">
+                    <h1><HelpCircle size={24} /> Help Desk</h1>
+                    <p>Get support from our team</p>
+                </div>
+                <button className="btn btn-primary" onClick={() => setShowNewTicket(true)}>
+                    <Plus size={18} /> New Ticket
+                </button>
             </div>
+
             <div className="tickets-container">
-                {loading ? <div className="loading-state"><div className="loading-spinner" /></div> : tickets.length === 0 ? (
-                    <div className="empty-state"><MessageCircle size={48} /><h3>No tickets</h3><p>Create a ticket to get support</p></div>
+                {loading ? (
+                    <div className="loading-state"><div className="loading-spinner" /></div>
+                ) : tickets.length === 0 ? (
+                    <div className="empty-state">
+                        <MessageCircle size={48} />
+                        <h3>No tickets yet</h3>
+                        <p>Create a ticket to get support from our team</p>
+                    </div>
                 ) : (
                     <div className="tickets-list">
                         {tickets.map((t) => (
                             <div key={t.id} className="ticket-item" onClick={() => handleViewTicket(t)}>
-                                <div className="ticket-status">{t.status === 'OPEN' ? <AlertCircle size={16} /> : t.status === 'IN_PROGRESS' ? <Clock size={16} /> : <CheckCircle size={16} />}</div>
-                                <div className="ticket-content"><h4>{t.subject}</h4><div className="ticket-meta"><span>{t.category}</span><span className={`ticket-priority ${t.priority.toLowerCase()}`}>{t.priority}</span></div></div>
+                                <div className="ticket-status">{getStatusIcon(t.status)}</div>
+                                <div className="ticket-content">
+                                    <h4>{t.subject}</h4>
+                                    <div className="ticket-meta">
+                                        <span className="ticket-category">{t.category}</span>
+                                        <span className={`ticket-priority ${t.priority.toLowerCase()}`}>{t.priority}</span>
+                                    </div>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
-            {showNewTicket && (
-                <div className={`modal-overlay modal-overlay-advanced ${isClosingNewTicket ? 'closing' : ''}`} onClick={closeNewTicket}>
-                    <div className={`modal modal-content-advanced ${isClosingNewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header"><h2 className="modal-title-advanced">New Ticket</h2><button className="close-btn modal-close-button-advanced" onClick={closeNewTicket}><X size={20} /></button></div>
-                        <form onSubmit={handleSubmit(handleCreateTicket)} className="modal-form">
-                            <div className="form-group"><label>Category</label><select {...register('category', { required: true })}><option value="">Select</option><option value="ACCOUNT">Account</option><option value="TECHNICAL">Technical</option><option value="GENERAL">General</option></select></div>
-                            <div className="form-group"><label>Priority</label><select {...register('priority', { required: true })}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select></div>
-                            <div className="form-group"><label>Subject</label><input type="text" {...register('subject', { required: true })} /></div>
-                            <div className="form-group"><label>Description</label><textarea rows={4} {...register('description', { required: true })} /></div>
-                            <div className="modal-actions modal-buttons-advanced"><button type="button" className="btn btn-ghost modal-button-advanced modal-button-hover" onClick={closeNewTicket}>Cancel</button><button type="submit" className="btn btn-primary modal-button-advanced modal-button-hover" disabled={submitting}>{submitting ? 'Creating...' : 'Create'}</button></div>
-                        </form>
-                    </div>
-                </div>
-            )}
+
+            {/* Premium New Ticket Modal */}
+            <NewTicketModal
+                isOpen={showNewTicket}
+                onClose={() => setShowNewTicket(false)}
+                onSubmit={handleCreateTicket}
+            />
+
+            {/* View Ticket Modal */}
             {selectedTicket && (
                 <div className={`modal-overlay modal-overlay-advanced ${isClosingViewTicket ? 'closing' : ''}`} onClick={closeViewTicket}>
-                    <div className={`modal modal-content-advanced ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header"><h2 className="modal-title-advanced">{selectedTicket.subject}</h2><button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button></div>
-                        <div className="ticket-messages modal-text-advanced"><p className="no-messages">Waiting for response...</p></div>
+                    <div className={`modal modal-content-advanced ticket-detail-modal ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h2 className="modal-title-advanced">{selectedTicket.subject}</h2>
+                                <div className="ticket-meta" style={{ marginTop: '8px' }}>
+                                    <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase()}`}>{selectedTicket.status}</span>
+                                    <span className="ticket-category">{selectedTicket.category}</span>
+                                </div>
+                            </div>
+                            <button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button>
+                        </div>
+                        <div className="ticket-messages modal-text-advanced">
+                            <p className="no-messages">Waiting for response from our support team...</p>
+                        </div>
                     </div>
                 </div>
             )}

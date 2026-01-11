@@ -2973,7 +2973,7 @@ export default {
             // HELPDESK APIs (Role-based ticket routing)
             // =====================================================
 
-            // POST /api/helpdesk/tickets - Create a new helpdesk ticket
+            // POST /api/helpdesk/tickets - Create a new helpdesk ticket (v1.1)
             if (url.pathname === "/api/helpdesk/tickets" && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -2982,87 +2982,124 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
+                // Get sender info including contact details
                 const sender = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
+                    "SELECT id, role, name, email, phone FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
-                const senderRole = sender?.role || 'customer';
+                const senderRole = sender?.role || 'Customer';
+                const senderRoleLower = senderRole.toLowerCase();
+
+                // SuperAdmin cannot create tickets (v1.1)
+                if (senderRoleLower === 'superadmin') {
+                    return jsonResponse({
+                        success: false,
+                        error: "SuperAdmin cannot create support tickets"
+                    }, 403);
+                }
 
                 try {
                     const body = await request.json() as any;
-                    const { category, priority, subject, message, receiver_role, receiver_id } = body;
+                    const { category, priority, subject, description } = body;
 
-                    if (!subject) {
-                        return jsonResponse({ success: false, error: "Subject is required" }, 400);
-                    }
+                    // Validation
+                    const missingFields: string[] = [];
+                    if (!category) missingFields.push('category');
+                    if (!priority) missingFields.push('priority');
+                    if (!subject?.trim()) missingFields.push('subject');
+                    if (!description?.trim()) missingFields.push('description');
 
-                    // Determine receiver_role based on routing rules
-                    let finalReceiverRole = receiver_role;
-
-                    if (!finalReceiverRole) {
-                        // Auto-route based on sender role
-                        const senderRoleLower = senderRole.toLowerCase();
-                        if (senderRoleLower === 'customer' || senderRoleLower === 'expert') {
-                            finalReceiverRole = 'Admin';
-                        } else if (senderRoleLower === 'admin') {
-                            finalReceiverRole = 'SuperAdmin';
-                        } else if (senderRoleLower === 'superadmin') {
-                            finalReceiverRole = receiver_role || 'Admin'; // SuperAdmin must specify
-                        }
-                    }
-
-                    // Validate routing: check allowed routes
-                    const allowedRoutes: { [key: string]: string[] } = {
-                        'customer': ['Admin', 'SuperAdmin'],
-                        'expert': ['Admin', 'SuperAdmin'],
-                        'admin': ['SuperAdmin'],
-                        'superadmin': ['Admin', 'Expert', 'Customer']
-                    };
-
-                    const senderRoleLower = senderRole.toLowerCase();
-                    const allowed = allowedRoutes[senderRoleLower] || [];
-                    if (!allowed.some(r => r.toLowerCase() === finalReceiverRole?.toLowerCase())) {
+                    if (missingFields.length > 0) {
                         return jsonResponse({
                             success: false,
-                            error: `Cannot send ticket to ${finalReceiverRole}. Allowed: ${allowed.join(', ')}`
+                            error: "VALIDATION_ERROR",
+                            message: "Missing or invalid fields",
+                            fields: missingFields
                         }, 400);
                     }
 
-                    // Only SuperAdmin can target specific receiver_id
-                    let finalReceiverId = null;
-                    if (senderRoleLower === 'superadmin' && receiver_id) {
-                        finalReceiverId = receiver_id;
+                    if (subject.length > 180) {
+                        return jsonResponse({
+                            success: false,
+                            error: "VALIDATION_ERROR",
+                            message: "Subject must be 180 characters or less",
+                            fields: ['subject']
+                        }, 400);
                     }
+
+                    // Generate unique ticket number: PV-TKT-YYYYMMDD-XXXXXX
+                    const now = new Date();
+                    const yyyy = now.getUTCFullYear();
+                    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+                    const dd = String(now.getUTCDate()).padStart(2, '0');
+                    const datePart = `${yyyy}${mm}${dd}`;
+                    const randomSix = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+                    const ticketNumber = `PV-TKT-${datePart}-${randomSix}`;
+
+                    // Contact snapshot from sender
+                    const contactName = sender?.name || 'Unknown';
+                    const contactEmail = sender?.email || '';
+                    const contactPhone = sender?.phone || null;
+
+                    // Determine routing based on role
+                    // Admin -> SuperAdmin only
+                    // Expert/Customer -> Admin queue (SuperAdmin also sees via visibility)
+                    const receiverRole = senderRoleLower === 'admin' ? 'SuperAdmin' : 'Admin';
 
                     const ticketId = crypto.randomUUID();
 
+                    // Insert ticket
                     await env.proveloce_db.prepare(`
-                        INSERT INTO expert_helpdesk (id, sender_id, sender_role, receiver_role, receiver_id, category, priority, subject, message, status, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        INSERT INTO expert_helpdesk (
+                            id, ticket_number, sender_id, sender_role, created_by_role,
+                            receiver_role, receiver_id, category, priority, subject, message,
+                            contact_name, contact_email, contact_phone,
+                            status, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     `).bind(
                         ticketId,
+                        ticketNumber,
                         payload.userId,
                         senderRole,
-                        finalReceiverRole,
-                        finalReceiverId,
-                        category || 'Other',
-                        priority || 'MEDIUM',
+                        senderRole,
+                        receiverRole,
+                        null, // receiver_id is null for queue routing
+                        category,
+                        priority,
                         subject,
-                        message || null
+                        description,
+                        contactName,
+                        contactEmail,
+                        contactPhone
+                    ).run();
+
+                    // Insert ticket_event for CREATED
+                    const eventId = crypto.randomUUID();
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO ticket_events (id, ticket_id, ticket_number, actor_user_id, actor_role, event_type, new_status, payload, created_at)
+                        VALUES (?, ?, ?, ?, ?, 'CREATED', 'PENDING', ?, CURRENT_TIMESTAMP)
+                    `).bind(
+                        eventId,
+                        ticketId,
+                        ticketNumber,
+                        payload.userId,
+                        senderRole,
+                        JSON.stringify({ category, priority, subject })
                     ).run();
 
                     return jsonResponse({
                         success: true,
-                        message: `Ticket sent to ${finalReceiverRole}`,
-                        data: { ticketId }
+                        message: `Ticket created successfully`,
+                        data: { ticketId: ticketNumber }
                     });
                 } catch (error: any) {
                     console.error("Ticket creation error:", error);
-                    return jsonResponse({ success: false, error: error.message || "Failed to create ticket" }, 500);
+                    return jsonResponse({ success: false, error: error.message || "SERVER_ERROR" }, 500);
                 }
             }
 
-            // GET /api/helpdesk/tickets - Get tickets (role-filtered)
+            // GET /api/helpdesk/tickets - Get tickets (role-filtered v1.1)
             if (url.pathname === "/api/helpdesk/tickets" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3079,47 +3116,41 @@ export default {
                 let tickets: any[] = [];
 
                 if (role === 'superadmin') {
-                    // SuperAdmin sees ALL tickets
+                    // SuperAdmin sees ALL tickets routed to them (receiver_role='SuperAdmin')
+                    // This includes Admin-created tickets + copies of non-admin tickets
                     const result = await env.proveloce_db.prepare(`
                         SELECT h.*, 
-                            s.name as sender_name, s.email as sender_email,
-                            r.name as receiver_name, r.email as receiver_email
+                            h.contact_name, h.contact_email, h.contact_phone,
+                            h.created_by_role
                         FROM expert_helpdesk h
-                        LEFT JOIN users s ON h.sender_id = s.id
-                        LEFT JOIN users r ON h.receiver_id = r.id
+                        WHERE h.receiver_role = 'SuperAdmin'
                         ORDER BY h.created_at DESC
                     `).all();
                     tickets = result.results || [];
                 } else if (role === 'admin') {
                     // Admin sees:
-                    // - Tickets from Customers/Experts to Admin role
-                    // - Their own sent tickets
-                    // - Tickets where they are the specific receiver
+                    // - Tickets from Experts/Customers routed to Admin (receiver_role='Admin')
+                    // - Their own created tickets
+                    // Note: Admin-created tickets are NOT visible to other Admins
                     const result = await env.proveloce_db.prepare(`
                         SELECT h.*, 
-                            s.name as sender_name, s.email as sender_email,
-                            r.name as receiver_name, r.email as receiver_email
+                            h.contact_name, h.contact_email, h.contact_phone,
+                            h.created_by_role
                         FROM expert_helpdesk h
-                        LEFT JOIN users s ON h.sender_id = s.id
-                        LEFT JOIN users r ON h.receiver_id = r.id
-                        WHERE (h.sender_role IN ('Customer', 'Expert') AND h.receiver_role = 'Admin')
+                        WHERE (h.receiver_role = 'Admin' AND h.created_by_role IN ('Expert', 'Customer'))
                            OR (h.sender_id = ?)
-                           OR (h.receiver_id = ?)
                         ORDER BY h.created_at DESC
-                    `).bind(payload.userId, payload.userId).all();
+                    `).bind(payload.userId).all();
                     tickets = result.results || [];
                 } else {
-                    // Expert/Customer: only see tickets they sent or received
+                    // Expert/Customer: only see their own tickets
                     const result = await env.proveloce_db.prepare(`
-                        SELECT h.*, 
-                            s.name as sender_name, s.email as sender_email,
-                            r.name as receiver_name, r.email as receiver_email
+                        SELECT h.ticket_number, h.subject, h.status, h.category, h.priority, 
+                               h.created_at
                         FROM expert_helpdesk h
-                        LEFT JOIN users s ON h.sender_id = s.id
-                        LEFT JOIN users r ON h.receiver_id = r.id
-                        WHERE h.sender_id = ? OR h.receiver_id = ?
+                        WHERE h.sender_id = ?
                         ORDER BY h.created_at DESC
-                    `).bind(payload.userId, payload.userId).all();
+                    `).bind(payload.userId).all();
                     tickets = result.results || [];
                 }
 
@@ -3129,7 +3160,7 @@ export default {
                 });
             }
 
-            // PATCH /api/helpdesk/tickets/:id/status - Update ticket status
+            // PATCH /api/helpdesk/tickets/:ticket_number/status - Update ticket status (v1.1)
             if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/status$/) && request.method === "PATCH") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3138,11 +3169,12 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                const ticketId = url.pathname.split('/')[4];
+                const ticketNumber = url.pathname.split('/')[4];
                 const body = await request.json() as any;
                 const { status } = body;
 
-                const validStatuses = ['OPEN', 'IN_REVIEW', 'RESOLVED', 'CLOSED'];
+                // v1.1 statuses: PENDING, RESOLVED, DECLINED
+                const validStatuses = ['PENDING', 'RESOLVED', 'DECLINED'];
                 if (!status || !validStatuses.includes(status)) {
                     return jsonResponse({
                         success: false,
@@ -3157,31 +3189,52 @@ export default {
 
                 const role = user?.role?.toLowerCase() || '';
 
-                // Get ticket to check permissions
+                // Only Admin and SuperAdmin can update status
+                if (role !== 'admin' && role !== 'superadmin') {
+                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can update ticket status" }, 403);
+                }
+
+                // Get ticket by ticket_number
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM expert_helpdesk WHERE id = ?"
-                ).bind(ticketId).first() as any;
+                    "SELECT * FROM expert_helpdesk WHERE ticket_number = ?"
+                ).bind(ticketNumber).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Check permission: SuperAdmin can update any, others only if sender or receiver
-                const canUpdate = role === 'superadmin' ||
-                    ticket.sender_id === payload.userId ||
-                    ticket.receiver_id === payload.userId ||
-                    (role === 'admin' && ticket.receiver_role === 'Admin');
+                // Check visibility/permission based on role
+                // Admin can only update tickets in their queue (receiver_role='Admin' AND created_by_role IN Expert/Customer)
+                // SuperAdmin can update tickets routed to them
+                const canUpdate =
+                    (role === 'superadmin' && ticket.receiver_role === 'SuperAdmin') ||
+                    (role === 'admin' && ticket.receiver_role === 'Admin' && ['Expert', 'Customer'].includes(ticket.created_by_role)) ||
+                    (ticket.sender_id === payload.userId);
 
                 if (!canUpdate) {
                     return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
                 }
 
+                const oldStatus = ticket.status;
+
+                // Update ticket status
                 await env.proveloce_db.prepare(`
                     UPDATE expert_helpdesk SET status = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                `).bind(status, ticketId).run();
+                    WHERE ticket_number = ?
+                `).bind(status, ticketNumber).run();
 
-                return jsonResponse({ success: true, message: "Ticket status updated" });
+                // Log event
+                const eventId = crypto.randomUUID();
+                await env.proveloce_db.prepare(`
+                    INSERT INTO ticket_events (id, ticket_id, ticket_number, actor_user_id, actor_role, event_type, old_status, new_status, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'STATUS_CHANGED', ?, ?, CURRENT_TIMESTAMP)
+                `).bind(eventId, ticket.id, ticketNumber, payload.userId, user.role, oldStatus, status).run();
+
+                return jsonResponse({
+                    success: true,
+                    message: "Ticket status updated",
+                    data: { ticketId: ticketNumber, status }
+                });
             }
 
             // =====================================================
