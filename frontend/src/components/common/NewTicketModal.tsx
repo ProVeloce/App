@@ -20,10 +20,11 @@ interface TicketFormData {
 }
 
 const CATEGORIES = [
+    { value: 'General', icon: Headphones, label: 'General' },
+    { value: 'Technical', icon: Cpu, label: 'Technical' },
     { value: 'Billing', icon: CreditCard, label: 'Billing' },
     { value: 'Tasks', icon: ClipboardList, label: 'Tasks' },
     { value: 'Payments', icon: DollarSign, label: 'Payments' },
-    { value: 'Technical', icon: Cpu, label: 'Technical' },
     { value: 'Account', icon: UserCircle, label: 'Account' },
     { value: 'Other', icon: MoreHorizontal, label: 'Other' },
 ];
@@ -49,9 +50,19 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
 
-    // Success popup state
-    const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-    const [createdTicketNumber, setCreatedTicketNumber] = useState('');
+    // State for Unified Popup System
+    const [popup, setPopup] = useState<{
+        show: boolean;
+        type: 'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO';
+        title: string;
+        message: string;
+        ticketNumber?: string;
+    }>({
+        show: false,
+        type: 'SUCCESS',
+        title: '',
+        message: '',
+    });
     const [copied, setCopied] = useState(false);
 
     const modalRef = useRef<HTMLDivElement>(null);
@@ -60,7 +71,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
     // Focus trap and ESC to close
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && !showSuccessPopup) {
+            if (e.key === 'Escape' && !popup.show) {
                 handleClose();
             }
         };
@@ -75,13 +86,11 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
             document.removeEventListener('keydown', handleKeyDown);
             document.body.style.overflow = '';
         };
-    }, [isOpen, showSuccessPopup]);
+    }, [isOpen, popup.show]);
 
     const handleClose = () => {
-        if (showSuccessPopup) {
-            // Close success popup and modal together
-            setShowSuccessPopup(false);
-            setCreatedTicketNumber('');
+        if (popup.show) {
+            setPopup(prev => ({ ...prev, show: false }));
         }
         setIsClosing(true);
         setTimeout(() => {
@@ -96,8 +105,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         setErrors({});
         setTouched({});
         setErrorMessage('');
-        setShowSuccessPopup(false);
-        setCreatedTicketNumber('');
+        setPopup({ show: false, type: 'SUCCESS', title: '', message: '' });
         setCopied(false);
     };
 
@@ -121,7 +129,6 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         setErrorMessage('');
 
         if (!validate()) {
-            // Scroll to first error
             const firstError = document.querySelector('.ntm-field-error');
             firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
@@ -130,19 +137,29 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         setSubmitting(true);
         try {
             const result = await onSubmit(formData);
-            // Show success popup with ticket ID
-            setCreatedTicketNumber(result.ticketNumber);
-            setShowSuccessPopup(true);
-        } catch (err) {
-            setErrorMessage("We couldn't create your ticket. Please try again.");
+            setPopup({
+                show: true,
+                type: 'SUCCESS',
+                title: 'Ticket Created Successfully',
+                message: 'Your support ticket has been registered.',
+                ticketNumber: result.ticketNumber
+            });
+        } catch (err: any) {
+            setPopup({
+                show: true,
+                type: 'ERROR',
+                title: 'System Error',
+                message: err.response?.data?.message || "We couldn't create your ticket. Please try again."
+            });
         } finally {
             setSubmitting(false);
         }
     };
 
     const handleCopyTicketNumber = async () => {
+        if (!popup.ticketNumber) return;
         try {
-            await navigator.clipboard.writeText(createdTicketNumber);
+            await navigator.clipboard.writeText(popup.ticketNumber);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
@@ -176,25 +193,28 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
     return (
         <div
             className={`ntm-overlay ${isClosing ? 'ntm-closing' : ''}`}
-            onClick={showSuccessPopup ? undefined : handleClose}
+            onClick={popup.show ? undefined : handleClose}
             role="dialog"
             aria-modal="true"
             aria-label="New Support Ticket"
         >
-            {/* Success Popup */}
-            {showSuccessPopup && (
-                <div className="ntm-success-popup" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ticket Confirmation">
-                    <div className="ntm-success-icon">
-                        <CheckCircle size={48} />
+            {/* Unified Modal Popup System */}
+            {popup.show && (
+                <div className={`ntm-status-popup type-${popup.type}`} onClick={(e) => e.stopPropagation()} role="dialog">
+                    <div className="ntm-status-icon">
+                        {popup.type === 'SUCCESS' && <CheckCircle size={48} />}
+                        {popup.type === 'ERROR' && <X size={48} />}
+                        {popup.type === 'WARNING' && <AlertTriangle size={48} />}
+                        {popup.type === 'INFO' && <Headphones size={48} />}
                     </div>
-                    <h2>Ticket Created Successfully</h2>
-                    <p>Your support ticket has been registered.</p>
+                    <h2>{popup.title}</h2>
+                    <p>{popup.message}</p>
 
-                    <div className="ntm-ticket-id-box">
-                        <label>TICKET NUMBER</label>
-                        <div className="ntm-ticket-id-value">
-                            <code>{createdTicketNumber || 'TICKET-UNKNOWN'}</code>
-                            {createdTicketNumber && createdTicketNumber !== 'UNKNOWN' && (
+                    {popup.type === 'SUCCESS' && popup.ticketNumber && (
+                        <div className="ntm-ticket-id-box">
+                            <label>TICKET NUMBER</label>
+                            <div className="ntm-ticket-id-value">
+                                <code>{popup.ticketNumber}</code>
                                 <button
                                     className="ntm-copy-btn"
                                     onClick={handleCopyTicketNumber}
@@ -202,22 +222,19 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
                                 >
                                     {copied ? <Check size={18} /> : <Copy size={18} />}
                                 </button>
-                            )}
+                            </div>
+                            {copied && <span className="ntm-copied-message">Copied to clipboard!</span>}
                         </div>
-                        {copied && <span className="ntm-copied-message">Copied to clipboard!</span>}
-                        {(!createdTicketNumber || createdTicketNumber === 'UNKNOWN') && (
-                            <span className="ntm-error-message">Ticket Number unavailable</span>
-                        )}
-                    </div>
+                    )}
 
                     <button className="ntm-btn ntm-btn-primary ntm-continue-btn" onClick={handleContinue}>
-                        Continue
+                        {popup.type === 'SUCCESS' ? 'Continue' : 'Try Again'}
                     </button>
                 </div>
             )}
 
             {/* Main Form Modal */}
-            {!showSuccessPopup && (
+            {!popup.show && (
                 <div
                     ref={modalRef}
                     className={`ntm-container ${isClosing ? 'ntm-closing' : ''}`}

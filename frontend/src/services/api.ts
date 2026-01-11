@@ -373,16 +373,16 @@ export const ticketApi = {
     getAllTickets: (params?: Record<string, any>) =>
         api.get<ApiResponse>('/helpdesk/tickets', { params }),
 
-    getTicketById: (id: string) =>
-        api.get<ApiResponse>(`/helpdesk/tickets/${id}`),
+    getTicketById: (idOrNumber: string) =>
+        api.get<ApiResponse>(`/helpdesk/tickets/${idOrNumber}`),
 
-    addMessage: (id: string, data: FormData) =>
-        api.post<ApiResponse>(`/tickets/${id}/messages`, data, {
+    addMessage: (idOrNumber: string, data: FormData) =>
+        api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/messages`, data, {
             headers: { 'Content-Type': 'multipart/form-data' },
         }),
 
-    updateTicketStatus: (id: string, status: string) =>
-        api.patch<ApiResponse>(`/tickets/${id}/status`, { status }),
+    updateTicketStatus: (idOrNumber: string, status: string) =>
+        api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/status`, { status }),
 };
 
 // Notification API

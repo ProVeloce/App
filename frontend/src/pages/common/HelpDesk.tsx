@@ -15,7 +15,12 @@ interface Ticket {
     category: string;
     priority: string;
     status: string;
+    created_by_user_id: string;
+    created_by_role: string;
+    assigned_to_user_id: string | null;
+    assigned_to_role: string;
     created_at: string;
+    updated_at: string;
     messages?: any[];
 }
 
@@ -77,8 +82,9 @@ const HelpDesk: React.FC = () => {
             if (response.data.success && response.data.data) {
                 setSelectedTicket(response.data.data.ticket);
             }
-        } catch (err) {
-            error('Failed to load ticket');
+        } catch (err: any) {
+            const msg = err.response?.data?.message || 'Failed to load ticket';
+            error(msg);
         }
     };
 
