@@ -381,8 +381,8 @@ export const ticketApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         }),
 
-    updateTicketStatus: (idOrNumber: string, status: string) =>
-        api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/status`, { status }),
+    updateTicketStatus: (idOrNumber: string, status: string, reply?: string) =>
+        api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/status`, { status, reply }),
 };
 
 // Notification API

@@ -127,25 +127,11 @@
     color: var(--text-muted);
 }
 
-.ticket-priority {
+.ticket-status-badge {
     padding: 2px 8px;
     border-radius: var(--radius-full);
     font-weight: 500;
-}
-
-.ticket-priority.low {
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-}
-
-.ticket-priority.medium {
-    background: var(--warning-50);
-    color: var(--warning-600);
-}
-
-.ticket-priority.high {
-    background: var(--error-50);
-    color: var(--error-500);
+    font-size: 0.75rem;
 }
 
 .ticket-date {
@@ -156,7 +142,9 @@
     color: var(--text-muted);
 }
 
+
 /* Modal */
+
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -304,7 +292,9 @@
     color: var(--text-secondary);
 }
 
+
 /* Empty State - Perfect Center Alignment */
+
 .empty-state {
     flex: 1;
     display: flex;
@@ -348,7 +338,9 @@
     justify-content: center;
 }
 
+
 /* Ticket Detail & Status Styles */
+
 .ticket-status-badge {
     padding: 4px 12px;
     border-radius: var(--radius-full);
@@ -356,19 +348,19 @@
     font-weight: 500;
 }
 
-.ticket-status-badge.open {
+.ticket-status-badge.pending {
     background: var(--warning-50);
     color: var(--warning-600);
 }
 
-.ticket-status-badge.in_progress {
-    background: var(--primary-100);
-    color: var(--primary-600);
-}
-
-.ticket-status-badge.resolved {
+.ticket-status-badge.approved {
     background: var(--success-50);
     color: var(--success-600);
+}
+
+.ticket-status-badge.rejected {
+    background: var(--error-50);
+    color: var(--error-500);
 }
 
 .no-messages {

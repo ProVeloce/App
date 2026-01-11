@@ -53,6 +53,7 @@ const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
 const ExpertReviewCenter = lazy(() => import('./pages/admin/ExpertReviewCenter'));
 const TaskAssignment = lazy(() => import('./pages/admin/TaskAssignment'));
 const ReportsAnalytics = lazy(() => import('./pages/admin/ReportsAnalytics'));
+const TicketManagement = lazy(() => import('./pages/admin/TicketManagement'));
 
 // Analyst Portal
 const AnalystDashboard = lazy(() => import('./pages/analyst/AnalystDashboard'));
@@ -125,6 +126,7 @@ function App() {
                         <Route path="/admin/expert-review" element={<ExpertReviewCenter />} />
                         <Route path="/admin/task-assignment" element={<TaskAssignment />} />
                         <Route path="/admin/reports" element={<ReportsAnalytics />} />
+                        <Route path="/admin/tickets" element={<TicketManagement />} />
                     </Route>
 
                     {/* SuperAdmin Routes */}

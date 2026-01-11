@@ -13,7 +13,6 @@ interface NewTicketModalProps {
 
 interface TicketFormData {
     category: string;
-    priority: string;
     subject: string;
     description: string;
     attachment?: File | null;
@@ -29,18 +28,11 @@ const CATEGORIES = [
     { value: 'Other', icon: MoreHorizontal, label: 'Other' },
 ];
 
-const PRIORITIES = [
-    { value: 'Low', label: 'Low', color: '#6B7280' },
-    { value: 'Medium', label: 'Medium', color: '#F59E0B' },
-    { value: 'High', label: 'High', color: '#EF4444' },
-];
-
 const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubmit }) => {
     const [isClosing, setIsClosing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [formData, setFormData] = useState<TicketFormData>({
         category: '',
-        priority: 'Medium',
         subject: '',
         description: '',
         attachment: null,
@@ -101,7 +93,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
     };
 
     const resetForm = () => {
-        setFormData({ category: '', priority: 'Medium', subject: '', description: '', attachment: null });
+        setFormData({ category: '', subject: '', description: '', attachment: null });
         setErrors({});
         setTouched({});
         setErrorMessage('');
@@ -113,14 +105,13 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         const newErrors: Record<string, string> = {};
 
         if (!formData.category) newErrors.category = 'Please choose a category';
-        if (!formData.priority) newErrors.priority = 'Please set a priority';
         if (!formData.subject.trim()) newErrors.subject = 'Subject is required';
         if (formData.subject.length > 180) newErrors.subject = 'Subject must be 180 characters or less';
         if (!formData.description.trim()) newErrors.description = 'Description is required';
         if (formData.description.length > 5000) newErrors.description = 'Description must be 5000 characters or less';
 
         setErrors(newErrors);
-        setTouched({ category: true, priority: true, subject: true, description: true });
+        setTouched({ category: true, subject: true, description: true });
         return Object.keys(newErrors).length === 0;
     };
 
@@ -326,34 +317,6 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
                                     </div>
                                     {getFieldState('category') === 'error' && (
                                         <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.category}</span>
-                                    )}
-                                </div>
-
-                                {/* Priority Pills */}
-                                <div className={`ntm-field ${getFieldState('priority')}`}>
-                                    <label className="ntm-label">Priority <span className="ntm-required">*</span></label>
-                                    <div className="ntm-priority-pills">
-                                        {PRIORITIES.map((p) => (
-                                            <button
-                                                key={p.value}
-                                                type="button"
-                                                className={`ntm-priority-pill ${formData.priority === p.value ? 'selected' : ''}`}
-                                                style={{
-                                                    '--pill-color': p.color,
-                                                    borderColor: formData.priority === p.value ? p.color : undefined,
-                                                    color: formData.priority === p.value ? p.color : undefined,
-                                                } as React.CSSProperties}
-                                                onClick={() => {
-                                                    setFormData(prev => ({ ...prev, priority: p.value }));
-                                                    setTouched(prev => ({ ...prev, priority: true }));
-                                                }}
-                                            >
-                                                {p.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {getFieldState('priority') === 'error' && (
-                                        <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.priority}</span>
                                     )}
                                 </div>
 

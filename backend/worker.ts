@@ -2973,7 +2973,7 @@ export default {
             // HELPDESK APIs (Role-based ticket routing)
             // =====================================================
 
-            // POST /api/helpdesk/tickets - Create a new helpdesk ticket (Unified v1.2)
+            // POST /api/helpdesk/tickets - Create a new helpdesk ticket (Enterprise v2.0)
             if (url.pathname === "/api/helpdesk/tickets" && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -2982,9 +2982,9 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                // Get sender info
+                // Get sender info including phone
                 const sender = await env.proveloce_db.prepare(
-                    "SELECT id, role, name, email FROM users WHERE id = ?"
+                    "SELECT id, role, name, email, phone FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const senderRole = sender?.role?.toUpperCase() || 'CUSTOMER';
@@ -2992,7 +2992,6 @@ export default {
                 try {
                     // Parse request - support both JSON and FormData
                     let category: string = '';
-                    let priority: string = '';
                     let subject: string = '';
                     let description: string = '';
                     let attachmentFile: File | null = null;
@@ -3001,7 +3000,6 @@ export default {
                     if (contentType.includes('multipart/form-data')) {
                         const formData = await request.formData();
                         category = formData.get('category') as string || '';
-                        priority = formData.get('priority') as string || '';
                         subject = formData.get('subject') as string || '';
                         description = formData.get('description') as string || '';
                         const file = formData.get('attachment');
@@ -3011,17 +3009,15 @@ export default {
                     } else {
                         const body = await request.json() as any;
                         category = body.category || '';
-                        priority = body.priority || '';
                         subject = body.subject || '';
                         description = body.description || '';
                     }
 
-                    // Strict Validation - Mandatory fields
+                    // Strict Validation - Mandatory fields (no priority)
                     const missingFields: string[] = [];
                     if (!subject?.trim()) missingFields.push('subject');
                     if (!description?.trim()) missingFields.push('description');
                     if (!category?.trim()) missingFields.push('category');
-                    if (!priority?.trim()) missingFields.push('priority');
 
                     if (missingFields.length > 0) {
                         return jsonResponse({
@@ -3032,53 +3028,54 @@ export default {
                         }, 400);
                     }
 
-                    // Generate unique ticket number: PV-TK-YYYYMMDD-XXXX
+                    // Generate unique ticket ID: PV-TK-YYYYMMDD-HHMM
                     const now = new Date();
                     const yyyymmdd = now.getUTCFullYear() +
                         String(now.getUTCMonth() + 1).padStart(2, '0') +
                         String(now.getUTCDate()).padStart(2, '0');
-                    const randomFour = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-                    const ticketNumber = `PV-TK-${yyyymmdd}-${randomFour}`;
+                    const hhmm = String(now.getUTCHours()).padStart(2, '0') +
+                        String(now.getUTCMinutes()).padStart(2, '0');
+                    const ticketId = `PV-TK-${yyyymmdd}-${hhmm}`;
 
-                    // Routing Logic: Admin -> SuperAdmin, others -> Admin
-                    const assignedToRole = senderRole === 'ADMIN' ? 'SUPERADMIN' : 'ADMIN';
-
-                    // Insert into unified tickets table
-                    await env.proveloce_db.prepare(`
-                        INSERT INTO tickets (
-                            ticket_number, subject, description, category, priority, status,
-                            created_by_user_id, created_by_role, assigned_to_role
-                        )
-                        VALUES (?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)
-                    `).bind(
-                        ticketNumber,
-                        subject.trim(),
-                        description.trim(),
-                        category.trim(),
-                        priority.toUpperCase(),
-                        payload.userId,
-                        senderRole,
-                        assignedToRole
-                    ).run();
-
-                    // Handle file attachment (Keep existing logic if applicable to unified table)
-                    let attachmentInfo: { id: string; fileName: string; filePath: string } | null = null;
+                    // Handle file attachment to R2
+                    let attachmentUrl: string | null = null;
                     if (attachmentFile && env.others) {
                         const fileId = crypto.randomUUID();
                         const fileExt = attachmentFile.name.split('.').pop() || 'bin';
-                        const filePath = `helpdesk/${ticketNumber}/${fileId}.${fileExt}`;
+                        const filePath = `helpdesk/${ticketId}/${fileId}.${fileExt}`;
                         await env.others.put(filePath, attachmentFile.stream(), {
                             httpMetadata: { contentType: attachmentFile.type || 'application/octet-stream' }
                         });
-                        attachmentInfo = { id: fileId, fileName: attachmentFile.name, filePath };
+                        // Generate public URL (assuming R2 public bucket)
+                        attachmentUrl = `https://attachments.proveloce.com/${filePath}`;
                     }
+
+                    // Insert into tickets table with full user profile
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO tickets (
+                            ticket_id, user_id, user_role, user_full_name, user_email, user_phone_number,
+                            subject, category, description, attachment_url, status
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                    `).bind(
+                        ticketId,
+                        payload.userId,
+                        senderRole,
+                        sender?.name || '',
+                        sender?.email || '',
+                        sender?.phone || null,
+                        subject.trim(),
+                        category.trim(),
+                        description.trim(),
+                        attachmentUrl
+                    ).run();
 
                     return jsonResponse({
                         success: true,
-                        message: `Ticket created successfully`,
+                        message: `Your ticket ${ticketId} has been created successfully`,
                         data: {
-                            ticketNumber: ticketNumber,
-                            attachment: attachmentInfo
+                            ticketId: ticketId,
+                            attachmentUrl: attachmentUrl
                         }
                     });
                 } catch (error: any) {
@@ -3087,7 +3084,7 @@ export default {
                 }
             }
 
-            // GET /api/helpdesk/tickets - Unified Ticket Visibility (v1.2)
+            // GET /api/helpdesk/tickets - Unified Ticket Visibility (Enterprise v2.0)
             if (url.pathname === "/api/helpdesk/tickets" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3102,21 +3099,30 @@ export default {
 
                 const role = user?.role?.toUpperCase() || 'CUSTOMER';
 
-                // Visibility Logic:
-                // - Customers/Experts see own tickets
-                // - Admin sees all except superadmin private (implemented as any ticket created by others or assigned to admin)
-                // - Superadmin sees everything
-                const result = await env.proveloce_db.prepare(`
+                // Visibility Logic per requirements:
+                // Customers & Experts: Can only see their own tickets
+                // Admins: Can see all customer & expert tickets
+                // Superadmin: Can see all tickets (including admin-raised)
+                let whereClause = '';
+                let params: any[] = [];
+
+                if (role === 'CUSTOMER' || role === 'EXPERT') {
+                    whereClause = 'user_id = ?';
+                    params = [payload.userId];
+                } else if (role === 'ADMIN') {
+                    whereClause = 'user_role IN (?, ?)';  // Only customer and expert tickets
+                    params = ['CUSTOMER', 'EXPERT'];
+                } else if (role === 'SUPERADMIN') {
+                    // No WHERE clause - see all tickets
+                }
+
+                const query = `
                     SELECT * FROM tickets
-                    WHERE 
-                        created_by_user_id = ?
-                        OR assigned_to_user_id = ?
-                        OR (
-                            ? = 'SUPERADMIN' 
-                            OR ? = 'ADMIN'
-                        )
+                    ${whereClause ? 'WHERE ' + whereClause : ''}
                     ORDER BY created_at DESC
-                `).bind(payload.userId, payload.userId, role, role).all();
+                `;
+
+                const result = await env.proveloce_db.prepare(query).bind(...params).all();
                 const tickets = result.results || [];
 
                 return jsonResponse({
@@ -3125,7 +3131,7 @@ export default {
                 });
             }
 
-            // GET /api/helpdesk/tickets/:ticket_number - Enterprise Retrieval (v1.2)
+            // GET /api/helpdesk/tickets/:ticket_id - Enterprise Retrieval (v2.0)
             if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+$/) && !url.pathname.includes('/status') && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3134,7 +3140,7 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                const ticketNumber = url.pathname.split('/')[4];
+                const ticketId = url.pathname.split('/')[4];
 
                 // Get user role
                 const user = await env.proveloce_db.prepare(
@@ -3144,38 +3150,35 @@ export default {
 
                 // Fetch and verify visibility
                 const ticket = await env.proveloce_db.prepare(`
-                    SELECT * FROM tickets 
-                    WHERE ticket_number = ?
-                    AND (
-                        created_by_user_id = ?
-                        OR assigned_to_user_id = ?
-                        OR ? IN ('ADMIN', 'SUPERADMIN')
-                    )
-                `).bind(ticketNumber, payload.userId, payload.userId, role).first() as any;
+                    SELECT * FROM tickets
+                    WHERE ticket_id = ?
+                `).bind(ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Fetch attachments
-                const attachmentsResult = await env.proveloce_db.prepare(`
-                    SELECT id, file_name, file_path, file_size, mime_type, uploaded_at
-                    FROM ticket_attachments WHERE ticket_id = ? OR ticket_id = ?
-                `).bind(ticket.id, ticket.ticket_number).all();
-                const attachments = attachmentsResult.results || [];
+                // Check visibility permissions
+                let canView = false;
+                if (role === 'CUSTOMER' || role === 'EXPERT') {
+                    canView = ticket.user_id === payload.userId;
+                } else if (role === 'ADMIN') {
+                    canView = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
+                } else if (role === 'SUPERADMIN') {
+                    canView = true;
+                }
+
+                if (!canView) {
+                    return jsonResponse({ success: false, error: "Not authorized to view this ticket" }, 403);
+                }
 
                 return jsonResponse({
                     success: true,
-                    data: {
-                        ticket: {
-                            ...ticket,
-                            attachments
-                        }
-                    }
+                    data: { ticket }
                 });
             }
 
-            // PATCH /api/helpdesk/tickets/:ticket_number/status - Update ticket status (v1.1)
+            // PATCH /api/helpdesk/tickets/:ticket_id/status - Update ticket status and reply (Enterprise v2.0)
             if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/status$/) && request.method === "PATCH") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3184,12 +3187,12 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                const ticketNumber = url.pathname.split('/')[4];
+                const ticketId = url.pathname.split('/')[4];
                 const body = await request.json() as any;
-                const { status } = body;
+                const { status, reply } = body;
 
-                // v1.1 statuses: PENDING, RESOLVED, DECLINED
-                const validStatuses = ['PENDING', 'RESOLVED', 'DECLINED'];
+                // Valid statuses: PENDING, APPROVED, REJECTED
+                const validStatuses = ['PENDING', 'APPROVED', 'REJECTED'];
                 if (!status || !validStatuses.includes(status)) {
                     return jsonResponse({
                         success: false,
@@ -3209,44 +3212,37 @@ export default {
                     return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can update ticket status" }, 403);
                 }
 
-                // Get ticket by ticket_number
+                // Get ticket by ticket_id
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM tickets WHERE ticket_number = ?"
-                ).bind(ticketNumber).first() as any;
+                    "SELECT * FROM tickets WHERE ticket_id = ?"
+                ).bind(ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check
-                const canUpdate =
-                    role === 'ADMIN' ||
-                    role === 'SUPERADMIN' ||
-                    ticket.created_by_user_id === payload.userId;
+                // Permission check - admins can update customer/expert tickets, superadmins can update all
+                let canUpdate = false;
+                if (role === 'ADMIN') {
+                    canUpdate = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
+                } else if (role === 'SUPERADMIN') {
+                    canUpdate = true;
+                }
 
                 if (!canUpdate) {
                     return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
                 }
 
-                const oldStatus = ticket.status;
-
-                // Update ticket status
+                // Update ticket status and admin_reply
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET status = ?
-                    WHERE ticket_number = ?
-                `).bind(status, ticketNumber).run();
-
-                // Log event
-                const eventId = crypto.randomUUID();
-                await env.proveloce_db.prepare(`
-                    INSERT INTO ticket_events (id, ticket_id, ticket_number, actor_user_id, actor_role, event_type, old_status, new_status, created_at)
-                    VALUES (?, ?, ?, ?, ?, 'STATUS_CHANGED', ?, ?, CURRENT_TIMESTAMP)
-                `).bind(eventId, ticket.id, ticketNumber, payload.userId, user.role, oldStatus, status).run();
+                    UPDATE tickets SET status = ?, admin_reply = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE ticket_id = ?
+                `).bind(status, reply || null, ticketId).run();
 
                 return jsonResponse({
                     success: true,
-                    message: "Ticket status updated",
-                    data: { ticketId: ticketNumber, status }
+                    message: "Ticket status updated successfully",
+                    data: { ticketId, status, adminReply: reply }
                 });
             }
 

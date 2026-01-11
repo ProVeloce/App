@@ -9,19 +9,20 @@ import '../../styles/AdvancedModalAnimations.css';
 
 interface Ticket {
     id: number;
-    ticket_number: string;
+    ticket_id: string;
+    user_id: string;
+    user_role: string;
+    user_full_name: string;
+    user_email: string;
+    user_phone_number: string | null;
     subject: string;
-    description: string;
     category: string;
-    priority: string;
+    description: string;
+    attachment_url: string | null;
     status: string;
-    created_by_user_id: string;
-    created_by_role: string;
-    assigned_to_user_id: string | null;
-    assigned_to_role: string;
+    admin_reply: string | null;
     created_at: string;
     updated_at: string;
-    messages?: any[];
 }
 
 const HelpDesk: React.FC = () => {
@@ -53,10 +54,9 @@ const HelpDesk: React.FC = () => {
         }, 300);
     };
 
-    const handleCreateTicket = async (data: { category: string; priority: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketNumber: string }> => {
+    const handleCreateTicket = async (data: { category: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketNumber: string }> => {
         const formData = new FormData();
         formData.append('category', data.category);
-        formData.append('priority', data.priority);
         formData.append('subject', data.subject);
         formData.append('description', data.description);
         if (data.attachment) {
@@ -65,8 +65,8 @@ const HelpDesk: React.FC = () => {
         const response = await ticketApi.createTicket(formData);
         console.log('[HelpDesk] Ticket creation response:', response.data);
 
-        // Backend returns ticketNumber inside the data object
-        const ticketNumber = response.data?.data?.ticketNumber || 'UNKNOWN';
+        // Backend returns ticketId inside the data object
+        const ticketNumber = response.data?.data?.ticketId || 'UNKNOWN';
         if (ticketNumber === 'UNKNOWN') {
             console.error('[HelpDesk] Ticket Number missing in response:', response.data);
         }
@@ -78,7 +78,7 @@ const HelpDesk: React.FC = () => {
 
     const handleViewTicket = async (ticket: Ticket) => {
         try {
-            const response = await ticketApi.getTicketById(ticket.ticket_number);
+            const response = await ticketApi.getTicketById(ticket.ticket_id);
             if (response.data.success && response.data.data) {
                 setSelectedTicket(response.data.data.ticket);
             }
@@ -90,14 +90,10 @@ const HelpDesk: React.FC = () => {
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'OPEN':
             case 'PENDING': return <AlertCircle size={16} className="status-open" />;
-            case 'IN_PROGRESS':
-            case 'IN_REVIEW': return <Clock size={16} className="status-progress" />;
-            case 'RESOLVED':
-            case 'CLOSED':
-            case 'DECLINED': return <CheckCircle size={16} className="status-resolved" />;
-            default: return <AlertCircle size={16} />;
+            case 'APPROVED': return <CheckCircle size={16} className="status-resolved" />;
+            case 'REJECTED': return <X size={16} className="status-closed" />;
+            default: return <Clock size={16} className="status-progress" />;
         }
     };
 
@@ -141,11 +137,11 @@ const HelpDesk: React.FC = () => {
                             <div key={t.id} className="ticket-item" onClick={() => handleViewTicket(t)}>
                                 <div className="ticket-status">{getStatusIcon(t.status)}</div>
                                 <div className="ticket-content">
-                                    <div className="ticket-id-small">{t.ticket_number}</div>
+                                    <div className="ticket-id-small">{t.ticket_id}</div>
                                     <h4>{t.subject}</h4>
                                     <div className="ticket-meta">
                                         <span className="ticket-category">{t.category}</span>
-                                        <span className={`ticket-priority ${t.priority.toLowerCase()}`}>{t.priority}</span>
+                                        <span className={`ticket-status-badge ${t.status.toLowerCase()}`}>{t.status}</span>
                                     </div>
                                 </div>
                             </div>
@@ -167,7 +163,7 @@ const HelpDesk: React.FC = () => {
                     <div className={`modal modal-content-advanced ticket-detail-modal ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
-                                <div className="ticket-id-tag">{selectedTicket.ticket_number}</div>
+                                <div className="ticket-id-tag">{selectedTicket.ticket_id}</div>
                                 <h2 className="modal-title-advanced">{selectedTicket.subject}</h2>
                                 <div className="ticket-meta" style={{ marginTop: '8px' }}>
                                     <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase()}`}>{selectedTicket.status}</span>
@@ -182,10 +178,35 @@ const HelpDesk: React.FC = () => {
                                 <p>{selectedTicket.description}</p>
                             </div>
 
-                            <div className="ticket-messages">
-                                <label>Messages</label>
-                                <p className="no-messages">Waiting for response from our support team...</p>
-                            </div>
+                            {selectedTicket.attachment_url && (
+                                <div className="ticket-attachment">
+                                    <label>Attachment</label>
+                                    <div className="attachment-actions">
+                                        <a href={selectedTicket.attachment_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+                                            View Attachment
+                                        </a>
+                                        <a href={selectedTicket.attachment_url} download className="btn btn-secondary btn-sm">
+                                            Download
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedTicket.admin_reply && (
+                                <div className="ticket-admin-reply">
+                                    <label>Admin Response</label>
+                                    <div className="admin-reply-content">
+                                        <p>{selectedTicket.admin_reply}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!selectedTicket.admin_reply && selectedTicket.status === 'PENDING' && (
+                                <div className="ticket-messages">
+                                    <label>Status</label>
+                                    <p className="no-messages">Waiting for response from our support team...</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
