@@ -2450,6 +2450,304 @@ export default {
             }
 
             // =====================================================
+            // TASK MANAGEMENT APIs (Admin/SuperAdmin)
+            // =====================================================
+
+            // POST /api/tasks - Create task and optionally assign to experts
+            if (url.pathname === "/api/tasks" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string; role?: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                // Only Admin or SuperAdmin can create tasks
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || '';
+                if (role !== 'admin' && role !== 'superadmin') {
+                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can create tasks" }, 403);
+                }
+
+                try {
+                    const body = await request.json() as any;
+                    const { title, description, domain, deadline, price_budget, priority, expert_ids } = body;
+
+                    if (!title) {
+                        return jsonResponse({ success: false, error: "Title is required" }, 400);
+                    }
+
+                    const taskId = crypto.randomUUID();
+
+                    // Create the task
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO tasks (id, title, description, domain, deadline, price_budget, priority, status, admin_id, created_by_id, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    `).bind(
+                        taskId,
+                        title,
+                        description || null,
+                        domain || null,
+                        deadline || null,
+                        price_budget || null,
+                        priority || 'MEDIUM',
+                        payload.userId,
+                        payload.userId
+                    ).run();
+
+                    // If expert_ids provided, create expert_tasks assignments
+                    let assignedCount = 0;
+                    if (expert_ids && Array.isArray(expert_ids) && expert_ids.length > 0) {
+                        for (const expertId of expert_ids) {
+                            try {
+                                await env.proveloce_db.prepare(`
+                                    INSERT INTO expert_tasks (id, task_id, expert_id, admin_id, status, created_at, updated_at)
+                                    VALUES (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                `).bind(crypto.randomUUID(), taskId, expertId, payload.userId).run();
+                                assignedCount++;
+                            } catch (e) {
+                                console.error("Failed to assign expert:", expertId, e);
+                            }
+                        }
+                    }
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Task created successfully",
+                        data: { taskId, assignedCount }
+                    });
+                } catch (error: any) {
+                    console.error("Task creation error:", error);
+                    return jsonResponse({ success: false, error: error.message || "Failed to create task" }, 500);
+                }
+            }
+
+            // GET /api/tasks - Get tasks (role-filtered)
+            if (url.pathname === "/api/tasks" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string; role?: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || '';
+                let tasks: any[] = [];
+
+                if (role === 'superadmin') {
+                    // SuperAdmin sees all tasks
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT t.*, u.name as admin_name,
+                            (SELECT COUNT(*) FROM expert_tasks WHERE task_id = t.id) as assigned_count
+                        FROM tasks t
+                        LEFT JOIN users u ON t.admin_id = u.id
+                        ORDER BY t.created_at DESC
+                    `).all();
+                    tasks = result.results || [];
+                } else if (role === 'admin') {
+                    // Admin sees tasks they created
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT t.*, u.name as admin_name,
+                            (SELECT COUNT(*) FROM expert_tasks WHERE task_id = t.id) as assigned_count
+                        FROM tasks t
+                        LEFT JOIN users u ON t.admin_id = u.id
+                        WHERE t.admin_id = ?
+                        ORDER BY t.created_at DESC
+                    `).bind(payload.userId).all();
+                    tasks = result.results || [];
+                } else if (role === 'expert') {
+                    // Expert sees tasks assigned to them
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT t.*, et.status as assignment_status, et.id as assignment_id
+                        FROM tasks t
+                        JOIN expert_tasks et ON et.task_id = t.id
+                        WHERE et.expert_id = ?
+                        ORDER BY t.created_at DESC
+                    `).bind(payload.userId).all();
+                    tasks = result.results || [];
+                }
+
+                return jsonResponse({
+                    success: true,
+                    data: { tasks }
+                });
+            }
+
+            // POST /api/tasks/:id/assign - Assign task to experts
+            if (url.pathname.match(/^\/api\/tasks\/[^\/]+\/assign$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string; role?: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || '';
+                if (role !== 'admin' && role !== 'superadmin') {
+                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can assign tasks" }, 403);
+                }
+
+                const taskId = url.pathname.split('/')[3];
+                const body = await request.json() as any;
+                const { expert_ids } = body;
+
+                if (!expert_ids || !Array.isArray(expert_ids) || expert_ids.length === 0) {
+                    return jsonResponse({ success: false, error: "expert_ids array is required" }, 400);
+                }
+
+                let assignedCount = 0;
+                for (const expertId of expert_ids) {
+                    try {
+                        await env.proveloce_db.prepare(`
+                            INSERT OR IGNORE INTO expert_tasks (id, task_id, expert_id, admin_id, status, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        `).bind(crypto.randomUUID(), taskId, expertId, payload.userId).run();
+                        assignedCount++;
+                    } catch (e) {
+                        console.error("Failed to assign expert:", expertId, e);
+                    }
+                }
+
+                return jsonResponse({
+                    success: true,
+                    message: `Task assigned to ${assignedCount} experts`,
+                    data: { taskId, assignedCount }
+                });
+            }
+
+            // POST /api/expert/tasks/:id/accept - Expert accepts task
+            if (url.pathname.match(/^\/api\/expert\/tasks\/[^\/]+\/accept$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const taskId = url.pathname.split('/')[4];
+
+                await env.proveloce_db.prepare(`
+                    UPDATE expert_tasks SET status = 'ACCEPTED', updated_at = CURRENT_TIMESTAMP
+                    WHERE task_id = ? AND expert_id = ? AND status = 'PENDING'
+                `).bind(taskId, payload.userId).run();
+
+                return jsonResponse({ success: true, message: "Task accepted" });
+            }
+
+            // POST /api/expert/tasks/:id/decline - Expert declines task
+            if (url.pathname.match(/^\/api\/expert\/tasks\/[^\/]+\/decline$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const taskId = url.pathname.split('/')[4];
+
+                await env.proveloce_db.prepare(`
+                    UPDATE expert_tasks SET status = 'DECLINED', updated_at = CURRENT_TIMESTAMP
+                    WHERE task_id = ? AND expert_id = ?
+                `).bind(taskId, payload.userId).run();
+
+                return jsonResponse({ success: true, message: "Task declined" });
+            }
+
+            // POST /api/expert/tasks/:id/complete - Expert marks task complete
+            if (url.pathname.match(/^\/api\/expert\/tasks\/[^\/]+\/complete$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const taskId = url.pathname.split('/')[4];
+
+                await env.proveloce_db.prepare(`
+                    UPDATE expert_tasks SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+                    WHERE task_id = ? AND expert_id = ? AND status IN ('ACCEPTED', 'IN_PROGRESS')
+                `).bind(taskId, payload.userId).run();
+
+                return jsonResponse({ success: true, message: "Task marked as completed" });
+            }
+
+            // GET /api/experts - Get list of experts for assignment (Admin/SuperAdmin)
+            if (url.pathname === "/api/experts" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || '';
+                if (role !== 'admin' && role !== 'superadmin') {
+                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can view experts list" }, 403);
+                }
+
+                // Get query params for filtering
+                const domain = url.searchParams.get('domain');
+                const skill = url.searchParams.get('skill');
+                const verified = url.searchParams.get('verified');
+
+                let query = `
+                    SELECT id, name, email, location, verified, rating, skills, domains, availability
+                    FROM users WHERE role = 'expert'
+                `;
+                const params: any[] = [];
+
+                if (verified === 'true') {
+                    query += ` AND verified = 1`;
+                }
+
+                query += ` ORDER BY rating DESC NULLS LAST, name ASC`;
+
+                const result = await env.proveloce_db.prepare(query).all();
+
+                // Filter by domain/skill in JS (since they're JSON arrays)
+                let experts = (result.results || []) as any[];
+
+                if (domain) {
+                    experts = experts.filter(e => {
+                        try {
+                            const domains = JSON.parse(e.domains || '[]');
+                            return domains.includes(domain);
+                        } catch { return false; }
+                    });
+                }
+
+                if (skill) {
+                    experts = experts.filter(e => {
+                        try {
+                            const skills = JSON.parse(e.skills || '[]');
+                            return skills.includes(skill);
+                        } catch { return false; }
+                    });
+                }
+
+                return jsonResponse({
+                    success: true,
+                    data: { experts }
+                });
+            }
+
+            // =====================================================
             // EXPERT PORTAL APIs
             // =====================================================
 
@@ -2669,6 +2967,221 @@ export default {
                     success: true,
                     data: { notifications: result.results || [] }
                 });
+            }
+
+            // =====================================================
+            // HELPDESK APIs (Role-based ticket routing)
+            // =====================================================
+
+            // POST /api/helpdesk/tickets - Create a new helpdesk ticket
+            if (url.pathname === "/api/helpdesk/tickets" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const sender = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const senderRole = sender?.role || 'customer';
+
+                try {
+                    const body = await request.json() as any;
+                    const { category, priority, subject, message, receiver_role, receiver_id } = body;
+
+                    if (!subject) {
+                        return jsonResponse({ success: false, error: "Subject is required" }, 400);
+                    }
+
+                    // Determine receiver_role based on routing rules
+                    let finalReceiverRole = receiver_role;
+
+                    if (!finalReceiverRole) {
+                        // Auto-route based on sender role
+                        const senderRoleLower = senderRole.toLowerCase();
+                        if (senderRoleLower === 'customer' || senderRoleLower === 'expert') {
+                            finalReceiverRole = 'Admin';
+                        } else if (senderRoleLower === 'admin') {
+                            finalReceiverRole = 'SuperAdmin';
+                        } else if (senderRoleLower === 'superadmin') {
+                            finalReceiverRole = receiver_role || 'Admin'; // SuperAdmin must specify
+                        }
+                    }
+
+                    // Validate routing: check allowed routes
+                    const allowedRoutes: { [key: string]: string[] } = {
+                        'customer': ['Admin', 'SuperAdmin'],
+                        'expert': ['Admin', 'SuperAdmin'],
+                        'admin': ['SuperAdmin'],
+                        'superadmin': ['Admin', 'Expert', 'Customer']
+                    };
+
+                    const senderRoleLower = senderRole.toLowerCase();
+                    const allowed = allowedRoutes[senderRoleLower] || [];
+                    if (!allowed.some(r => r.toLowerCase() === finalReceiverRole?.toLowerCase())) {
+                        return jsonResponse({
+                            success: false,
+                            error: `Cannot send ticket to ${finalReceiverRole}. Allowed: ${allowed.join(', ')}`
+                        }, 400);
+                    }
+
+                    // Only SuperAdmin can target specific receiver_id
+                    let finalReceiverId = null;
+                    if (senderRoleLower === 'superadmin' && receiver_id) {
+                        finalReceiverId = receiver_id;
+                    }
+
+                    const ticketId = crypto.randomUUID();
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO expert_helpdesk (id, sender_id, sender_role, receiver_role, receiver_id, category, priority, subject, message, status, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    `).bind(
+                        ticketId,
+                        payload.userId,
+                        senderRole,
+                        finalReceiverRole,
+                        finalReceiverId,
+                        category || 'Other',
+                        priority || 'MEDIUM',
+                        subject,
+                        message || null
+                    ).run();
+
+                    return jsonResponse({
+                        success: true,
+                        message: `Ticket sent to ${finalReceiverRole}`,
+                        data: { ticketId }
+                    });
+                } catch (error: any) {
+                    console.error("Ticket creation error:", error);
+                    return jsonResponse({ success: false, error: error.message || "Failed to create ticket" }, 500);
+                }
+            }
+
+            // GET /api/helpdesk/tickets - Get tickets (role-filtered)
+            if (url.pathname === "/api/helpdesk/tickets" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || 'customer';
+                let tickets: any[] = [];
+
+                if (role === 'superadmin') {
+                    // SuperAdmin sees ALL tickets
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT h.*, 
+                            s.name as sender_name, s.email as sender_email,
+                            r.name as receiver_name, r.email as receiver_email
+                        FROM expert_helpdesk h
+                        LEFT JOIN users s ON h.sender_id = s.id
+                        LEFT JOIN users r ON h.receiver_id = r.id
+                        ORDER BY h.created_at DESC
+                    `).all();
+                    tickets = result.results || [];
+                } else if (role === 'admin') {
+                    // Admin sees:
+                    // - Tickets from Customers/Experts to Admin role
+                    // - Their own sent tickets
+                    // - Tickets where they are the specific receiver
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT h.*, 
+                            s.name as sender_name, s.email as sender_email,
+                            r.name as receiver_name, r.email as receiver_email
+                        FROM expert_helpdesk h
+                        LEFT JOIN users s ON h.sender_id = s.id
+                        LEFT JOIN users r ON h.receiver_id = r.id
+                        WHERE (h.sender_role IN ('Customer', 'Expert') AND h.receiver_role = 'Admin')
+                           OR (h.sender_id = ?)
+                           OR (h.receiver_id = ?)
+                        ORDER BY h.created_at DESC
+                    `).bind(payload.userId, payload.userId).all();
+                    tickets = result.results || [];
+                } else {
+                    // Expert/Customer: only see tickets they sent or received
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT h.*, 
+                            s.name as sender_name, s.email as sender_email,
+                            r.name as receiver_name, r.email as receiver_email
+                        FROM expert_helpdesk h
+                        LEFT JOIN users s ON h.sender_id = s.id
+                        LEFT JOIN users r ON h.receiver_id = r.id
+                        WHERE h.sender_id = ? OR h.receiver_id = ?
+                        ORDER BY h.created_at DESC
+                    `).bind(payload.userId, payload.userId).all();
+                    tickets = result.results || [];
+                }
+
+                return jsonResponse({
+                    success: true,
+                    data: { tickets }
+                });
+            }
+
+            // PATCH /api/helpdesk/tickets/:id/status - Update ticket status
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/status$/) && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const ticketId = url.pathname.split('/')[4];
+                const body = await request.json() as any;
+                const { status } = body;
+
+                const validStatuses = ['OPEN', 'IN_REVIEW', 'RESOLVED', 'CLOSED'];
+                if (!status || !validStatuses.includes(status)) {
+                    return jsonResponse({
+                        success: false,
+                        error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+                    }, 400);
+                }
+
+                // Get user role
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const role = user?.role?.toLowerCase() || '';
+
+                // Get ticket to check permissions
+                const ticket = await env.proveloce_db.prepare(
+                    "SELECT * FROM expert_helpdesk WHERE id = ?"
+                ).bind(ticketId).first() as any;
+
+                if (!ticket) {
+                    return jsonResponse({ success: false, error: "Ticket not found" }, 404);
+                }
+
+                // Check permission: SuperAdmin can update any, others only if sender or receiver
+                const canUpdate = role === 'superadmin' ||
+                    ticket.sender_id === payload.userId ||
+                    ticket.receiver_id === payload.userId ||
+                    (role === 'admin' && ticket.receiver_role === 'Admin');
+
+                if (!canUpdate) {
+                    return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
+                }
+
+                await env.proveloce_db.prepare(`
+                    UPDATE expert_helpdesk SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).bind(status, ticketId).run();
+
+                return jsonResponse({ success: true, message: "Ticket status updated" });
             }
 
             // =====================================================

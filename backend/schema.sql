@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
   email_verified INTEGER DEFAULT 0,
   avatar_data TEXT,
   avatar_mime_type TEXT,
+  -- Expert profile fields
+  location TEXT,
+  verified INTEGER DEFAULT 0,
+  rating REAL,
+  skills TEXT,                 -- JSON array: ["React","MongoDB","Billing",...]
+  domains TEXT,                -- JSON array: ["Billing","Infra","Security",...]
+  availability TEXT,           -- JSON object: {status:"Available", slots:[...]}
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -97,16 +104,33 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  domain TEXT,
   attachments TEXT,
   deadline TIMESTAMP,
-  status TEXT DEFAULT 'pending',
-  priority TEXT DEFAULT 'medium',
-  assigned_to_id TEXT,
+  price_budget REAL,
+  status TEXT DEFAULT 'PENDING',       -- PENDING/IN_PROGRESS/COMPLETED/CANCELLED
+  priority TEXT DEFAULT 'MEDIUM',      -- LOW/MEDIUM/HIGH
+  admin_id TEXT,                       -- Admin who created the task
   created_by_id TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (assigned_to_id) REFERENCES users(id),
+  FOREIGN KEY (admin_id) REFERENCES users(id),
   FOREIGN KEY (created_by_id) REFERENCES users(id)
+);
+
+-- EXPERT TASK ASSIGNMENTS (many-to-many: one task can be assigned to multiple experts)
+CREATE TABLE IF NOT EXISTS expert_tasks (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  expert_id TEXT NOT NULL,
+  admin_id TEXT,
+  status TEXT DEFAULT 'PENDING',       -- PENDING/VIEWED/ACCEPTED/DECLINED/IN_PROGRESS/COMPLETED/PAYMENT_DUE/PAID
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (admin_id) REFERENCES users(id),
+  UNIQUE(task_id, expert_id)
 );
 
 -- TASK SUBMISSIONS BY EXPERTS
@@ -122,7 +146,7 @@ CREATE TABLE IF NOT EXISTS task_submissions (
   FOREIGN KEY (expert_id) REFERENCES users(id)
 );
 
--- SUPPORT TICKETS
+-- SUPPORT TICKETS (legacy - kept for backward compatibility)
 CREATE TABLE IF NOT EXISTS tickets (
   id TEXT PRIMARY KEY,
   user_id TEXT,
@@ -138,6 +162,37 @@ CREATE TABLE IF NOT EXISTS tickets (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (assigned_to_id) REFERENCES users(id)
+);
+
+-- EXPERT HELPDESK (new role-based ticket routing system)
+CREATE TABLE IF NOT EXISTS expert_helpdesk (
+  id TEXT PRIMARY KEY,
+  sender_id TEXT NOT NULL,
+  sender_role TEXT NOT NULL,           -- SuperAdmin/Admin/Expert/Customer
+  receiver_role TEXT NOT NULL,         -- SuperAdmin/Admin/Expert/Customer
+  receiver_id TEXT,                    -- NULL for role queue, specific user ID for targeted
+  category TEXT DEFAULT 'Other',       -- Billing/Task/Account/Technical/Other
+  priority TEXT DEFAULT 'MEDIUM',      -- LOW/MEDIUM/HIGH
+  subject TEXT NOT NULL,
+  message TEXT,
+  status TEXT DEFAULT 'OPEN',          -- OPEN/IN_REVIEW/RESOLVED/CLOSED
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- PAYMENTS (tracks payments for expert work)
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  task_id TEXT,
+  expert_id TEXT NOT NULL,
+  amount REAL NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'INITIATED',     -- INITIATED/HOLD/RELEASED/FAILED
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- NOTIFICATIONS
@@ -246,11 +301,33 @@ CREATE TABLE IF NOT EXISTS expert_earnings (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to_id);
+CREATE INDEX IF NOT EXISTS idx_users_verified ON users(verified);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_admin ON tasks(admin_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_certifications_expert ON expert_certifications(expert_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_expert ON expert_portfolio(expert_id);
 CREATE INDEX IF NOT EXISTS idx_earnings_expert ON expert_earnings(expert_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
+
+-- Expert tasks visibility indexes
+CREATE INDEX IF NOT EXISTS idx_expert_tasks_expert ON expert_tasks(expert_id);
+CREATE INDEX IF NOT EXISTS idx_expert_tasks_task ON expert_tasks(task_id);
+CREATE INDEX IF NOT EXISTS idx_expert_tasks_admin ON expert_tasks(admin_id);
+CREATE INDEX IF NOT EXISTS idx_expert_tasks_status ON expert_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_expert_tasks_visibility ON expert_tasks(expert_id, admin_id, task_id);
+
+-- Expert helpdesk visibility indexes
+CREATE INDEX IF NOT EXISTS idx_helpdesk_sender ON expert_helpdesk(sender_id);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver ON expert_helpdesk(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_sender_role ON expert_helpdesk(sender_role);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver_role ON expert_helpdesk(receiver_role);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_status ON expert_helpdesk(status);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_visibility ON expert_helpdesk(sender_id, receiver_id, sender_role, receiver_role);
+
+-- Payments indexes
+CREATE INDEX IF NOT EXISTS idx_payments_expert ON payments(expert_id);
+CREATE INDEX IF NOT EXISTS idx_payments_task ON payments(task_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
