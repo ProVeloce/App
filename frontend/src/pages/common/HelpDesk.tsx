@@ -48,7 +48,11 @@ const HelpDesk: React.FC = () => {
             formData.append('attachment', data.attachment);
         }
         const response = await ticketApi.createTicket(formData);
+        console.log('[HelpDesk] Ticket creation response:', response.data);
         const ticketId = response.data?.data?.ticketId || 'UNKNOWN';
+        if (ticketId === 'UNKNOWN') {
+            console.error('[HelpDesk] Ticket ID missing in response:', response.data);
+        }
         success('Ticket submitted successfully');
         fetchTickets();
         return { ticketId };

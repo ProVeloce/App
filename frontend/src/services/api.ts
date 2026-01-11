@@ -363,18 +363,18 @@ export const taskApi = {
 // Ticket API
 export const ticketApi = {
     createTicket: (data: FormData) =>
-        api.post<ApiResponse>('/tickets', data, {
+        api.post<ApiResponse>('/helpdesk/tickets', data, {
             headers: { 'Content-Type': 'multipart/form-data' },
         }),
 
     getMyTickets: (params?: Record<string, any>) =>
-        api.get<ApiResponse>('/tickets/my-tickets', { params }),
+        api.get<ApiResponse>('/helpdesk/tickets', { params }),
 
     getAllTickets: (params?: Record<string, any>) =>
-        api.get<ApiResponse>('/tickets', { params }),
+        api.get<ApiResponse>('/helpdesk/tickets', { params }),
 
     getTicketById: (id: string) =>
-        api.get<ApiResponse>(`/tickets/${id}`),
+        api.get<ApiResponse>(`/helpdesk/tickets/${id}`),
 
     addMessage: (id: string, data: FormData) =>
         api.post<ApiResponse>(`/tickets/${id}/messages`, data, {
