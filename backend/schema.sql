@@ -179,6 +179,53 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- EXPERT CERTIFICATIONS (stored in R2: expertdetails)
+CREATE TABLE IF NOT EXISTS expert_certifications (
+  id TEXT PRIMARY KEY,
+  expert_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  issuer TEXT NOT NULL,
+  credential_id TEXT,
+  credential_url TEXT,
+  issue_date TEXT NOT NULL,
+  expiry_date TEXT,
+  file_name TEXT,
+  r2_object_key TEXT,
+  file_url TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- EXPERT PORTFOLIO (stored in R2: expertdetails)
+CREATE TABLE IF NOT EXISTS expert_portfolio (
+  id TEXT PRIMARY KEY,
+  expert_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  skills TEXT,
+  project_url TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- EXPERT PORTFOLIO FILES (linked to portfolio items)
+CREATE TABLE IF NOT EXISTS expert_portfolio_files (
+  id TEXT PRIMARY KEY,
+  portfolio_id TEXT NOT NULL,
+  expert_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT,
+  file_size INTEGER,
+  r2_object_key TEXT NOT NULL,
+  file_url TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (portfolio_id) REFERENCES expert_portfolio(id) ON DELETE CASCADE,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
