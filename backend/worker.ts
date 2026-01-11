@@ -3026,28 +3026,51 @@ export default {
                         description = body.description || '';
                     }
 
-                    // Validation
+                    // Validation - Enhanced per workflow spec
+                    const validCategories = ['Billing', 'Tasks', 'Payments', 'Technical', 'Account', 'Other'];
+                    const validPriorities = ['Low', 'Medium', 'High'];
                     const missingFields: string[] = [];
-                    if (!category) missingFields.push('category');
-                    if (!priority) missingFields.push('priority');
-                    if (!subject?.trim()) missingFields.push('subject');
-                    if (!description?.trim()) missingFields.push('description');
+                    const validationErrors: string[] = [];
+
+                    if (!category) {
+                        missingFields.push('category');
+                    } else if (!validCategories.includes(category)) {
+                        validationErrors.push(`Category must be one of: ${validCategories.join(', ')}`);
+                    }
+
+                    if (!priority) {
+                        missingFields.push('priority');
+                    } else if (!validPriorities.includes(priority)) {
+                        validationErrors.push(`Priority must be one of: ${validPriorities.join(', ')}`);
+                    }
+
+                    if (!subject?.trim()) {
+                        missingFields.push('subject');
+                    } else if (subject.length > 180) {
+                        validationErrors.push('Subject must be 180 characters or less');
+                    }
+
+                    if (!description?.trim()) {
+                        missingFields.push('description');
+                    } else if (description.trim().length < 20) {
+                        validationErrors.push('Description must be at least 20 characters');
+                    }
 
                     if (missingFields.length > 0) {
                         return jsonResponse({
                             success: false,
                             error: "VALIDATION_ERROR",
-                            message: "Missing or invalid fields",
+                            message: "Missing required fields",
                             fields: missingFields
                         }, 400);
                     }
 
-                    if (subject.length > 180) {
+                    if (validationErrors.length > 0) {
                         return jsonResponse({
                             success: false,
                             error: "VALIDATION_ERROR",
-                            message: "Subject must be 180 characters or less",
-                            fields: ['subject']
+                            message: validationErrors.join('; '),
+                            fields: validationErrors
                         }, 400);
                     }
 
