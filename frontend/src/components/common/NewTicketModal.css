@@ -169,6 +169,13 @@
     margin-top: 8px;
 }
 
+.ntm-error-message {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--ntm-error);
+    margin-top: 8px;
+}
+
 .ntm-continue-btn {
     width: 100%;
     padding: 14px 24px;

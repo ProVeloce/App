@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     X, Headphones, CreditCard, ClipboardList, DollarSign,
-    Cpu, UserCircle, MoreHorizontal, Loader2, CheckCircle, AlertTriangle, Paperclip, Copy, Check, PartyPopper
+    Cpu, UserCircle, MoreHorizontal, Loader2, CheckCircle, AlertTriangle, Paperclip, Copy, Check
 } from 'lucide-react';
 import './NewTicketModal.css';
 
@@ -183,26 +183,31 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         >
             {/* Success Popup */}
             {showSuccessPopup && (
-                <div className="ntm-success-popup" onClick={(e) => e.stopPropagation()}>
+                <div className="ntm-success-popup" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ticket Confirmation">
                     <div className="ntm-success-icon">
-                        <PartyPopper size={48} />
+                        <CheckCircle size={48} />
                     </div>
-                    <h2>🎉 Ticket Created Successfully</h2>
+                    <h2>Ticket Created Successfully</h2>
                     <p>Your support ticket has been registered.</p>
 
                     <div className="ntm-ticket-id-box">
-                        <label>Ticket ID</label>
+                        <label>TICKET ID</label>
                         <div className="ntm-ticket-id-value">
-                            <code>{createdTicketId}</code>
-                            <button
-                                className="ntm-copy-btn"
-                                onClick={handleCopyTicketId}
-                                aria-label={copied ? 'Copied!' : 'Copy ticket ID'}
-                            >
-                                {copied ? <Check size={18} /> : <Copy size={18} />}
-                            </button>
+                            <code>{createdTicketId || 'PV-TKT-UNKNOWN'}</code>
+                            {createdTicketId && createdTicketId !== 'UNKNOWN' && (
+                                <button
+                                    className="ntm-copy-btn"
+                                    onClick={handleCopyTicketId}
+                                    aria-label={copied ? 'Copied!' : 'Copy ticket ID'}
+                                >
+                                    {copied ? <Check size={18} /> : <Copy size={18} />}
+                                </button>
+                            )}
                         </div>
                         {copied && <span className="ntm-copied-message">Copied to clipboard!</span>}
+                        {(!createdTicketId || createdTicketId === 'UNKNOWN') && (
+                            <span className="ntm-error-message">Ticket ID unavailable</span>
+                        )}
                     </div>
 
                     <button className="ntm-btn ntm-btn-primary ntm-continue-btn" onClick={handleContinue}>
@@ -449,8 +454,9 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 

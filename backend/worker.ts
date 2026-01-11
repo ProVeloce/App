@@ -2998,9 +2998,33 @@ export default {
                     }, 403);
                 }
 
+
                 try {
-                    const body = await request.json() as any;
-                    const { category, priority, subject, description } = body;
+                    // Parse request - support both JSON and FormData
+                    let category: string = '';
+                    let priority: string = '';
+                    let subject: string = '';
+                    let description: string = '';
+                    let attachmentFile: File | null = null;
+
+                    const contentType = request.headers.get('Content-Type') || '';
+                    if (contentType.includes('multipart/form-data')) {
+                        const formData = await request.formData();
+                        category = formData.get('category') as string || '';
+                        priority = formData.get('priority') as string || '';
+                        subject = formData.get('subject') as string || '';
+                        description = formData.get('description') as string || '';
+                        const file = formData.get('attachment');
+                        if (file && file instanceof File && file.size > 0) {
+                            attachmentFile = file;
+                        }
+                    } else {
+                        const body = await request.json() as any;
+                        category = body.category || '';
+                        priority = body.priority || '';
+                        subject = body.subject || '';
+                        description = body.description || '';
+                    }
 
                     // Validation
                     const missingFields: string[] = [];
@@ -3042,8 +3066,6 @@ export default {
                     const contactPhone = sender?.phone || null;
 
                     // Determine routing based on role
-                    // Admin -> SuperAdmin only
-                    // Expert/Customer -> Admin queue (SuperAdmin also sees via visibility)
                     const receiverRole = senderRoleLower === 'admin' ? 'SuperAdmin' : 'Admin';
 
                     const ticketId = crypto.randomUUID();
@@ -3064,7 +3086,7 @@ export default {
                         senderRole,
                         senderRole,
                         receiverRole,
-                        null, // receiver_id is null for queue routing
+                        null,
                         category,
                         priority,
                         subject,
@@ -3073,6 +3095,36 @@ export default {
                         contactEmail,
                         contactPhone
                     ).run();
+
+                    // Handle file attachment
+                    let attachmentInfo: { id: string; fileName: string; filePath: string } | null = null;
+                    if (attachmentFile && env.OTHERS) {
+                        const fileId = crypto.randomUUID();
+                        const fileExt = attachmentFile.name.split('.').pop() || 'bin';
+                        const filePath = `helpdesk/${ticketId}/${fileId}.${fileExt}`;
+
+                        // Upload to R2 bucket "others"
+                        await env.OTHERS.put(filePath, attachmentFile.stream(), {
+                            httpMetadata: {
+                                contentType: attachmentFile.type || 'application/octet-stream'
+                            }
+                        });
+
+                        // Insert attachment metadata
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, mime_type, uploaded_at)
+                            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        `).bind(
+                            fileId,
+                            ticketId,
+                            attachmentFile.name,
+                            filePath,
+                            attachmentFile.size,
+                            attachmentFile.type || 'application/octet-stream'
+                        ).run();
+
+                        attachmentInfo = { id: fileId, fileName: attachmentFile.name, filePath };
+                    }
 
                     // Insert ticket_event for CREATED
                     const eventId = crypto.randomUUID();
@@ -3085,13 +3137,16 @@ export default {
                         ticketNumber,
                         payload.userId,
                         senderRole,
-                        JSON.stringify({ category, priority, subject })
+                        JSON.stringify({ category, priority, subject, hasAttachment: !!attachmentFile })
                     ).run();
 
                     return jsonResponse({
                         success: true,
                         message: `Ticket created successfully`,
-                        data: { ticketId: ticketNumber }
+                        data: {
+                            ticketId: ticketNumber,
+                            attachment: attachmentInfo
+                        }
                     });
                 } catch (error: any) {
                     console.error("Ticket creation error:", error);
