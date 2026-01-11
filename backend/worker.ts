@@ -3128,7 +3128,7 @@ export default {
                     if (attachmentFile && env.others) {
                         const fileId = crypto.randomUUID();
                         const fileExt = attachmentFile.name.split('.').pop() || 'bin';
-                        const filePath = `helpdesk/${ticketId}/${fileId}.${fileExt}`;
+                        const filePath = `helpdesk/${ticketNumber}/${fileId}.${fileExt}`;
 
                         // Upload to R2 bucket "others"
                         await env.others.put(filePath, attachmentFile.stream(), {
@@ -3137,41 +3137,14 @@ export default {
                             }
                         });
 
-                        // Insert attachment metadata
-                        await env.proveloce_db.prepare(`
-                            INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, mime_type, uploaded_at)
-                            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                        `).bind(
-                            fileId,
-                            ticketId,
-                            attachmentFile.name,
-                            filePath,
-                            attachmentFile.size,
-                            attachmentFile.type || 'application/octet-stream'
-                        ).run();
-
                         attachmentInfo = { id: fileId, fileName: attachmentFile.name, filePath };
                     }
-
-                    // Insert ticket_event for CREATED
-                    const eventId = crypto.randomUUID();
-                    await env.proveloce_db.prepare(`
-                        INSERT INTO ticket_events (id, ticket_id, ticket_number, actor_user_id, actor_role, event_type, new_status, payload, created_at)
-                        VALUES (?, ?, ?, ?, ?, 'CREATED', 'PENDING', ?, CURRENT_TIMESTAMP)
-                    `).bind(
-                        eventId,
-                        ticketId,
-                        ticketNumber,
-                        payload.userId,
-                        senderRole,
-                        JSON.stringify({ category, priority, subject, hasAttachment: !!attachmentFile })
-                    ).run();
 
                     return jsonResponse({
                         success: true,
                         message: `Ticket created successfully`,
                         data: {
-                            ticketId: ticketNumber,
+                            ticketNumber: ticketNumber,
                             attachment: attachmentInfo
                         }
                     });

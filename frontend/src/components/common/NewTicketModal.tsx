@@ -8,7 +8,7 @@ import './NewTicketModal.css';
 interface NewTicketModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (data: TicketFormData) => Promise<{ ticketId: string }>;
+    onSubmit: (data: TicketFormData) => Promise<{ ticketNumber: string }>;
 }
 
 interface TicketFormData {
@@ -51,7 +51,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
 
     // Success popup state
     const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-    const [createdTicketId, setCreatedTicketId] = useState('');
+    const [createdTicketNumber, setCreatedTicketNumber] = useState('');
     const [copied, setCopied] = useState(false);
 
     const modalRef = useRef<HTMLDivElement>(null);
@@ -81,7 +81,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         if (showSuccessPopup) {
             // Close success popup and modal together
             setShowSuccessPopup(false);
-            setCreatedTicketId('');
+            setCreatedTicketNumber('');
         }
         setIsClosing(true);
         setTimeout(() => {
@@ -97,7 +97,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         setTouched({});
         setErrorMessage('');
         setShowSuccessPopup(false);
-        setCreatedTicketId('');
+        setCreatedTicketNumber('');
         setCopied(false);
     };
 
@@ -131,7 +131,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         try {
             const result = await onSubmit(formData);
             // Show success popup with ticket ID
-            setCreatedTicketId(result.ticketId);
+            setCreatedTicketNumber(result.ticketNumber);
             setShowSuccessPopup(true);
         } catch (err) {
             setErrorMessage("We couldn't create your ticket. Please try again.");
@@ -140,9 +140,9 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         }
     };
 
-    const handleCopyTicketId = async () => {
+    const handleCopyTicketNumber = async () => {
         try {
-            await navigator.clipboard.writeText(createdTicketId);
+            await navigator.clipboard.writeText(createdTicketNumber);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
@@ -191,22 +191,22 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
                     <p>Your support ticket has been registered.</p>
 
                     <div className="ntm-ticket-id-box">
-                        <label>TICKET ID</label>
+                        <label>TICKET NUMBER</label>
                         <div className="ntm-ticket-id-value">
-                            <code>{createdTicketId || 'PV-TKT-UNKNOWN'}</code>
-                            {createdTicketId && createdTicketId !== 'UNKNOWN' && (
+                            <code>{createdTicketNumber || 'TICKET-UNKNOWN'}</code>
+                            {createdTicketNumber && createdTicketNumber !== 'UNKNOWN' && (
                                 <button
                                     className="ntm-copy-btn"
-                                    onClick={handleCopyTicketId}
-                                    aria-label={copied ? 'Copied!' : 'Copy ticket ID'}
+                                    onClick={handleCopyTicketNumber}
+                                    aria-label={copied ? 'Copied!' : 'Copy ticket number'}
                                 >
                                     {copied ? <Check size={18} /> : <Copy size={18} />}
                                 </button>
                             )}
                         </div>
                         {copied && <span className="ntm-copied-message">Copied to clipboard!</span>}
-                        {(!createdTicketId || createdTicketId === 'UNKNOWN') && (
-                            <span className="ntm-error-message">Ticket ID unavailable</span>
+                        {(!createdTicketNumber || createdTicketNumber === 'UNKNOWN') && (
+                            <span className="ntm-error-message">Ticket Number unavailable</span>
                         )}
                     </div>
 

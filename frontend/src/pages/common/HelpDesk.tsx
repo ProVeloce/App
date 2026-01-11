@@ -38,7 +38,7 @@ const HelpDesk: React.FC = () => {
         }, 300);
     };
 
-    const handleCreateTicket = async (data: { category: string; priority: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketId: string }> => {
+    const handleCreateTicket = async (data: { category: string; priority: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketNumber: string }> => {
         const formData = new FormData();
         formData.append('category', data.category);
         formData.append('priority', data.priority);
@@ -49,13 +49,16 @@ const HelpDesk: React.FC = () => {
         }
         const response = await ticketApi.createTicket(formData);
         console.log('[HelpDesk] Ticket creation response:', response.data);
-        const ticketId = response.data?.data?.ticketId || 'UNKNOWN';
-        if (ticketId === 'UNKNOWN') {
-            console.error('[HelpDesk] Ticket ID missing in response:', response.data);
+
+        // Backend returns ticketNumber inside the data object
+        const ticketNumber = response.data?.data?.ticketNumber || 'UNKNOWN';
+        if (ticketNumber === 'UNKNOWN') {
+            console.error('[HelpDesk] Ticket Number missing in response:', response.data);
         }
+
         success('Ticket submitted successfully');
         fetchTickets();
-        return { ticketId };
+        return { ticketNumber };
     };
 
     const handleViewTicket = async (ticket: Ticket) => {
