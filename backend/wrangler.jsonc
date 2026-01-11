@@ -39,6 +39,11 @@
 			"bucket_name": "expertapplications",
 			"binding": "expertapplications",
 			"remote": true
+		},
+		{
+			"bucket_name": "others",
+			"binding": "others",
+			"remote": true
 		}
 	]
 }
