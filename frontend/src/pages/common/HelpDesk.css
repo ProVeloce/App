@@ -9,25 +9,46 @@
     margin-bottom: var(--space-6);
 }
 
-.header-left h1 {
+.header-left .helpdesk-title {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: var(--space-1);
+    gap: var(--space-2);
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: 1.2;
 }
 
-.header-left p {
+.title-icon {
+    color: var(--primary-600);
+    margin-right: var(--space-1);
+}
+
+.title-main {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.title-separator {
+    color: var(--text-muted);
+    font-weight: 400;
+    opacity: 0.5;
+    margin: 0 2px;
+}
+
+.title-sub {
+    font-weight: 400;
     color: var(--text-secondary);
+    opacity: 0.7;
+    font-size: 0.938rem;
 }
 
 .tickets-container {
     background: var(--bg-primary);
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-light);
-    min-height: 400px;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
 }
 
 .tickets-list {
@@ -283,12 +304,51 @@
     color: var(--text-secondary);
 }
 
-.no-messages {
+/* Empty State - Perfect Center Alignment */
+.empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
-    padding: var(--space-8);
-    color: var(--text-muted);
+    padding: var(--space-12) var(--space-6);
+    animation: fadeIn 0.4s ease-out;
 }
 
+.empty-icon {
+    color: var(--primary-200);
+    margin-bottom: var(--space-4);
+}
+
+.empty-state h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    font-size: 0.938rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.empty-cta {
+    margin-top: 16px;
+    box-shadow: 0 4px 12px rgba(var(--primary-600-rgb, 79, 70, 229), 0.2);
+}
+
+.loading-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Ticket Detail & Status Styles */
 .ticket-status-badge {
     padding: 4px 12px;
     border-radius: var(--radius-full);
@@ -309,4 +369,11 @@
 .ticket-status-badge.resolved {
     background: var(--success-50);
     color: var(--success-600);
+}
+
+.no-messages {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--text-muted);
+    font-size: 0.875rem;
 }

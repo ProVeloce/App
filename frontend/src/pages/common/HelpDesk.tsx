@@ -105,8 +105,14 @@ const HelpDesk: React.FC = () => {
         <div className="helpdesk-page">
             <div className="page-header">
                 <div className="header-left">
-                    <h1><HelpCircle size={24} /> Help Desk</h1>
-                    <p>{canCreateTicket ? 'Get support from our team' : 'View and manage support tickets'}</p>
+                    <h1 className="helpdesk-title">
+                        <HelpCircle size={24} className="title-icon" />
+                        <span className="title-main">Help Desk</span>
+                        <span className="title-separator">·</span>
+                        <span className="title-sub">
+                            {canCreateTicket ? 'Get support from our team' : 'View and manage support tickets'}
+                        </span>
+                    </h1>
                 </div>
                 {canCreateTicket && (
                     <button className="btn btn-primary" onClick={() => setShowNewTicket(true)}>
@@ -120,9 +126,14 @@ const HelpDesk: React.FC = () => {
                     <div className="loading-state"><div className="loading-spinner" /></div>
                 ) : tickets.length === 0 ? (
                     <div className="empty-state">
-                        <MessageCircle size={48} />
-                        <h3>No tickets yet</h3>
+                        <MessageCircle size={48} className="empty-icon" />
+                        <h2>No tickets yet</h2>
                         <p>Create a ticket to get support from our team</p>
+                        {canCreateTicket && (
+                            <button className="btn btn-primary empty-cta" onClick={() => setShowNewTicket(true)}>
+                                Create Ticket
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="tickets-list">
