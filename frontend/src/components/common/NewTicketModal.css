@@ -1,21 +1,22 @@
 /* =====================================================
-   New Ticket Modal - Premium Design
-   ProVeloce Connect UI System v1.0
+   New Ticket Modal - Premium Design (Light Theme)
+   ProVeloce Connect UI System v1.1
    ===================================================== */
 
-/* CSS Variables */
+/* CSS Variables - Light Theme */
 :root {
     --ntm-primary: #3B82F6;
-    --ntm-surface: #0B1220;
-    --ntm-card: rgba(18, 24, 38, 0.95);
-    --ntm-text: #E5E7EB;
-    --ntm-subtle: #9CA3AF;
+    --ntm-surface: #F8FAFC;
+    --ntm-card: #FFFFFF;
+    --ntm-text: #1F2937;
+    --ntm-subtle: #6B7280;
     --ntm-success: #22C55E;
     --ntm-error: #EF4444;
     --ntm-warning: #F59E0B;
-    --ntm-gray: #6B7280;
-    --ntm-border: rgba(255, 255, 255, 0.08);
+    --ntm-gray: #9CA3AF;
+    --ntm-border: rgba(0, 0, 0, 0.1);
     --ntm-focus-ring: rgba(59, 130, 246, 0.35);
+    --ntm-input-bg: #F9FAFB;
 }
 
 /* Overlay with glass blur */
@@ -27,9 +28,9 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     animation: ntm-overlay-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -66,7 +67,7 @@
     text-align: center;
     max-width: 420px;
     width: 90%;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15);
     animation: ntm-popup-in 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -145,7 +146,7 @@
     width: 36px;
     height: 36px;
     border: none;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.05);
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -186,7 +187,7 @@
     background: var(--ntm-card);
     border: 1px solid var(--ntm-border);
     border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
     animation: ntm-modal-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -279,7 +280,7 @@
 }
 
 .ntm-close-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.05);
     color: var(--ntm-text);
 }
 
@@ -362,7 +363,7 @@
     padding: 14px 16px;
     font-size: 0.875rem;
     color: var(--ntm-text);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--ntm-input-bg);
     border: 1px solid var(--ntm-border);
     border-radius: 12px;
     outline: none;
@@ -416,11 +417,10 @@
     color: var(--ntm-error);
 }
 
-/* Category Dropdown */
 .ntm-category-dropdown {
     position: relative;
     padding: 14px 16px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--ntm-input-bg);
     border: 1px solid var(--ntm-border);
     border-radius: 12px;
     cursor: pointer;
@@ -431,7 +431,7 @@
 }
 
 .ntm-category-dropdown:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: #F3F4F6;
 }
 
 .ntm-category-dropdown:focus {
@@ -479,7 +479,7 @@
     background: var(--ntm-card);
     border: 1px solid var(--ntm-border);
     border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
     z-index: 100;
     padding: 6px;
     animation: ntm-dropdown-in 150ms ease-out;
@@ -510,7 +510,7 @@
 }
 
 .ntm-category-option:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .ntm-category-option.selected {
@@ -541,13 +541,13 @@
 }
 
 .ntm-priority-pill:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .ntm-priority-pill.selected {
     background: rgba(var(--pill-color-rgb, 107, 114, 128), 0.15);
     border-color: var(--pill-color);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
 .ntm-priority-pill:focus {
@@ -573,7 +573,7 @@
     align-items: center;
     gap: 12px;
     padding: 14px 16px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--ntm-input-bg);
     border: 1px dashed var(--ntm-border);
     border-radius: 12px;
     font-size: 0.875rem;
@@ -583,7 +583,7 @@
 }
 
 .ntm-file-label:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: #F3F4F6;
     border-color: var(--ntm-primary);
 }
 
@@ -595,7 +595,7 @@
     width: 28px;
     height: 28px;
     border: none;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.05);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -654,7 +654,7 @@
 }
 
 .ntm-btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.05);
 }
 
 .ntm-btn-primary {
