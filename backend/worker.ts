@@ -3074,44 +3074,50 @@ export default {
                         }, 400);
                     }
 
-                    // Generate unique ticket number: PV-TKT-YYYYMMDD-XXXXXX
+                    // Generate unique ticket number: TICKET-YYYYMMDD-XXXXXX
                     const now = new Date();
                     const yyyy = now.getUTCFullYear();
                     const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
                     const dd = String(now.getUTCDate()).padStart(2, '0');
                     const datePart = `${yyyy}${mm}${dd}`;
                     const randomSix = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-                    const ticketNumber = `PV-TKT-${datePart}-${randomSix}`;
+                    const ticketNumber = `TICKET-${datePart}-${randomSix}`;
+
+                    // Sanitize inputs
+                    const sanitizedSubject = subject.trim();
+                    const sanitizedDescription = description.trim();
+
+                    // Role-based routing per enterprise spec
+                    // Customer/Expert -> Admin
+                    // Admin -> SuperAdmin
+                    const createdByRole = senderRole.toUpperCase();
+                    let assignedToRole = 'ADMIN';
+                    if (createdByRole === 'ADMIN') {
+                        assignedToRole = 'SUPERADMIN';
+                    }
 
                     // Contact snapshot from sender
                     const contactName = sender?.name || 'Unknown';
                     const contactEmail = sender?.email || '';
                     const contactPhone = sender?.phone || null;
 
-                    // Determine status mapping (open = PENDING equivalent)
-                    const ticketStatus = 'open';
-
-                    const ticketId = crypto.randomUUID();
-
-                    // Insert into unified tickets table
+                    // Insert into tickets table with enterprise schema
                     await env.proveloce_db.prepare(`
                         INSERT INTO tickets (
-                            ticket_number, title, description, created_by, role,
-                            status, priority, category, assigned_to,
-                            contact_name, contact_email, contact_phone,
-                            created_at, updated_at
+                            ticket_number, created_by_user_id, created_by_role, assigned_to_role,
+                            category, priority, subject, description, status,
+                            contact_name, contact_email, contact_phone
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?, ?)
                     `).bind(
                         ticketNumber,
-                        subject,
-                        description,
                         payload.userId,
-                        senderRoleLower,
-                        ticketStatus,
-                        priority.toLowerCase(),
+                        createdByRole,
+                        assignedToRole,
                         category,
-                        null, // assigned_to
+                        priority.toUpperCase(),
+                        sanitizedSubject,
+                        sanitizedDescription,
                         contactName,
                         contactEmail,
                         contactPhone
@@ -3188,26 +3194,36 @@ export default {
                     "SELECT role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
-                const role = user?.role?.toLowerCase() || 'user';
+                const role = user?.role?.toUpperCase() || 'CUSTOMER';
                 let tickets: any[] = [];
 
-                if (role === 'superadmin' || role === 'admin') {
-                    // Admin and SuperAdmin see ALL tickets
+                if (role === 'SUPERADMIN') {
+                    // SuperAdmin sees ALL tickets
                     const result = await env.proveloce_db.prepare(`
-                        SELECT id, ticket_number, title, description, created_by, role,
-                            status, priority, category, assigned_to,
-                            contact_name, contact_email, contact_phone,
-                            created_at, updated_at
+                        SELECT id, ticket_number, subject, description, created_by_user_id, created_by_role,
+                            assigned_to_role, status, priority, category,
+                            contact_name, contact_email, contact_phone, created_at
                         FROM tickets
                         ORDER BY created_at DESC
                     `).all();
                     tickets = result.results || [];
-                } else {
-                    // User/Expert: only see their own tickets
+                } else if (role === 'ADMIN') {
+                    // Admin sees tickets assigned to ADMIN (not other admin-created tickets)
                     const result = await env.proveloce_db.prepare(`
-                        SELECT id, ticket_number, title, status, category, priority, created_at
+                        SELECT id, ticket_number, subject, description, created_by_user_id, created_by_role,
+                            assigned_to_role, status, priority, category,
+                            contact_name, contact_email, contact_phone, created_at
                         FROM tickets
-                        WHERE created_by = ?
+                        WHERE assigned_to_role = 'ADMIN' OR created_by_user_id = ?
+                        ORDER BY created_at DESC
+                    `).bind(payload.userId).all();
+                    tickets = result.results || [];
+                } else {
+                    // Customer/Expert: only see their own tickets
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT id, ticket_number, subject, status, category, priority, created_at
+                        FROM tickets
+                        WHERE created_by_user_id = ?
                         ORDER BY created_at DESC
                     `).bind(payload.userId).all();
                     tickets = result.results || [];
@@ -3234,9 +3250,9 @@ export default {
                 const user = await env.proveloce_db.prepare(
                     "SELECT role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
-                const role = user?.role?.toLowerCase() || 'user';
+                const role = user?.role?.toUpperCase() || 'CUSTOMER';
 
-                // Fetch ticket from unified tickets table
+                // Fetch ticket from tickets table
                 const ticket = await env.proveloce_db.prepare(`
                     SELECT * FROM tickets WHERE ticket_number = ?
                 `).bind(ticketNumber).first() as any;
@@ -3245,11 +3261,11 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Visibility check - creator or admin/superadmin
+                // Visibility check per enterprise spec
                 const canView =
-                    ticket.created_by === payload.userId ||
-                    role === 'admin' ||
-                    role === 'superadmin';
+                    ticket.created_by_user_id === payload.userId ||
+                    role === 'ADMIN' ||
+                    role === 'SUPERADMIN';
 
                 if (!canView) {
                     return jsonResponse({ success: false, error: "Access denied" }, 403);
@@ -3307,14 +3323,14 @@ export default {
                     "SELECT role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
-                const role = user?.role?.toLowerCase() || '';
+                const role = user?.role?.toUpperCase() || '';
 
                 // Only Admin and SuperAdmin can update status
-                if (role !== 'admin' && role !== 'superadmin') {
+                if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
                     return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can update ticket status" }, 403);
                 }
 
-                // Get ticket by ticket_number from unified tickets table
+                // Get ticket by ticket_number
                 const ticket = await env.proveloce_db.prepare(
                     "SELECT * FROM tickets WHERE ticket_number = ?"
                 ).bind(ticketNumber).first() as any;
@@ -3323,11 +3339,11 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Simplified permission check for tickets table
+                // Permission check
                 const canUpdate =
-                    role === 'admin' ||
-                    role === 'superadmin' ||
-                    ticket.created_by === payload.userId;
+                    role === 'ADMIN' ||
+                    role === 'SUPERADMIN' ||
+                    ticket.created_by_user_id === payload.userId;
 
                 if (!canUpdate) {
                     return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
@@ -3335,9 +3351,9 @@ export default {
 
                 const oldStatus = ticket.status;
 
-                // Update ticket status in tickets table
+                // Update ticket status
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP
+                    UPDATE tickets SET status = ?
                     WHERE ticket_number = ?
                 `).bind(status, ticketNumber).run();
 
