@@ -83,7 +83,17 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.ticket-id-small {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--primary-600);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
 }
 
 .ticket-meta {
@@ -102,17 +112,17 @@
     font-weight: 500;
 }
 
-.priority-normal {
+.ticket-priority.low {
     background: var(--bg-tertiary);
     color: var(--text-secondary);
 }
 
-.priority-high {
+.ticket-priority.medium {
     background: var(--warning-50);
     color: var(--warning-600);
 }
 
-.priority-critical {
+.ticket-priority.high {
     background: var(--error-50);
     color: var(--error-500);
 }
@@ -163,6 +173,19 @@
     color: var(--text-primary);
 }
 
+.ticket-id-tag {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: var(--primary-50);
+    color: var(--primary-700);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -190,10 +213,37 @@
     border-top: 1px solid var(--border-light);
 }
 
-.ticket-messages {
+.ticket-detail-body {
     padding: var(--space-6);
-    max-height: 400px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.ticket-description label,
+.ticket-messages label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+    letter-spacing: 0.05em;
+}
+
+.ticket-description p {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    background: var(--bg-tertiary);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+}
+
+.ticket-messages {
+    border-top: 1px solid var(--border-light);
+    padding-top: var(--space-6);
 }
 
 .message {

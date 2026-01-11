@@ -7,7 +7,17 @@ import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
 
-interface Ticket { id: string; subject: string; category: string; priority: string; status: string; createdAt: string; messages?: any[]; }
+interface Ticket {
+    id: number;
+    ticket_number: string;
+    subject: string;
+    description: string;
+    category: string;
+    priority: string;
+    status: string;
+    created_at: string;
+    messages?: any[];
+}
 
 const HelpDesk: React.FC = () => {
     const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -63,9 +73,13 @@ const HelpDesk: React.FC = () => {
 
     const handleViewTicket = async (ticket: Ticket) => {
         try {
-            const response = await ticketApi.getTicketById(ticket.id);
-            if (response.data.success && response.data.data) setSelectedTicket(response.data.data.ticket);
-        } catch (err) { error('Failed to load ticket'); }
+            const response = await ticketApi.getTicketById(ticket.ticket_number);
+            if (response.data.success && response.data.data) {
+                setSelectedTicket(response.data.data.ticket);
+            }
+        } catch (err) {
+            error('Failed to load ticket');
+        }
     };
 
     const getStatusIcon = (status: string) => {
@@ -110,6 +124,7 @@ const HelpDesk: React.FC = () => {
                             <div key={t.id} className="ticket-item" onClick={() => handleViewTicket(t)}>
                                 <div className="ticket-status">{getStatusIcon(t.status)}</div>
                                 <div className="ticket-content">
+                                    <div className="ticket-id-small">{t.ticket_number}</div>
                                     <h4>{t.subject}</h4>
                                     <div className="ticket-meta">
                                         <span className="ticket-category">{t.category}</span>
@@ -135,6 +150,7 @@ const HelpDesk: React.FC = () => {
                     <div className={`modal modal-content-advanced ticket-detail-modal ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
+                                <div className="ticket-id-tag">{selectedTicket.ticket_number}</div>
                                 <h2 className="modal-title-advanced">{selectedTicket.subject}</h2>
                                 <div className="ticket-meta" style={{ marginTop: '8px' }}>
                                     <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase()}`}>{selectedTicket.status}</span>
@@ -143,8 +159,16 @@ const HelpDesk: React.FC = () => {
                             </div>
                             <button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button>
                         </div>
-                        <div className="ticket-messages modal-text-advanced">
-                            <p className="no-messages">Waiting for response from our support team...</p>
+                        <div className="ticket-detail-body modal-text-advanced">
+                            <div className="ticket-description">
+                                <label>Description</label>
+                                <p>{selectedTicket.description}</p>
+                            </div>
+
+                            <div className="ticket-messages">
+                                <label>Messages</label>
+                                <p className="no-messages">Waiting for response from our support team...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
