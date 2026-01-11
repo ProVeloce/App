@@ -226,6 +226,23 @@ CREATE TABLE IF NOT EXISTS expert_portfolio_files (
 );
 
 
+-- EXPERT EARNINGS (tracks payments to experts)
+CREATE TABLE IF NOT EXISTS expert_earnings (
+  id TEXT PRIMARY KEY,
+  expert_id TEXT NOT NULL,
+  task_id TEXT,
+  amount REAL NOT NULL DEFAULT 0,
+  platform_fee REAL DEFAULT 0,
+  net_amount REAL NOT NULL DEFAULT 0,
+  payment_status TEXT DEFAULT 'pending',
+  payout_reference TEXT,
+  payout_date TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -233,3 +250,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_certifications_expert ON expert_certifications(expert_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_expert ON expert_portfolio(expert_id);
+CREATE INDEX IF NOT EXISTS idx_earnings_expert ON expert_earnings(expert_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);

@@ -2450,6 +2450,228 @@ export default {
             }
 
             // =====================================================
+            // EXPERT PORTAL APIs
+            // =====================================================
+
+            // GET /api/expert/dashboard - Expert dashboard stats
+            if (url.pathname === "/api/expert/dashboard" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string; role?: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                // Check if user is an expert
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                if (!user || user.role?.toLowerCase() !== 'expert') {
+                    return jsonResponse({ success: false, error: "Expert access required" }, 403);
+                }
+
+                // Get task stats
+                const activeTasks = await env.proveloce_db.prepare(
+                    "SELECT COUNT(*) as count FROM tasks WHERE assigned_to_id = ? AND status = 'active'"
+                ).bind(payload.userId).first() as any;
+
+                const completedTasks = await env.proveloce_db.prepare(
+                    "SELECT COUNT(*) as count FROM tasks WHERE assigned_to_id = ? AND status = 'completed'"
+                ).bind(payload.userId).first() as any;
+
+                const pendingTasks = await env.proveloce_db.prepare(
+                    "SELECT COUNT(*) as count FROM tasks WHERE assigned_to_id = ? AND status = 'pending'"
+                ).bind(payload.userId).first() as any;
+
+                // Get earnings
+                const earnings = await env.proveloce_db.prepare(
+                    "SELECT COALESCE(SUM(net_amount), 0) as total FROM expert_earnings WHERE expert_id = ? AND payment_status = 'paid'"
+                ).bind(payload.userId).first() as any;
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        stats: {
+                            activeTasks: activeTasks?.count || 0,
+                            completedTasks: completedTasks?.count || 0,
+                            pendingTasks: pendingTasks?.count || 0,
+                            totalEarnings: earnings?.total || 0,
+                        },
+                        recentActivity: [],
+                    }
+                });
+            }
+
+            // GET /api/expert/certifications - Get expert's certifications
+            if (url.pathname === "/api/expert/certifications" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT id, title, issuer, credential_id, credential_url, 
+                           issue_date, expiry_date, file_name, file_url, created_at
+                    FROM expert_certifications 
+                    WHERE expert_id = ?
+                    ORDER BY created_at DESC
+                `).bind(payload.userId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: { certifications: result.results || [] }
+                });
+            }
+
+            // GET /api/expert/portfolio - Get expert's portfolio items
+            if (url.pathname === "/api/expert/portfolio" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT id, title, description, skills, project_url, created_at
+                    FROM expert_portfolio 
+                    WHERE expert_id = ?
+                    ORDER BY created_at DESC
+                `).bind(payload.userId).all();
+
+                // Get files for each portfolio item
+                const portfolioItems: any[] = [];
+                for (const item of (result.results || []) as any[]) {
+                    const files = await env.proveloce_db.prepare(`
+                        SELECT id, file_name, file_type, file_url
+                        FROM expert_portfolio_files 
+                        WHERE portfolio_id = ?
+                    `).bind(item.id).all();
+                    portfolioItems.push({
+                        ...item,
+                        skills: item.skills ? JSON.parse(item.skills) : [],
+                        files: files.results || [],
+                    });
+                }
+
+                return jsonResponse({
+                    success: true,
+                    data: { portfolio: portfolioItems }
+                });
+            }
+
+            // GET /api/expert/tasks - Get expert's assigned tasks
+            if (url.pathname === "/api/expert/tasks" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT t.id, t.title, t.description, t.deadline, t.status, t.priority, t.created_at,
+                           u.name as customer_name
+                    FROM tasks t
+                    LEFT JOIN users u ON t.created_by_id = u.id
+                    WHERE t.assigned_to_id = ?
+                    ORDER BY t.created_at DESC
+                `).bind(payload.userId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: { tasks: result.results || [] }
+                });
+            }
+
+            // GET /api/expert/earnings - Get expert's earnings history
+            if (url.pathname === "/api/expert/earnings" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT e.id, e.amount, e.platform_fee, e.net_amount, e.payment_status, 
+                           e.payout_reference, e.payout_date, e.created_at,
+                           t.title as task_title
+                    FROM expert_earnings e
+                    LEFT JOIN tasks t ON e.task_id = t.id
+                    WHERE e.expert_id = ?
+                    ORDER BY e.created_at DESC
+                `).bind(payload.userId).all();
+
+                // Calculate totals
+                const totals = await env.proveloce_db.prepare(`
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN net_amount ELSE 0 END), 0) as total_paid,
+                        COALESCE(SUM(CASE WHEN payment_status = 'pending' THEN net_amount ELSE 0 END), 0) as pending
+                    FROM expert_earnings WHERE expert_id = ?
+                `).bind(payload.userId).first() as any;
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        earnings: result.results || [],
+                        summary: {
+                            totalPaid: totals?.total_paid || 0,
+                            pending: totals?.pending || 0,
+                        }
+                    }
+                });
+            }
+
+            // GET /api/expert/helpdesk - Get expert's support tickets
+            if (url.pathname === "/api/expert/helpdesk" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT id, subject, description, status, category, priority, created_at, resolved_at
+                    FROM tickets 
+                    WHERE user_id = ?
+                    ORDER BY created_at DESC
+                `).bind(payload.userId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: { tickets: result.results || [] }
+                });
+            }
+
+            // GET /api/expert/notifications - Get expert's notifications
+            if (url.pathname === "/api/expert/notifications" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const result = await env.proveloce_db.prepare(`
+                    SELECT id, title, message, type, is_read, link, created_at
+                    FROM notifications 
+                    WHERE user_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                `).bind(payload.userId).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: { notifications: result.results || [] }
+                });
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 
