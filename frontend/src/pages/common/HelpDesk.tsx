@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ticketApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { HelpCircle, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, X } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
@@ -15,6 +16,10 @@ const HelpDesk: React.FC = () => {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
     const { success, error } = useToast();
+    const { user } = useAuth();
+
+    // SuperAdmin cannot create tickets
+    const canCreateTicket = user?.role?.toLowerCase() !== 'superadmin';
 
     useEffect(() => { fetchTickets(); }, []);
 
@@ -58,11 +63,13 @@ const HelpDesk: React.FC = () => {
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'OPEN': return <AlertCircle size={16} className="status-open" />;
+            case 'OPEN':
+            case 'PENDING': return <AlertCircle size={16} className="status-open" />;
             case 'IN_PROGRESS':
             case 'IN_REVIEW': return <Clock size={16} className="status-progress" />;
             case 'RESOLVED':
-            case 'CLOSED': return <CheckCircle size={16} className="status-resolved" />;
+            case 'CLOSED':
+            case 'DECLINED': return <CheckCircle size={16} className="status-resolved" />;
             default: return <AlertCircle size={16} />;
         }
     };
@@ -72,11 +79,13 @@ const HelpDesk: React.FC = () => {
             <div className="page-header">
                 <div className="header-left">
                     <h1><HelpCircle size={24} /> Help Desk</h1>
-                    <p>Get support from our team</p>
+                    <p>{canCreateTicket ? 'Get support from our team' : 'View and manage support tickets'}</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowNewTicket(true)}>
-                    <Plus size={18} /> New Ticket
-                </button>
+                {canCreateTicket && (
+                    <button className="btn btn-primary" onClick={() => setShowNewTicket(true)}>
+                        <Plus size={18} /> New Ticket
+                    </button>
+                )}
             </div>
 
             <div className="tickets-container">
