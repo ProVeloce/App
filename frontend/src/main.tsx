@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -24,6 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                                     <SessionManager>
                                         <App />
                                         <GlobalErrorModal />
+                                        <Analytics />
                                     </SessionManager>
                                 </ToastProvider>
                             </SessionProvider>
