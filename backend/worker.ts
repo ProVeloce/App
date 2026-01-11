@@ -3027,7 +3027,7 @@ export default {
                     }
 
                     // Validation - Enhanced per workflow spec
-                    const validCategories = ['Billing', 'Tasks', 'Payments', 'Technical', 'Account', 'Other'];
+                    const validCategories = ['General', 'Technical', 'Billing', 'Tasks', 'Payments', 'Account', 'Other'];
                     const validPriorities = ['Low', 'Medium', 'High'];
                     const missingFields: string[] = [];
                     const validationErrors: string[] = [];
@@ -3235,6 +3235,68 @@ export default {
                 return jsonResponse({
                     success: true,
                     data: { tickets }
+                });
+            }
+
+            // GET /api/helpdesk/tickets/:ticket_number - Get individual ticket with attachments
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+$/) && !url.pathname.includes('/status') && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const ticketNumber = url.pathname.split('/')[4];
+
+                // Get user role
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+                const role = user?.role?.toLowerCase() || '';
+
+                // Fetch ticket
+                const ticket = await env.proveloce_db.prepare(`
+                    SELECT * FROM expert_helpdesk WHERE ticket_number = ?
+                `).bind(ticketNumber).first() as any;
+
+                if (!ticket) {
+                    return jsonResponse({ success: false, error: "Ticket not found" }, 404);
+                }
+
+                // Visibility check
+                const canView =
+                    ticket.sender_id === payload.userId ||
+                    (role === 'superadmin' && ticket.receiver_role === 'SuperAdmin') ||
+                    (role === 'admin' && ticket.receiver_role === 'Admin') ||
+                    role === 'superadmin';
+
+                if (!canView) {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                // Fetch attachments
+                const attachmentsResult = await env.proveloce_db.prepare(`
+                    SELECT id, file_name, file_path, file_size, mime_type, uploaded_at
+                    FROM ticket_attachments WHERE ticket_id = ?
+                `).bind(ticket.id).all();
+                const attachments = attachmentsResult.results || [];
+
+                // Log access in audit trail
+                const eventId = crypto.randomUUID();
+                await env.proveloce_db.prepare(`
+                    INSERT INTO ticket_events (id, ticket_id, ticket_number, actor_user_id, actor_role, event_type, payload, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'ACCESSED', ?, CURRENT_TIMESTAMP)
+                `).bind(eventId, ticket.id, ticketNumber, payload.userId, user?.role || 'Unknown', JSON.stringify({ action: 'view' })).run();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        ticket: {
+                            ...ticket,
+                            attachments
+                        }
+                    }
                 });
             }
 
