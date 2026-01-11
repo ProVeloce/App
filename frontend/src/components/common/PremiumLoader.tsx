@@ -26,7 +26,7 @@ const PremiumLoader: React.FC<PremiumLoaderProps> = ({
                     <div className="logo-glow"></div>
                     <div className="logo-container">
                         <img
-                            src="/images/logo.png"
+                            src="/logo-nobg.png"
                             alt="ProVeloce Connect"
                             className="logo-image"
                         />
