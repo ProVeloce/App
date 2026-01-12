@@ -169,8 +169,8 @@ const AdminManagement: React.FC = () => {
         if (r === 'superadmin') return 'badge-purple';
         if (r === 'admin') return 'badge-blue';
         if (r === 'analyst') return 'badge-green';
-        if (r === 'expert' || r === 'agent') return 'badge-orange';
-        if (r === 'customer' || r === 'viewer') return 'badge-gray';
+        if (r === 'expert') return 'badge-orange';
+        return 'badge-gray';
     };
 
     const getStatusBadgeClass = (status: string) => {
@@ -196,16 +196,13 @@ const AdminManagement: React.FC = () => {
             {/* Filters */}
             <div className="filters-section">
                 <div className="role-tabs">
-                    {['all', 'admin', 'analyst', 'agent', 'viewer'].map(role => (
+                    {['all', 'admin', 'analyst', 'expert', 'customer'].map(role => (
                         <button
                             key={role}
                             className={`tab-btn ${roleFilter === role ? 'active' : ''}`}
                             onClick={() => { setRoleFilter(role); setPagination(p => ({ ...p, page: 1 })); }}
                         >
-                            {role === 'all' ? 'All Users' :
-                                role === 'agent' ? 'Experts' :
-                                    role === 'viewer' ? 'Customers' :
-                                        role.charAt(0).toUpperCase() + role.slice(1)}
+                            {role === 'all' ? 'All Users' : role.charAt(0).toUpperCase() + role.slice(1)}
                         </button>
                     ))}
                 </div>
@@ -250,13 +247,7 @@ const AdminManagement: React.FC = () => {
                                 <tr key={user.id}>
                                     <td className="user-name">{user.name || '-'}</td>
                                     <td>{user.email}</td>
-                                    <td>
-                                        <span className={`badge ${getRoleBadgeClass(user.role)}`}>
-                                            {user.role?.toLowerCase() === 'agent' ? 'Expert' :
-                                                user.role?.toLowerCase() === 'viewer' ? 'Customer' :
-                                                    user.role}
-                                        </span>
-                                    </td>
+                                    <td><span className={`badge ${getRoleBadgeClass(user.role)}`}>{user.role}</span></td>
                                     <td><span className={`status-badge ${getStatusBadgeClass(user.status)}`}>{user.status}</span></td>
                                     <td>{(user.createdAt || (user as any).created_at) ? new Date((user.createdAt || (user as any).created_at)).toLocaleDateString() : '-'}</td>
                                     <td className="actions">
@@ -308,8 +299,8 @@ const AdminManagement: React.FC = () => {
                                 <div className="form-group">
                                     <label>Role</label>
                                     <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                                        <option value="viewer">Customer</option>
-                                        <option value="agent">Expert</option>
+                                        <option value="customer">Customer</option>
+                                        <option value="expert">Expert</option>
                                         {currentUser?.role === 'SUPERADMIN' && (
                                             <>
                                                 <option value="analyst">Analyst</option>
@@ -363,8 +354,8 @@ const AdminManagement: React.FC = () => {
                                 <div className="form-group">
                                     <label>Role</label>
                                     <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                                        <option value="viewer">Customer</option>
-                                        <option value="agent">Expert</option>
+                                        <option value="customer">Customer</option>
+                                        <option value="expert">Expert</option>
                                         {currentUser?.role === 'SUPERADMIN' && (
                                             <>
                                                 <option value="analyst">Analyst</option>

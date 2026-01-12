@@ -403,14 +403,12 @@
 }
 
 .btn-primary {
-    background: #0078D4;
+    background: var(--primary);
     color: white;
-    font-weight: bold;
-    padding: 8px 16px;
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #005a9e;
+    background: var(--primary-hover);
 }
 
 .btn-secondary {

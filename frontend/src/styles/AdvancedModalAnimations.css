@@ -186,10 +186,12 @@
 .modal-buttons-advanced {
   animation: buttonSlideIn 0.4s var(--smooth-out) forwards;
   animation-delay: 0.4s;
+  opacity: 0;
 }
 
 .modal-button-advanced {
   animation: buttonSlideIn 0.3s var(--smooth-out) forwards;
+  opacity: 0;
 }
 
 .modal-button-advanced:nth-child(1) {
