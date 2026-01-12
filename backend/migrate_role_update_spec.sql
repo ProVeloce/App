@@ -29,7 +29,7 @@ UPDATE users SET status = 'active' WHERE status NOT IN ('active', 'inactive', 's
 INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
 VALUES (
     'system-migration-' || CURRENT_TIMESTAMP, 
-    '00000000-0000-0000-0000-000000000000', 
+    NULL, 
     'SYSTEM_MIGRATION', 
     'system', 
     'user_role_spec_v2', 
