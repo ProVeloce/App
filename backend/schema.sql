@@ -149,8 +149,8 @@ CREATE TABLE IF NOT EXISTS task_submissions (
   FOREIGN KEY (expert_id) REFERENCES users(id)
 );
 
--- SUPPORT TICKETS (legacy - kept for backward compatibility)
-CREATE TABLE IF NOT EXISTS tickets (
+-- SUPPORT TICKETS (LEGACY - DEPRECATED)
+CREATE TABLE IF NOT EXISTS tickets_legacy (
   id TEXT PRIMARY KEY,
   user_id TEXT,
   assigned_to_id TEXT,
@@ -167,8 +167,27 @@ CREATE TABLE IF NOT EXISTS tickets (
   FOREIGN KEY (assigned_to_id) REFERENCES users(id)
 );
 
--- EXPERT HELPDESK (new role-based ticket routing system)
-CREATE TABLE IF NOT EXISTS expert_helpdesk (
+-- UNIFIED TICKETS (SPEC v3.0)
+CREATE TABLE IF NOT EXISTS tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_number TEXT UNIQUE NOT NULL,
+    category TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    description TEXT NOT NULL,
+    attachment TEXT DEFAULT NULL,                             -- R2 object key
+    raised_by_user_id TEXT NOT NULL,                         -- FK → users.id
+    assigned_user_id TEXT DEFAULT NULL,                      -- FK → users.id
+    messages JSON NOT NULL DEFAULT '[]',                      -- Array of {sender_id, text, timestamp}
+    status TEXT NOT NULL DEFAULT 'Open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Closed')),
+    FOREIGN KEY (raised_by_user_id) REFERENCES users(id),
+    FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+);
+
+-- EXPERT HELPDESK (LEGACY - DEPRECATED)
+CREATE TABLE IF NOT EXISTS expert_helpdesk_legacy (
   id TEXT PRIMARY KEY,
   ticket_number TEXT UNIQUE,            -- Format: PV-TKT-YYYYMMDD-XXXXXX
   sender_id TEXT NOT NULL,
@@ -314,7 +333,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_certifications_expert ON expert_certifications(expert_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_expert ON expert_portfolio(expert_id);
 CREATE INDEX IF NOT EXISTS idx_earnings_expert ON expert_earnings(expert_id);
-CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_raised_by ON tickets(raised_by_user_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_ticket_number ON tickets(ticket_number);
 
 -- Expert tasks visibility indexes
 CREATE INDEX IF NOT EXISTS idx_expert_tasks_expert ON expert_tasks(expert_id);
@@ -323,13 +343,20 @@ CREATE INDEX IF NOT EXISTS idx_expert_tasks_admin ON expert_tasks(admin_id);
 CREATE INDEX IF NOT EXISTS idx_expert_tasks_status ON expert_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_expert_tasks_visibility ON expert_tasks(expert_id, admin_id, task_id);
 
--- Expert helpdesk visibility indexes
-CREATE INDEX IF NOT EXISTS idx_helpdesk_sender ON expert_helpdesk(sender_id);
-CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver ON expert_helpdesk(receiver_id);
-CREATE INDEX IF NOT EXISTS idx_helpdesk_sender_role ON expert_helpdesk(sender_role);
-CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver_role ON expert_helpdesk(receiver_role);
-CREATE INDEX IF NOT EXISTS idx_helpdesk_status ON expert_helpdesk(status);
-CREATE INDEX IF NOT EXISTS idx_helpdesk_visibility ON expert_helpdesk(sender_id, receiver_id, sender_role, receiver_role);
+-- Expert helpdesk visibility indexes (Legacy)
+DROP INDEX IF EXISTS idx_helpdesk_sender;
+DROP INDEX IF EXISTS idx_helpdesk_receiver;
+DROP INDEX IF EXISTS idx_helpdesk_sender_role;
+DROP INDEX IF EXISTS idx_helpdesk_receiver_role;
+DROP INDEX IF EXISTS idx_helpdesk_status;
+DROP INDEX IF EXISTS idx_helpdesk_visibility;
+
+CREATE INDEX IF NOT EXISTS idx_helpdesk_sender ON expert_helpdesk_legacy(sender_id);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver ON expert_helpdesk_legacy(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_sender_role ON expert_helpdesk_legacy(sender_role);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_receiver_role ON expert_helpdesk_legacy(receiver_role);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_status ON expert_helpdesk_legacy(status);
+CREATE INDEX IF NOT EXISTS idx_helpdesk_visibility ON expert_helpdesk_legacy(sender_id, receiver_id, sender_role, receiver_role);
 
 -- Payments indexes
 CREATE INDEX IF NOT EXISTS idx_payments_expert ON payments(expert_id);

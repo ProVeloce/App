@@ -1,0 +1,81 @@
+﻿
+ Ôøà´©Å wrangler 4.54.0 (update available 4.58.0)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Resource location: remote 
+
+node.exe : [33mÔû▓ 
+[43;33m[[43;30mWAR
+NING[43;33m][0m 
+[1mÔÜá´©Å This 
+process may take 
+some time, during 
+which your D1 
+database will be 
+unavailable to 
+serve queries.[0m
+At line:1 char:1
++ & "C:\Program File
+s\nodejs/node.exe" "
+C:\Users\shrey\AppDa
+ta\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: ([33   
+ mÔû▓ [43;3...v    
+e queries.[0m:    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+
+
+­ƒîÇ Executing on remote database proveloce_db (3b3261c1-a83c-49dc-82df-4688cbdc785c):
+­ƒîÇ To execute on your local development database, remove the --remote flag from your wrangler command.
+Note: if the execution fails to complete, your DB will return to its original state and you can safely retry.
+Ôö£ Checking if file needs uploading
+Ôöé
+Ôö£ ­ƒîÇ Uploading 3b3261c1-a83c-49dc-82df-4688cbdc785c.1fc3eb7925d14f3a.sql
+Ôöé ­ƒîÇ Uploading complete.
+Ôöé
+­ƒîÇ Starting import...
+­ƒîÇ Processed 50 queries.
+­ƒÜú Executed 50 queries in 3.93ms (12 rows read, 6 rows written)
+   Database is currently at bookmark 000000db-0000000e-00004ff1-3f79d347927dd434c3a5ccdd9f01c7a3.
+[
+  {
+    "results": [
+      {
+        "Total queries executed": 50,
+        "Rows read": 12,
+        "Rows written": 6,
+        "Database size (MB)": "0.38"
+      }
+    ],
+    "success": true,
+    "finalBookmark": "000000db-0000000e-00004ff1-3f79d347927dd434c3a5ccdd9f01c7a3",
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 3.9296
+      },
+      "duration": 3.9296,
+      "changes": 1,
+      "last_row_id": 0,
+      "changed_db": true,
+      "size_after": 380928,
+      "rows_read": 12,
+      "rows_written": 6,
+      "num_tables": 20,
+      "total_attempts": 1
+    }
+  }
+]

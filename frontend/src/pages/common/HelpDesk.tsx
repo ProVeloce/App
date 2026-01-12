@@ -8,37 +8,32 @@ import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
 
 interface Ticket {
-    id: number;
-    ticket_id: string;
-    user_id: string;
-    user_role: string;
+    id: string; // The primary ticket identifier (e.g., PV-TK-...)
+    ticket_id: string; // Alias for id to maintain compatibility
+    raised_by_user_id: string;
     user_full_name: string;
     user_email: string;
-    user_phone_number: string | null;
+    user_role?: string;
+    user_phone_number?: string | null;
     subject: string;
     category: string;
     description: string;
-    attachment_url: string | null;
-    status: string;
-    message_response: string | null;
-    ticket_responder: string | null;
-    responder_name: string | null;
-    responder_role: string | null;
-    ticket_assigned_user: string | null;
+    attachment: string | null; // R2 object key
+    status: 'Open' | 'In Progress' | 'Closed';
+    assigned_user_id: string | null;
     assigned_user_name: string | null;
     assigned_user_role: string | null;
     created_at: string;
     updated_at: string;
+    messages?: string; // Raw JSON from DB if not parsed
 }
 
 interface TicketMessage {
-    id: number;
-    ticket_id: string;
     sender_id: string;
     sender_name: string;
     sender_role: string;
-    message: string;
-    created_at: string;
+    text: string;
+    timestamp: string;
 }
 
 const HelpDesk: React.FC = () => {
@@ -51,7 +46,7 @@ const HelpDesk: React.FC = () => {
 
     // Admin response state
     const [messageResponse, setMessageResponse] = useState('');
-    const [selectedStatus, setSelectedStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
+    const [selectedStatus, setSelectedStatus] = useState<'Open' | 'In Progress' | 'Closed'>('Open');
     const [submittingResponse, setSubmittingResponse] = useState(false);
 
     // General thread reply state
@@ -75,7 +70,7 @@ const HelpDesk: React.FC = () => {
     const isAdmin = userRole === 'ADMIN';
     const isAdminOrSuperAdmin = isAdmin || isSuperAdmin;
     const canCreateTicket = userRole !== 'SUPERADMIN';
-    const isAssignedResponder = selectedTicket?.ticket_assigned_user === user?.id;
+    const isAssignedResponder = selectedTicket?.assigned_user_id === user?.id;
 
     useEffect(() => {
         fetchTickets();
@@ -107,7 +102,7 @@ const HelpDesk: React.FC = () => {
             setIsClosingViewTicket(false);
             setMessageResponse('');
             setThreadReply('');
-            setSelectedStatus('APPROVED');
+            setSelectedStatus('Open');
         }, 300);
     };
 
@@ -128,12 +123,16 @@ const HelpDesk: React.FC = () => {
 
     const handleViewTicket = async (ticket: Ticket) => {
         try {
-            const response = await ticketApi.getTicketById(ticket.ticket_id);
+            const ticketId = ticket.id; // Corrected to use id
+            const response = await ticketApi.getTicketById(ticketId);
             if (response.data.success && response.data.data) {
-                setSelectedTicket(response.data.data.ticket);
+                const fetchedTicket = response.data.data.ticket;
+                // Map id to ticket_id for UI components that might still use it
+                fetchedTicket.ticket_id = fetchedTicket.id;
+                setSelectedTicket(fetchedTicket);
                 setThreadMessages(response.data.data.messages || []);
-                setMessageResponse(''); // Clear status reply input
-                setThreadReply(''); // Clear thread message input
+                setMessageResponse('');
+                setThreadReply('');
             }
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to load ticket');
@@ -250,9 +249,9 @@ const HelpDesk: React.FC = () => {
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'PENDING': return <AlertCircle size={16} className="status-pending" />;
-            case 'APPROVED': return <CheckCircle size={16} className="status-approved" />;
-            case 'REJECTED': return <X size={16} className="status-rejected" />;
+            case 'Open': return <AlertCircle size={16} className="status-open" />;
+            case 'In Progress': return <MessageCircle size={16} className="status-progress" />;
+            case 'Closed': return <CheckCircle size={16} className="status-closed" />;
             default: return <AlertCircle size={16} />;
         }
     };
@@ -371,17 +370,17 @@ const HelpDesk: React.FC = () => {
                             {/* Attachment Section */}
                             <div className="ticket-attachment">
                                 <label>Attachment</label>
-                                {selectedTicket.attachment_url ? (
+                                {selectedTicket.attachment ? (
                                     <div className="attachment-actions">
                                         <button
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => handleViewAttachment(selectedTicket.attachment_url!)}
+                                            onClick={() => handleViewAttachment(selectedTicket.attachment!)}
                                         >
                                             <Eye size={14} /> View
                                         </button>
                                         <button
                                             className="btn btn-secondary btn-sm"
-                                            onClick={() => handleDownloadAttachment(selectedTicket.attachment_url!)}
+                                            onClick={() => handleDownloadAttachment(selectedTicket.attachment!)}
                                         >
                                             <Download size={14} /> Download
                                         </button>
@@ -396,15 +395,15 @@ const HelpDesk: React.FC = () => {
                                 <label><MessageCircle size={16} /> Conversation History</label>
                                 <div className="messages-list">
                                     {threadMessages.length > 0 ? (
-                                        threadMessages.map((msg) => (
-                                            <div key={msg.id} className={`message-item ${msg.sender_id === user?.id ? 'own-message' : 'other-message'}`}>
+                                        threadMessages.map((msg, idx) => (
+                                            <div key={idx} className={`message-item ${msg.sender_id === user?.id ? 'own-message' : 'other-message'}`}>
                                                 <div className="message-meta">
                                                     <span className="sender-name">{msg.sender_name}</span>
                                                     <span className="sender-role">({msg.sender_role})</span>
-                                                    <span className="message-time">{new Date(msg.created_at).toLocaleString()}</span>
+                                                    <span className="message-time">{new Date(msg.timestamp).toLocaleString()}</span>
                                                 </div>
                                                 <div className="message-text">
-                                                    <p>{msg.message}</p>
+                                                    <p>{msg.text}</p>
                                                 </div>
                                             </div>
                                         ))
@@ -432,8 +431,8 @@ const HelpDesk: React.FC = () => {
                                 </button>
                             </div>
 
-                            {/* Pending Status Message (for users) */}
-                            {!isAdminOrSuperAdmin && !selectedTicket.message_response && selectedTicket.status === 'PENDING' && (
+                            {/* Notice for users (Optional, can be expanded) */}
+                            {!isAdminOrSuperAdmin && selectedTicket.status === 'Open' && (
                                 <div className="ticket-pending-notice">
                                     <AlertCircle size={20} />
                                     <span>Waiting for response from our support team...</span>
@@ -441,7 +440,7 @@ const HelpDesk: React.FC = () => {
                             )}
 
                             {/* Status Update / Responder Form (Restricted per Spec) */}
-                            {(isSuperAdmin || isAssignedResponder) && selectedTicket.status === 'PENDING' && (
+                            {(isSuperAdmin || isAssignedResponder) && selectedTicket.status !== 'Closed' && (
                                 <div className="admin-response-form status-update-form">
                                     <label><Shield size={16} /> Update Status (Responder Option)</label>
                                     <textarea
@@ -453,13 +452,14 @@ const HelpDesk: React.FC = () => {
                                     />
                                     <div className="response-actions">
                                         <div className="status-selector">
-                                            <label>Final Status:</label>
+                                            <label>Set Status:</label>
                                             <select
                                                 value={selectedStatus}
-                                                onChange={(e) => setSelectedStatus(e.target.value as 'APPROVED' | 'REJECTED')}
+                                                onChange={(e) => setSelectedStatus(e.target.value as any)}
                                             >
-                                                <option value="APPROVED">Approved</option>
-                                                <option value="REJECTED">Rejected</option>
+                                                <option value="Open">Open</option>
+                                                <option value="In Progress">In Progress</option>
+                                                <option value="Closed">Closed</option>
                                             </select>
                                         </div>
                                         <button
@@ -488,15 +488,10 @@ const HelpDesk: React.FC = () => {
                                         )}
                                     </div>
                                     <div className="meta-item">
-                                        <label>Responder</label>
-                                        {selectedTicket.responder_name ? (
-                                            <div className="meta-value">
-                                                <CheckCircle size={14} />
-                                                <span>{selectedTicket.responder_name} ({selectedTicket.responder_role})</span>
-                                            </div>
-                                        ) : (
-                                            <div className="meta-value unassigned">Not responded yet</div>
-                                        )}
+                                        <label>Current Status</label>
+                                        <div className="meta-value">
+                                            <span className={`status-text ${selectedTicket.status.toLowerCase().replace(' ', '-')}`}>{selectedTicket.status}</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -506,7 +501,7 @@ const HelpDesk: React.FC = () => {
                                         <div className="assign-controls">
                                             <select
                                                 className="assign-select"
-                                                defaultValue={selectedTicket.ticket_assigned_user || ''}
+                                                defaultValue={selectedTicket.assigned_user_id || ''}
                                                 onChange={(e) => handleAssignTicket(e.target.value)}
                                                 disabled={isAssigning}
                                             >
@@ -578,8 +573,8 @@ const HelpDesk: React.FC = () => {
                             <button
                                 className="preview-download-btn"
                                 onClick={() => {
-                                    if (selectedTicket?.attachment_url) {
-                                        handleDownloadAttachment(selectedTicket.attachment_url);
+                                    if (selectedTicket?.attachment) {
+                                        handleDownloadAttachment(selectedTicket.attachment);
                                     }
                                     closeAttachmentPreview();
                                 }}

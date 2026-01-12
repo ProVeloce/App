@@ -85,14 +85,14 @@
 }
 
 .status-open {
-    color: var(--warning-600);
-}
-
-.status-progress {
     color: var(--primary-600);
 }
 
-.status-resolved {
+.status-progress {
+    color: var(--warning-600);
+}
+
+.status-closed {
     color: var(--success-600);
 }
 
@@ -132,6 +132,39 @@
     border-radius: var(--radius-full);
     font-weight: 500;
     font-size: 0.75rem;
+}
+
+.ticket-status-badge.open {
+    background: rgba(79, 70, 229, 0.1);
+    color: #4f46e5;
+    border: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+.ticket-status-badge.in-progress {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.ticket-status-badge.closed {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-text.open {
+    color: #4f46e5;
+    font-weight: 600;
+}
+
+.status-text.in-progress {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.status-text.closed {
+    color: #10b981;
+    font-weight: 600;
 }
 
 .ticket-date {

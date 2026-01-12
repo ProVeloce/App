@@ -3103,24 +3103,30 @@ export default {
                         attachmentUrl = `/api/helpdesk/attachments/${filePath}`;
                     }
 
-                    // Insert into tickets table with full user profile
+                    // Insert into tickets table using Unified Spec v3.0
+                    // messages array: [{sender_id, sender_name, sender_role, text, timestamp}]
+                    const initialMessage = {
+                        sender_id: payload.userId,
+                        sender_name: sender?.name || 'User',
+                        sender_role: senderRole,
+                        text: description.trim(),
+                        timestamp: new Date().toISOString()
+                    };
+
                     await env.proveloce_db.prepare(`
                         INSERT INTO tickets (
-                            ticket_id, user_id, user_role, user_full_name, user_email, user_phone_number,
-                            subject, category, description, attachment_url, status
+                            ticket_number, category, subject, description, attachment, 
+                            raised_by_user_id, messages, status, created_at, updated_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     `).bind(
                         ticketId,
-                        payload.userId,
-                        senderRole,
-                        sender?.name || '',
-                        sender?.email || '',
-                        sender?.phone || null,
-                        subject.trim(),
                         category.trim(),
+                        subject.trim(),
                         description.trim(),
-                        attachmentUrl
+                        attachmentUrl,
+                        payload.userId,
+                        JSON.stringify([initialMessage])
                     ).run();
 
                     return jsonResponse({
@@ -3152,37 +3158,33 @@ export default {
 
                 const role = user?.role?.toUpperCase() || 'CUSTOMER';
 
-                // Visibility Logic per requirements:
-                // Customers & Experts: Can only see their own tickets
-                // Admins: Can see all customer & expert tickets
-                // Superadmin: Can see all tickets (including admin-raised)
+                // Unified Visibility Logic (Spec v3.0):
+                // Superadmin: view_all(tickets)
+                // Assigned Admin: view_ticket(assigned)
+                // Raised User: view_ticket(raised)
+                // Deny All Others
+
                 let whereClause = '';
                 let params: any[] = [];
 
                 if (role === 'SUPERADMIN') {
-                    // Superadmin sees everything
                     whereClause = '';
-                    params = [];
-                } else if (role === 'ADMIN' || role === 'EXPERT') {
-                    // Admin/Expert see their own raised tickets OR tickets assigned to them
-                    whereClause = '(t.user_id = ? OR t.ticket_assigned_user = ?)';
-                    params = [payload.userId, payload.userId];
                 } else {
-                    // Customers only see their own tickets
-                    whereClause = 't.user_id = ?';
-                    params = [payload.userId];
+                    whereClause = '(raised_by_user_id = ? OR assigned_user_id = ?)';
+                    params = [payload.userId, payload.userId];
                 }
 
                 const query = `
                     SELECT 
                         t.*,
-                        u_resp.name as responder_name,
-                        u_resp.role as responder_role,
+                        t.ticket_number as ticket_id,
+                        u_raised.name as user_full_name,
+                        u_raised.email as user_email,
                         u_assign.name as assigned_user_name,
                         u_assign.role as assigned_user_role
                     FROM tickets t
-                    LEFT JOIN users u_resp ON t.ticket_responder = u_resp.id
-                    LEFT JOIN users u_assign ON t.ticket_assigned_user = u_assign.id
+                    LEFT JOIN users u_raised ON t.raised_by_user_id = u_raised.id
+                    LEFT JOIN users u_assign ON t.assigned_user_id = u_assign.id
                     ${whereClause ? 'WHERE ' + whereClause : ''}
                     ORDER BY t.created_at DESC
                 `;
@@ -3197,7 +3199,7 @@ export default {
             }
 
             // GET /api/helpdesk/tickets/:ticket_id - Enterprise Retrieval (v2.0)
-            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+$/) && !url.pathname.includes('/status') && request.method === "GET") {
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+$/) && !url.pathname.includes('/status') && !url.pathname.includes('/messages') && !url.pathname.includes('/assign') && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
                 const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
@@ -3217,53 +3219,43 @@ export default {
                 const ticket = await env.proveloce_db.prepare(`
                     SELECT 
                         t.*,
-                        u_resp.name as responder_name,
-                        u_resp.role as responder_role,
+                        t.ticket_number as ticket_id,
+                        u_raised.name as user_full_name,
+                        u_raised.email as user_email,
                         u_assign.name as assigned_user_name,
                         u_assign.role as assigned_user_role
                     FROM tickets t
-                    LEFT JOIN users u_resp ON t.ticket_responder = u_resp.id
-                    LEFT JOIN users u_assign ON t.ticket_assigned_user = u_assign.id
-                    WHERE t.ticket_id = ?
+                    LEFT JOIN users u_raised ON t.raised_by_user_id = u_raised.id
+                    LEFT JOIN users u_assign ON t.assigned_user_id = u_assign.id
+                    WHERE t.ticket_number = ?
                 `).bind(ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Check visibility permissions
-                let canView = false;
-                if (role === 'SUPERADMIN') {
-                    canView = true;
-                } else if (role === 'ADMIN' || role === 'EXPERT') {
-                    // Admin/Expert can view if raised by them OR assigned to them
-                    canView = ticket.user_id === payload.userId || ticket.ticket_assigned_user === payload.userId;
-                } else {
-                    // Customers only see their own
-                    canView = ticket.user_id === payload.userId;
-                }
+                // Check visibility permissions: Superadmin OR Raised User OR Assigned User
+                const isRaisedByMe = ticket.raised_by_user_id === payload.userId;
+                const isAssignedToMe = ticket.assigned_user_id === payload.userId;
+                const isSuperAdmin = role === 'SUPERADMIN';
 
-                if (!canView) {
+                if (!isSuperAdmin && !isRaisedByMe && !isAssignedToMe) {
                     return jsonResponse({ success: false, error: "Not authorized to view this ticket" }, 403);
                 }
 
-                // Fetch message thread
-                const messagesResult = await env.proveloce_db.prepare(`
-                    SELECT 
-                        m.*,
-                        u.name as sender_name,
-                        u.role as sender_role
-                    FROM ticket_messages m
-                    JOIN users u ON m.sender_id = u.id
-                    WHERE m.ticket_id = ?
-                    ORDER BY m.created_at ASC
-                `).bind(ticketId).all();
+                // Parse messages from JSON
+                let messages = [];
+                try {
+                    messages = typeof ticket.messages === 'string' ? JSON.parse(ticket.messages) : (ticket.messages || []);
+                } catch (e) {
+                    console.error("Failed to parse ticket messages JSON", e);
+                }
 
                 return jsonResponse({
                     success: true,
                     data: {
                         ticket,
-                        messages: messagesResult.results || []
+                        messages
                     }
                 });
             }
@@ -3281,74 +3273,83 @@ export default {
                 const body = await request.json() as any;
                 const { status, reply } = body;
 
-                // Valid statuses: PENDING, APPROVED, REJECTED
-                const validStatuses = ['PENDING', 'APPROVED', 'REJECTED'];
-                if (!status || !validStatuses.includes(status)) {
+                // Status mapping to Spec v3.0: Open, In Progress, Closed
+                let finalStatus = status;
+                if (status === 'APPROVED' || status === 'OPEN') finalStatus = 'Open';
+                else if (status === 'IN_PROGRESS') finalStatus = 'In Progress';
+                else if (status === 'REJECTED' || status === 'CLOSED') finalStatus = 'Closed';
+
+                const validStatuses = ['Open', 'In Progress', 'Closed'];
+                if (!finalStatus || !validStatuses.includes(finalStatus)) {
                     return jsonResponse({
                         success: false,
                         error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
                     }, 400);
                 }
 
-                // Get user role
+                // Get requester info
                 const user = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
+                    "SELECT name, role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const role = user?.role?.toUpperCase() || '';
 
-                // Get ticket by ticket_id
+                // Get ticket to check permission
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM tickets WHERE ticket_id = ?"
+                    "SELECT * FROM tickets WHERE ticket_number = ?"
                 ).bind(ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check per revised spec:
-                // SuperAdmin can respond to any ticket.
-                // Assigned User can respond to their assigned ticket.
-                let canUpdate = false;
-                if (role === 'SUPERADMIN') {
-                    canUpdate = true;
-                } else {
-                    canUpdate = ticket.ticket_assigned_user === payload.userId;
+                // Permission check (Spec v3.0):
+                // Superadmin: full_access
+                // Assigned Admin: respond_ticket
+                const isSuperAdmin = role === 'SUPERADMIN';
+                const isAssigned = ticket.assigned_user_id === payload.userId;
+
+                if (!isSuperAdmin && !isAssigned) {
+                    return jsonResponse({ success: false, error: "Only SuperAdmin or the Assigned Responder can update the status of this ticket" }, 403);
                 }
 
-                if (!canUpdate) {
-                    return jsonResponse({ success: false, error: "Only SuperAdmin or the Assigned Responder can respond to this ticket" }, 403);
+                // Handle message thread append
+                let updatedMessages = [];
+                try {
+                    updatedMessages = typeof ticket.messages === 'string' ? JSON.parse(ticket.messages) : (ticket.messages || []);
+                } catch (e) { updatedMessages = []; }
+
+                if (reply && reply.trim()) {
+                    updatedMessages.push({
+                        sender_id: payload.userId,
+                        sender_name: user?.name || 'Staff',
+                        sender_role: role,
+                        text: reply.trim(),
+                        timestamp: new Date().toISOString()
+                    });
                 }
 
-                // Update ticket status
+                // Update ticket
                 await env.proveloce_db.prepare(`
                     UPDATE tickets SET 
                         status = ?, 
-                        ticket_responder = ?,
+                        messages = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE ticket_id = ?
-                `).bind(status, payload.userId, ticketId).run();
+                    WHERE ticket_number = ?
+                `).bind(finalStatus, JSON.stringify(updatedMessages), ticketId).run();
 
-                // Insert into thread if message is provided
-                if (reply && reply.trim()) {
-                    await env.proveloce_db.prepare(`
-                        INSERT INTO ticket_messages (ticket_id, sender_id, message)
-                        VALUES (?, ?, ?)
-                    `).bind(ticketId, payload.userId, reply.trim()).run();
-                }
-
-                // AUDIT TRAIL: Log response action
+                // AUDIT TRAIL
                 const logId = crypto.randomUUID();
-                const logMessage = `Ticket ${ticketId} status updated to ${status} with response by ${role.toLowerCase()}`;
+                const logMessage = `Ticket ${ticketId} status updated to ${finalStatus} by ${role.toLowerCase()}.`;
                 await env.proveloce_db.prepare(`
                     INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
-                `).bind(logId, payload.userId, 'RESPOND_TICKET', 'TICKET', ticketId, JSON.stringify({ message: logMessage, status })).run();
+                `).bind(logId, payload.userId, 'RESPOND_TICKET', 'TICKET', ticketId, JSON.stringify({ message: logMessage, status: finalStatus })).run();
 
                 return jsonResponse({
                     success: true,
                     message: "Ticket status updated successfully",
-                    data: { ticketId, status }
+                    data: { ticketId, status: finalStatus }
                 });
             }
 
@@ -3368,7 +3369,7 @@ export default {
                     return jsonResponse({ success: false, error: "assignedToId is required" }, 400);
                 }
 
-                // Verify requester is Admin or SuperAdmin
+                // Verify requester is SuperAdmin (Spec v3.0: superadmin_only)
                 const requester = await env.proveloce_db.prepare(
                     "SELECT role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
@@ -3387,19 +3388,19 @@ export default {
                     return jsonResponse({ success: false, error: "Assigned user not found" }, 404);
                 }
 
-                if (assignedUser.role?.toUpperCase() !== 'ADMIN') {
-                    return jsonResponse({ success: false, error: "Tickets can only be assigned to users with ADMIN role" }, 400);
+                if (assignedUser.role?.toUpperCase() !== 'ADMIN' && assignedUser.role?.toUpperCase() !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "Tickets can only be assigned to users with ADMIN or SUPERADMIN role" }, 400);
                 }
 
                 // Update ticket
                 await env.proveloce_db.prepare(`
                     UPDATE tickets SET 
-                        ticket_assigned_user = ?,
+                        assigned_user_id = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE ticket_id = ?
+                    WHERE ticket_number = ?
                 `).bind(assignedToId, ticketId).run();
 
-                // AUDIT TRAIL: Log "Ticket <ticket_id> assigned to <admin_user.username> by superadmin"
+                // AUDIT TRAIL
                 const logId = crypto.randomUUID();
                 const logMessage = `Ticket ${ticketId} assigned to ${assignedUser.username || assignedUser.name} by superadmin`;
                 await env.proveloce_db.prepare(`
@@ -3429,53 +3430,64 @@ export default {
                     return jsonResponse({ success: false, error: "Message is required" }, 400);
                 }
 
+                // Get requester info
+                const user = await env.proveloce_db.prepare(
+                    "SELECT name, role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+                const role = user?.role?.toUpperCase() || 'CUSTOMER';
+
                 // Get ticket to check permissions
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM tickets WHERE ticket_id = ?"
+                    "SELECT * FROM tickets WHERE ticket_number = ?"
                 ).bind(ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Get requester role
-                const user = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
-                ).bind(payload.userId).first() as any;
-                const role = user?.role?.toUpperCase() || 'CUSTOMER';
+                // Permission check (Spec v3.0):
+                // SuperAdmin full access, Assigned User can respond, Raised User can post (though spec says Raised User can view, usually they can also reply to their own thread)
+                // We'll allow SuperAdmin, Assigned User, or the Raising User to post.
+                const isSuperAdmin = role === 'SUPERADMIN';
+                const isAssigned = ticket.assigned_user_id === payload.userId;
+                const isRaiser = ticket.raised_by_user_id === payload.userId;
 
-                // Permission check: SuperAdmin, Assigned User, or Raised User
-                let canPost = false;
-                if (role === 'SUPERADMIN') {
-                    canPost = true;
-                } else if (payload.userId === ticket.user_id || payload.userId === ticket.ticket_assigned_user) {
-                    canPost = true;
-                }
-
-                if (!canPost) {
+                if (!isSuperAdmin && !isAssigned && !isRaiser) {
                     return jsonResponse({ success: false, error: "Not authorized to post to this ticket thread" }, 403);
                 }
 
-                // Insert message
-                await env.proveloce_db.prepare(`
-                    INSERT INTO ticket_messages (ticket_id, sender_id, message)
-                    VALUES (?, ?, ?)
-                `).bind(ticketId, payload.userId, message.trim()).run();
+                // Append message to JSON
+                let currentMessages = [];
+                try {
+                    currentMessages = typeof ticket.messages === 'string' ? JSON.parse(ticket.messages) : (ticket.messages || []);
+                } catch (e) { currentMessages = []; }
 
-                // If message is from raised user, set ticket back to OPEN if it was PENDING or CLOSED? 
-                // Spec doesn't specify, but good practice.
+                currentMessages.push({
+                    sender_id: payload.userId,
+                    sender_name: user?.name || 'User',
+                    sender_role: role,
+                    text: message.trim(),
+                    timestamp: new Date().toISOString()
+                });
+
+                await env.proveloce_db.prepare(`
+                    UPDATE tickets SET 
+                        messages = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE ticket_number = ?
+                `).bind(JSON.stringify(currentMessages), ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
-                const logMessage = `New message added to ticket ${ticketId} by ${role.toLowerCase()}`;
+                const logMessage = `New message added to ticket ${ticketId} by ${role.toLowerCase()}.`;
                 await env.proveloce_db.prepare(`
                     INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
-                `).bind(logId, payload.userId, 'POST_MESSAGE', 'TICKET', ticketId, JSON.stringify({ message: logMessage })).run();
+                `).bind(logId, payload.userId, 'POST_TICKET_MESSAGE', 'TICKET', ticketId, JSON.stringify({ message: logMessage })).run();
 
                 return jsonResponse({
                     success: true,
-                    message: "Message posted successfully"
+                    message: "Message added successfully"
                 });
             }
 

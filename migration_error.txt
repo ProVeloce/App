@@ -1,0 +1,61 @@
+﻿
+ Ôøà´©Å wrangler 4.54.0 (update available 4.58.0)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Resource location: remote 
+
+node.exe : [33mÔû▓ 
+[43;33m[[43;30mWAR
+NING[43;33m][0m 
+[1mÔÜá´©Å This 
+process may take 
+some time, during 
+which your D1 
+database will be 
+unavailable to 
+serve queries.[0m
+At line:1 char:1
++ & "C:\Program File
+s\nodejs/node.exe" "
+C:\Users\shrey\AppDa
+ta\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: ([33   
+ mÔû▓ [43;3...v    
+e queries.[0m:    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+
+
+­ƒîÇ Executing on remote database proveloce_db (3b3261c1-a83c-49dc-82df-4688cbdc785c):
+­ƒîÇ To execute on your local development database, remove the --remote flag from your wrangler command.
+Note: if the execution fails to complete, your DB will return to its original state and you can safely retry.
+Ôö£ Checking if file needs uploading
+Ôöé
+Ôö£ ­ƒîÇ Uploading 3b3261c1-a83c-49dc-82df-4688cbdc785c.2a53aac81bfe9fdd.sql
+Ôöé ­ƒîÇ Uploading complete.
+Ôöé
+
+[31mX [41;31m[[41
+;97mERROR[41;31m][
+0m [1mno such 
+column: attachment 
+at offset 620: 
+SQLITE_ERROR[0m
+
+
+ƒ¬Á  Logs were 
+written to "C:\Users
+\shrey\AppData\Roami
+ng\xdg.config\.wrang
+ler\logs\wrangler-20
+26-01-12_08-01-45_59
+9.log"
