@@ -610,6 +610,30 @@
     color: var(--primary-600);
 }
 
+/* View Ticket Action (VTA) Button - POML spec */
+.vta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 10px 20px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    background-color: #007BFF;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.vta-btn:hover {
+    background-color: #0056b3;
+}
+
+.vta-btn svg {
+    color: #FFFFFF;
+}
+
 /* Attachment Preview Modal (POML: size=medium) */
 .attachment-preview-overlay {
     z-index: 1100;

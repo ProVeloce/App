@@ -293,16 +293,10 @@ const HelpDesk: React.FC = () => {
                                 {selectedTicket.attachment_url ? (
                                     <div className="attachment-actions">
                                         <button
-                                            className="btn btn-secondary btn-sm"
+                                            className="vta-btn"
                                             onClick={() => handleViewAttachment(selectedTicket.attachment_url!)}
                                         >
-                                            <Eye size={14} /> View
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            onClick={() => handleDownloadAttachment(selectedTicket.attachment_url!)}
-                                        >
-                                            <Download size={14} /> Download
+                                            <Eye size={16} /> View Ticket Action
                                         </button>
                                     </div>
                                 ) : (
@@ -407,25 +401,11 @@ const HelpDesk: React.FC = () => {
                                                         <FileText size={64} />
                                                     </div>
                                                     <p className="generic-filename">{attachmentPreview.filename}</p>
-                                                    <p className="generic-message">Preview available - click Download to save file</p>
+                                                    <p className="generic-message">File preview - close to return to ticket</p>
                                                 </div>
                                             )}
                         </div>
-                        {/* Styled Download Button per POML spec */}
-                        <div className="preview-footer">
-                            <button
-                                className="preview-download-btn"
-                                onClick={() => {
-                                    // Need the original path, not blob URL
-                                    if (selectedTicket?.attachment_url) {
-                                        handleDownloadAttachment(selectedTicket.attachment_url);
-                                    }
-                                    closeAttachmentPreview();
-                                }}
-                            >
-                                <Download size={16} /> Download
-                            </button>
-                        </div>
+                        {/* Download button removed per POML spec - DownloadButton visible=false */}
                     </div>
                 </div>
             )}
