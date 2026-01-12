@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   phone TEXT,
   password_hash TEXT,
-  role TEXT DEFAULT 'customer',
-  status TEXT DEFAULT 'pending_verification',
+  role TEXT DEFAULT 'user' NOT NULL,
+  status TEXT DEFAULT 'Active' NOT NULL,
   email_verified INTEGER DEFAULT 0,
   avatar_data TEXT,
   avatar_mime_type TEXT,
@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS users (
   availability TEXT,           -- JSON object: {status:"Available", slots:[...]}
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT role_check CHECK (role IN ('superadmin', 'admin', 'user', 'expert')),
+  CONSTRAINT status_check CHECK (status IN ('Active', 'Suspended', 'Deactivated'))
 );
 
 -- USER PROFILES TABLE
@@ -48,7 +50,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 CREATE TABLE IF NOT EXISTS expert_applications (
   id TEXT PRIMARY KEY,
   user_id TEXT UNIQUE,
-  status TEXT DEFAULT 'draft',
+  status TEXT DEFAULT 'Pending' NOT NULL,
   
   -- Personal Details
   dob TEXT,
@@ -96,7 +98,8 @@ CREATE TABLE IF NOT EXISTS expert_applications (
   submitted_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT status_check CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Deactivated'))
 );
 
 -- TASKS FOR EXPERT ASSIGNMENTS

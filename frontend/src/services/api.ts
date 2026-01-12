@@ -501,4 +501,22 @@ export const documentApi = {
         api.get<ApiResponse<{ documents: any[]; count: number }>>('/admin/documents', { params }),
 };
 
+// Admin User Management API
+export const adminUserApi = {
+    getUsers: (params?: Record<string, any>) =>
+        api.get<ApiResponse<{ users: any[]; pagination: any }>>('/admin/users', { params }),
+
+    getUserById: (id: string) =>
+        api.get<ApiResponse<{ user: any }>>(`/admin/users/${id}`),
+
+    updateUser: (id: string, data: any) =>
+        api.patch<ApiResponse>(`/admin/users/${id}`, data),
+
+    deactivateUser: (id: string) =>
+        api.delete<ApiResponse>(`/admin/users/${id}`),
+
+    getAdminStats: () =>
+        api.get<ApiResponse>('/admin/stats'),
+};
+
 export default api;

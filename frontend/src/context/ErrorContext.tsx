@@ -82,7 +82,21 @@ export const showGlobalError = (title: string, message: string) => {
     if (globalSetError) {
         globalSetError({ title, message });
     } else {
-        // Fallback if context not yet initialized
         console.error(`[Error] ${title}: ${message}`);
+    }
+};
+
+// success notification support
+let globalSetSuccess: ((error: Omit<AppError, 'visible'>) => void) | null = null;
+
+export const registerGlobalSuccessHandler = (handler: (error: Omit<AppError, 'visible'>) => void) => {
+    globalSetSuccess = handler;
+};
+
+export const showGlobalSuccess = (title: string, message: string) => {
+    if (globalSetSuccess) {
+        globalSetSuccess({ title, message });
+    } else {
+        console.log(`[Success] ${title}: ${message}`);
     }
 };

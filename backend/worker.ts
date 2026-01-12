@@ -231,6 +231,19 @@ export default {
                     // TODO: Verify password hash (implement proper password verification)
                     // For now, just generate JWT for existing user
 
+                    // login trigger: set status to 'Active' if NULL or 'pending_verification'
+                    const currentStatus = user.status;
+                    if (!currentStatus || currentStatus === 'pending_verification') {
+                        await env.proveloce_db.prepare(
+                            "UPDATE users SET status = 'Active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                        ).bind(user.id).run();
+
+                        // Log the activation
+                        await env.proveloce_db.prepare(
+                            "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                        ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ reason: "Login Trigger", oldStatus: currentStatus, newStatus: "Active" })).run();
+                    }
+
                     const token = await createJWT(
                         { userId: user.id, email: user.email, name: user.name, role: user.role },
                         env.JWT_SECRET || "default-secret"
@@ -240,7 +253,7 @@ export default {
                         success: true,
                         message: "Login successful",
                         token,
-                        user: { id: user.id, name: user.name, email: user.email, role: user.role }
+                        user: { id: user.id, name: user.name, email: user.email, role: user.role, status: 'Active' }
                     });
                 } catch (e: any) {
                     return jsonResponse({ success: false, error: e.message || "Login failed" }, 400);
@@ -394,22 +407,42 @@ export default {
                     if (!user) {
                         const userId = crypto.randomUUID();
                         await env.proveloce_db.prepare(
-                            "INSERT INTO users (id, name, email, role, email_verified, avatar_data) VALUES (?, ?, ?, ?, ?, ?)"
+                            "INSERT INTO users (id, name, email, role, status, email_verified, avatar_data) VALUES (?, ?, ?, ?, ?, ?, ?)"
                         ).bind(
                             userId,
                             googleUser.name,
                             googleUser.email,
-                            "customer",
+                            "user",
+                            "Active",
                             1,
                             googleUser.picture || null
                         ).run();
+
+                        // Log activity
+                        await env.proveloce_db.prepare(
+                            "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                        ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "google", role: "user", status: "Active" })).run();
 
                         user = {
                             id: userId,
                             name: googleUser.name,
                             email: googleUser.email,
-                            role: "customer"
+                            role: "user",
+                            status: "Active"
                         };
+                    } else {
+                        // existing user login trigger
+                        if (!user.status || user.status === 'pending_verification') {
+                            await env.proveloce_db.prepare(
+                                "UPDATE users SET status = 'Active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                            ).bind(user.id).run();
+
+                            await env.proveloce_db.prepare(
+                                "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                            ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ method: "google", oldStatus: user.status, newStatus: "Active" })).run();
+
+                            user.status = "Active";
+                        }
                     }
 
                     // Generate JWT token
@@ -1033,9 +1066,12 @@ export default {
                     return jsonResponse({ success: false, error: "Admins cannot modify other admins" }, 403);
                 }
 
-                // Privilege escalation prevention
+                // privilege escalation prevention
                 if (role !== undefined) {
                     const newRole = role.toLowerCase();
+                    if (!['superadmin', 'admin', 'user', 'expert'].includes(newRole)) {
+                        return jsonResponse({ success: false, error: "Invalid role" }, 400);
+                    }
                     // Admin cannot assign admin or superadmin roles
                     if (requesterRole === "admin" && (newRole === "admin" || newRole === "superadmin")) {
                         return jsonResponse({ success: false, error: "You don't have permission to assign this role" }, 403);
@@ -1043,6 +1079,12 @@ export default {
                     // Only superadmin can assign superadmin role
                     if (newRole === "superadmin" && requesterRole !== "superadmin") {
                         return jsonResponse({ success: false, error: "Only superadmin can assign superadmin role" }, 403);
+                    }
+                }
+
+                if (status !== undefined) {
+                    if (!['Active', 'Suspended', 'Deactivated'].includes(status)) {
+                        return jsonResponse({ success: false, error: "Invalid status" }, 400);
                     }
                 }
 
@@ -1106,15 +1148,15 @@ export default {
                     return jsonResponse({ success: false, error: "Cannot delete superadmin" }, 403);
                 }
 
-                // Soft delete - set status to deactivated
+                // Soft delete - set status to 'Deactivated'
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET status = 'deactivated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET status = 'Deactivated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                 ).bind(id).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), auth.payload.userId, "DELETE_USER", "user", id, JSON.stringify({ userId: id })).run();
+                ).bind(crypto.randomUUID(), auth.payload.userId, "DELETE_USER", "user", id, JSON.stringify({ deactivatedUser: id, status: 'Deactivated' })).run();
 
                 return jsonResponse({ success: true, message: "User deactivated successfully" });
             }
@@ -1609,12 +1651,12 @@ export default {
                     return jsonResponse({ success: false, error: "Application not found" }, 404);
                 }
 
-                // Update application status
+                // Update application status to 'Approved'
                 await env.proveloce_db.prepare(
-                    "UPDATE expert_applications SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-                ).bind(applicationId).run();
+                    "UPDATE expert_applications SET status = 'Approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(payload.userId, applicationId).run();
 
-                // Update user role to EXPERT
+                // Update user role to 'expert'
                 await env.proveloce_db.prepare(
                     "UPDATE users SET role = 'expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                 ).bind(app.user_id).run();
@@ -1622,7 +1664,7 @@ export default {
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), payload.userId, "APPROVE_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ approvedBy: payload.userId })).run();
+                ).bind(crypto.randomUUID(), payload.userId, "APPROVE_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ approvedBy: payload.userId, userId: app.user_id, status: 'Approved', role: 'expert' })).run();
 
                 return jsonResponse({ success: true, message: "Application approved" });
             }
@@ -1657,13 +1699,13 @@ export default {
                 }
 
                 await env.proveloce_db.prepare(
-                    "UPDATE expert_applications SET status = 'rejected', rejection_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-                ).bind(reason, applicationId).run();
+                    "UPDATE expert_applications SET status = 'Rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                ).bind(reason, payload.userId, applicationId).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), payload.userId, "REJECT_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ rejectedBy: payload.userId, reason })).run();
+                ).bind(crypto.randomUUID(), payload.userId, "REJECT_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ rejectedBy: payload.userId, status: 'Rejected', reason })).run();
 
                 return jsonResponse({ success: true, message: "Application rejected" });
             }

@@ -107,13 +107,14 @@ const ExpertReviewCenter: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
+    const s = status.toUpperCase();
     const badges: Record<string, { color: string; icon: React.ReactNode }> = {
       PENDING: { color: 'warning', icon: <Clock size={14} /> },
       APPROVED: { color: 'success', icon: <CheckCircle size={14} /> },
       REJECTED: { color: 'danger', icon: <XCircle size={14} /> },
-      DRAFT: { color: 'secondary', icon: <FileText size={14} /> },
+      DEACTIVATED: { color: 'secondary', icon: <XCircle size={14} /> },
     };
-    const badge = badges[status] || badges.PENDING;
+    const badge = badges[s] || badges.PENDING;
     return (
       <span className={`status-badge ${badge.color}`}>
         {badge.icon}
@@ -147,6 +148,7 @@ const ExpertReviewCenter: React.FC = () => {
           <option value="PENDING">Pending</option>
           <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
+          <option value="DEACTIVATED">Deactivated</option>
           <option value="">All</option>
         </select>
         <button onClick={fetchApplications} className="refresh-btn">
