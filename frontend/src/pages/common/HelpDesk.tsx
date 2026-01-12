@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ticketApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, ExternalLink, User, Mail, Phone, Shield } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User, Mail, Phone, Shield, FileText } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
@@ -36,6 +36,11 @@ const HelpDesk: React.FC = () => {
     const [adminReply, setAdminReply] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
     const [submittingResponse, setSubmittingResponse] = useState(false);
+
+    // Attachment preview modal state
+    const [attachmentPreview, setAttachmentPreview] = useState<{ show: boolean; url: string; filename: string }>({
+        show: false, url: '', filename: ''
+    });
 
     const { success, error } = useToast();
     const { user } = useAuth();
@@ -107,6 +112,35 @@ const HelpDesk: React.FC = () => {
         } finally {
             setSubmittingResponse(false);
         }
+    };
+
+    // Open attachment in inline modal (POML: redirect=false, mode=popup)
+    const handleViewAttachment = (url: string) => {
+        const filename = url.split('/').pop() || 'attachment';
+        setAttachmentPreview({ show: true, url, filename });
+    };
+
+    // Direct download without redirect (POML: mode=direct, redirect=false)
+    const handleDownloadAttachment = async (url: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const filename = url.split('/').pop() || 'attachment';
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+            error('Failed to download attachment');
+        }
+    };
+
+    const closeAttachmentPreview = () => {
+        setAttachmentPreview({ show: false, url: '', filename: '' });
     };
 
     const getStatusIcon = (status: string) => {
@@ -232,12 +266,18 @@ const HelpDesk: React.FC = () => {
                                 <label>Attachment</label>
                                 {selectedTicket.attachment_url ? (
                                     <div className="attachment-actions">
-                                        <a href={selectedTicket.attachment_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
-                                            <ExternalLink size={14} /> View
-                                        </a>
-                                        <a href={selectedTicket.attachment_url} download className="btn btn-secondary btn-sm">
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => handleViewAttachment(selectedTicket.attachment_url!)}
+                                        >
+                                            <Eye size={14} /> View
+                                        </button>
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => handleDownloadAttachment(selectedTicket.attachment_url!)}
+                                        >
                                             <Download size={14} /> Download
-                                        </a>
+                                        </button>
                                     </div>
                                 ) : (
                                     <p className="no-attachment">No attachment provided</p>
@@ -292,6 +332,41 @@ const HelpDesk: React.FC = () => {
                                             {submittingResponse ? 'Sending...' : <><Send size={16} /> Send Response</>}
                                         </button>
                                     </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Attachment Preview Modal (POML: popup mode, inline source) */}
+            {attachmentPreview.show && (
+                <div className="modal-overlay attachment-preview-overlay" onClick={closeAttachmentPreview}>
+                    <div className="attachment-preview-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="preview-header">
+                            <div className="preview-title">
+                                <FileText size={20} />
+                                <span>{attachmentPreview.filename}</span>
+                            </div>
+                            <button className="close-btn" onClick={closeAttachmentPreview}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="preview-content">
+                            {attachmentPreview.url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? (
+                                <img src={attachmentPreview.url} alt="Attachment preview" className="preview-image" />
+                            ) : attachmentPreview.url.match(/\.(pdf)$/i) ? (
+                                <iframe src={attachmentPreview.url} title="PDF Preview" className="preview-iframe" />
+                            ) : (
+                                <div className="preview-unsupported">
+                                    <FileText size={48} />
+                                    <p>Preview not available for this file type</p>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => handleDownloadAttachment(attachmentPreview.url)}
+                                    >
+                                        <Download size={16} /> Download to View
+                                    </button>
                                 </div>
                             )}
                         </div>
