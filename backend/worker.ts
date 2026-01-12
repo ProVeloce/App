@@ -3253,8 +3253,8 @@ export default {
                     FROM tickets t
                     LEFT JOIN users u_raised ON t.raised_by_user_id = u_raised.id
                     LEFT JOIN users u_assign ON t.assigned_user_id = u_assign.id
-                    WHERE t.ticket_number = ?
-                `).bind(ticketId).first() as any;
+                    WHERE t.id = ? OR t.ticket_number = ?
+                `).bind(ticketId, ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
@@ -3322,8 +3322,8 @@ export default {
 
                 // Get ticket to check permission
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM tickets WHERE ticket_number = ?"
-                ).bind(ticketId).first() as any;
+                    "SELECT * FROM tickets WHERE id = ? OR ticket_number = ?"
+                ).bind(ticketId, ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
@@ -3361,8 +3361,8 @@ export default {
                         status = ?, 
                         messages = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE ticket_number = ?
-                `).bind(finalStatus, JSON.stringify(updatedMessages), ticketId).run();
+                    WHERE id = ? OR ticket_number = ?
+                `).bind(finalStatus, JSON.stringify(updatedMessages), ticketId, ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
@@ -3423,8 +3423,8 @@ export default {
                     UPDATE tickets SET 
                         assigned_user_id = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE ticket_number = ?
-                `).bind(assignedToId, ticketId).run();
+                    WHERE id = ? OR ticket_number = ?
+                `).bind(assignedToId, ticketId, ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
@@ -3464,8 +3464,8 @@ export default {
 
                 // Get ticket to check permissions
                 const ticket = await env.proveloce_db.prepare(
-                    "SELECT * FROM tickets WHERE ticket_number = ?"
-                ).bind(ticketId).first() as any;
+                    "SELECT * FROM tickets WHERE id = ? OR ticket_number = ?"
+                ).bind(ticketId, ticketId).first() as any;
 
                 if (!ticket) {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
@@ -3500,8 +3500,8 @@ export default {
                     UPDATE tickets SET 
                         messages = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE ticket_number = ?
-                `).bind(JSON.stringify(currentMessages), ticketId).run();
+                    WHERE id = ? OR ticket_number = ?
+                `).bind(JSON.stringify(currentMessages), ticketId, ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
