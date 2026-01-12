@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ticketApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, Clock, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, ExternalLink, User, Mail, Phone, Shield } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
@@ -31,11 +31,18 @@ const HelpDesk: React.FC = () => {
     const [showNewTicket, setShowNewTicket] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
+
+    // Admin response state
+    const [adminReply, setAdminReply] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
+    const [submittingResponse, setSubmittingResponse] = useState(false);
+
     const { success, error } = useToast();
     const { user } = useAuth();
 
-    // SuperAdmin cannot create tickets
-    const canCreateTicket = user?.role?.toLowerCase() !== 'superadmin';
+    const userRole = user?.role?.toUpperCase() || 'CUSTOMER';
+    const isAdminOrSuperAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+    const canCreateTicket = userRole !== 'SUPERADMIN';
 
     useEffect(() => { fetchTickets(); }, []);
 
@@ -51,6 +58,8 @@ const HelpDesk: React.FC = () => {
         setTimeout(() => {
             setSelectedTicket(null);
             setIsClosingViewTicket(false);
+            setAdminReply('');
+            setSelectedStatus('APPROVED');
         }, 300);
     };
 
@@ -63,14 +72,7 @@ const HelpDesk: React.FC = () => {
             formData.append('attachment', data.attachment);
         }
         const response = await ticketApi.createTicket(formData);
-        console.log('[HelpDesk] Ticket creation response:', response.data);
-
-        // Backend returns ticketId inside the data object
         const ticketNumber = response.data?.data?.ticketId || 'UNKNOWN';
-        if (ticketNumber === 'UNKNOWN') {
-            console.error('[HelpDesk] Ticket Number missing in response:', response.data);
-        }
-
         success('Ticket submitted successfully');
         fetchTickets();
         return { ticketNumber };
@@ -81,19 +83,38 @@ const HelpDesk: React.FC = () => {
             const response = await ticketApi.getTicketById(ticket.ticket_id);
             if (response.data.success && response.data.data) {
                 setSelectedTicket(response.data.data.ticket);
+                setAdminReply(response.data.data.ticket.admin_reply || '');
             }
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Failed to load ticket';
-            error(msg);
+            error(err.response?.data?.message || 'Failed to load ticket');
+        }
+    };
+
+    const handleSendResponse = async () => {
+        if (!selectedTicket || !adminReply.trim()) {
+            error('Please enter a response message');
+            return;
+        }
+
+        setSubmittingResponse(true);
+        try {
+            await ticketApi.updateTicketStatus(selectedTicket.ticket_id, selectedStatus, adminReply.trim());
+            success(`Ticket ${selectedStatus.toLowerCase()} successfully`);
+            fetchTickets();
+            closeViewTicket();
+        } catch (err: any) {
+            error(err.response?.data?.message || 'Failed to update ticket');
+        } finally {
+            setSubmittingResponse(false);
         }
     };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'PENDING': return <AlertCircle size={16} className="status-open" />;
-            case 'APPROVED': return <CheckCircle size={16} className="status-resolved" />;
-            case 'REJECTED': return <X size={16} className="status-closed" />;
-            default: return <Clock size={16} className="status-progress" />;
+            case 'PENDING': return <AlertCircle size={16} className="status-pending" />;
+            case 'APPROVED': return <CheckCircle size={16} className="status-approved" />;
+            case 'REJECTED': return <X size={16} className="status-rejected" />;
+            default: return <AlertCircle size={16} />;
         }
     };
 
@@ -106,7 +127,7 @@ const HelpDesk: React.FC = () => {
                         <span className="title-main">Help Desk</span>
                         <span className="title-separator">·</span>
                         <span className="title-sub">
-                            {canCreateTicket ? 'Get support from our team' : 'View and manage support tickets'}
+                            {isAdminOrSuperAdmin ? 'Review and respond to tickets' : 'Get support from our team'}
                         </span>
                     </h1>
                 </div>
@@ -124,7 +145,7 @@ const HelpDesk: React.FC = () => {
                     <div className="empty-state">
                         <MessageCircle size={48} className="empty-icon" />
                         <h2>No tickets yet</h2>
-                        <p>Create a ticket to get support from our team</p>
+                        <p>{isAdminOrSuperAdmin ? 'No tickets require your attention' : 'Create a ticket to get support from our team'}</p>
                         {canCreateTicket && (
                             <button className="btn btn-primary empty-cta" onClick={() => setShowNewTicket(true)}>
                                 Create Ticket
@@ -142,6 +163,7 @@ const HelpDesk: React.FC = () => {
                                     <div className="ticket-meta">
                                         <span className="ticket-category">{t.category}</span>
                                         <span className={`ticket-status-badge ${t.status.toLowerCase()}`}>{t.status}</span>
+                                        {isAdminOrSuperAdmin && <span className="ticket-user-badge">{t.user_full_name || 'Unknown User'}</span>}
                                     </div>
                                 </div>
                             </div>
@@ -150,7 +172,6 @@ const HelpDesk: React.FC = () => {
                 )}
             </div>
 
-            {/* Premium New Ticket Modal */}
             <NewTicketModal
                 isOpen={showNewTicket}
                 onClose={() => setShowNewTicket(false)}
@@ -172,26 +193,58 @@ const HelpDesk: React.FC = () => {
                             </div>
                             <button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button>
                         </div>
+
                         <div className="ticket-detail-body modal-text-advanced">
+                            {/* User Identity Card - Admin/SuperAdmin Only */}
+                            {isAdminOrSuperAdmin && (
+                                <div className="user-identity-card">
+                                    <label>Submitted By</label>
+                                    <div className="identity-details">
+                                        <div className="identity-row">
+                                            <User size={16} />
+                                            <span>{selectedTicket.user_full_name || 'Unknown'}</span>
+                                        </div>
+                                        <div className="identity-row">
+                                            <Mail size={16} />
+                                            <span>{selectedTicket.user_email || 'No email'}</span>
+                                        </div>
+                                        {selectedTicket.user_phone_number && (
+                                            <div className="identity-row">
+                                                <Phone size={16} />
+                                                <span>{selectedTicket.user_phone_number}</span>
+                                            </div>
+                                        )}
+                                        <div className="identity-row">
+                                            <Shield size={16} />
+                                            <span className="role-badge">{selectedTicket.user_role}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="ticket-description">
                                 <label>Description</label>
                                 <p>{selectedTicket.description}</p>
                             </div>
 
-                            {selectedTicket.attachment_url && (
-                                <div className="ticket-attachment">
-                                    <label>Attachment</label>
+                            {/* Attachment Section */}
+                            <div className="ticket-attachment">
+                                <label>Attachment</label>
+                                {selectedTicket.attachment_url ? (
                                     <div className="attachment-actions">
                                         <a href={selectedTicket.attachment_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
-                                            View Attachment
+                                            <ExternalLink size={14} /> View
                                         </a>
                                         <a href={selectedTicket.attachment_url} download className="btn btn-secondary btn-sm">
-                                            Download
+                                            <Download size={14} /> Download
                                         </a>
                                     </div>
-                                </div>
-                            )}
+                                ) : (
+                                    <p className="no-attachment">No attachment provided</p>
+                                )}
+                            </div>
 
+                            {/* Admin Reply Section (for users viewing response) */}
                             {selectedTicket.admin_reply && (
                                 <div className="ticket-admin-reply">
                                     <label>Admin Response</label>
@@ -201,10 +254,44 @@ const HelpDesk: React.FC = () => {
                                 </div>
                             )}
 
-                            {!selectedTicket.admin_reply && selectedTicket.status === 'PENDING' && (
-                                <div className="ticket-messages">
-                                    <label>Status</label>
-                                    <p className="no-messages">Waiting for response from our support team...</p>
+                            {/* Pending Status Message (for users) */}
+                            {!isAdminOrSuperAdmin && !selectedTicket.admin_reply && selectedTicket.status === 'PENDING' && (
+                                <div className="ticket-pending-notice">
+                                    <AlertCircle size={20} />
+                                    <span>Waiting for response from our support team...</span>
+                                </div>
+                            )}
+
+                            {/* Admin Response Form */}
+                            {isAdminOrSuperAdmin && selectedTicket.status === 'PENDING' && (
+                                <div className="admin-response-form">
+                                    <label>Send Response</label>
+                                    <textarea
+                                        className="admin-reply-textarea"
+                                        placeholder="Enter your response to this ticket..."
+                                        value={adminReply}
+                                        onChange={(e) => setAdminReply(e.target.value)}
+                                        rows={4}
+                                    />
+                                    <div className="response-actions">
+                                        <div className="status-selector">
+                                            <label>Status:</label>
+                                            <select
+                                                value={selectedStatus}
+                                                onChange={(e) => setSelectedStatus(e.target.value as 'APPROVED' | 'REJECTED')}
+                                            >
+                                                <option value="APPROVED">Approved</option>
+                                                <option value="REJECTED">Rejected</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={handleSendResponse}
+                                            disabled={submittingResponse || !adminReply.trim()}
+                                        >
+                                            {submittingResponse ? 'Sending...' : <><Send size={16} /> Send Response</>}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -216,3 +303,4 @@ const HelpDesk: React.FC = () => {
 };
 
 export default HelpDesk;
+

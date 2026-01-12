@@ -369,3 +369,243 @@
     color: var(--text-muted);
     font-size: 0.875rem;
 }
+
+/* Status Icon Colors */
+.status-pending {
+    color: var(--warning-600);
+}
+
+.status-approved {
+    color: var(--success-600);
+}
+
+.status-rejected {
+    color: var(--error-500);
+}
+
+/* User Identity Card (Admin View) */
+.user-identity-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.user-identity-card label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+    letter-spacing: 0.05em;
+}
+
+.identity-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.identity-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.identity-row svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.role-badge {
+    background: var(--primary-100);
+    color: var(--primary-700);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* User Badge in Ticket List */
+.ticket-user-badge {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* No Attachment */
+.no-attachment {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+/* Admin Reply Section */
+.ticket-admin-reply {
+    background: var(--success-50);
+    border: 1px solid var(--success-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+}
+
+.ticket-admin-reply label {
+    color: var(--success-700);
+}
+
+.admin-reply-content {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+.admin-reply-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* Pending Notice */
+.ticket-pending-notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: var(--warning-50);
+    border: 1px solid var(--warning-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    color: var(--warning-700);
+    font-size: 0.875rem;
+}
+
+.ticket-pending-notice svg {
+    flex-shrink: 0;
+}
+
+/* Admin Response Form */
+.admin-response-form {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.admin-response-form>label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-3);
+    letter-spacing: 0.05em;
+}
+
+.admin-reply-textarea {
+    width: 100%;
+    padding: var(--space-3);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+}
+
+.admin-reply-textarea:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(var(--primary-600-rgb, 79, 70, 229), 0.15);
+}
+
+.admin-reply-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.response-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.status-selector {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.status-selector label {
+    font-size: 0.813rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.status-selector select {
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.status-selector select:focus {
+    outline: none;
+    border-color: var(--primary-500);
+}
+
+/* Attachment Actions */
+.ticket-attachment {
+    margin-top: var(--space-2);
+}
+
+.ticket-attachment label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+    letter-spacing: 0.05em;
+}
+
+.attachment-actions {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.attachment-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.btn-sm {
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.75rem;
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+    border-color: var(--primary-500);
+    color: var(--primary-600);
+}
