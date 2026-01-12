@@ -3125,8 +3125,9 @@ export default {
                     whereClause = '(t.user_id = ? OR t.ticket_assigned_user = ?)';
                     params = [payload.userId, payload.userId];
                 } else if (role === 'ADMIN') {
-                    whereClause = 't.user_role IN (?, ?)';  // Only customer and expert tickets
-                    params = ['CUSTOMER', 'EXPERT'];
+                    // Admins see Customer/Expert tickets OR tickets they created herself
+                    whereClause = '(t.user_role IN (?, ?) OR t.user_id = ?)';
+                    params = ['CUSTOMER', 'EXPERT', payload.userId];
                 } else if (role === 'SUPERADMIN') {
                     // No WHERE clause - see all tickets
                 }
@@ -3197,8 +3198,8 @@ export default {
                     // Expert can view if they created it OR it's assigned to them
                     canView = ticket.user_id === payload.userId || ticket.ticket_assigned_user === payload.userId;
                 } else if (role === 'ADMIN') {
-                    // Admins see Customer/Expert tickets
-                    canView = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
+                    // Admins see Customer/Expert tickets OR tickets they created
+                    canView = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT' || ticket.user_id === payload.userId;
                 } else if (role === 'SUPERADMIN') {
                     canView = true;
                 }
@@ -3268,11 +3269,11 @@ export default {
                     return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
                 }
 
-                // Update ticket status, admin_reply and set responder
+                // Update ticket status, message_response and set responder
                 await env.proveloce_db.prepare(`
                     UPDATE tickets SET 
                         status = ?, 
-                        admin_reply = ?, 
+                        message_response = ?, 
                         ticket_responder = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE ticket_id = ?
@@ -3281,7 +3282,7 @@ export default {
                 return jsonResponse({
                     success: true,
                     message: "Ticket status updated successfully",
-                    data: { ticketId, status, adminReply: reply }
+                    data: { ticketId, status, messageResponse: reply }
                 });
             }
 

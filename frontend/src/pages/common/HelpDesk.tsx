@@ -20,7 +20,7 @@ interface Ticket {
     description: string;
     attachment_url: string | null;
     status: string;
-    admin_reply: string | null;
+    message_response: string | null;
     ticket_responder: string | null;
     responder_name: string | null;
     responder_role: string | null;
@@ -39,7 +39,7 @@ const HelpDesk: React.FC = () => {
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
 
     // Admin response state
-    const [adminReply, setAdminReply] = useState('');
+    const [messageResponse, setMessageResponse] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
     const [submittingResponse, setSubmittingResponse] = useState(false);
 
@@ -89,7 +89,7 @@ const HelpDesk: React.FC = () => {
         setTimeout(() => {
             setSelectedTicket(null);
             setIsClosingViewTicket(false);
-            setAdminReply('');
+            setMessageResponse('');
             setSelectedStatus('APPROVED');
         }, 300);
     };
@@ -114,7 +114,7 @@ const HelpDesk: React.FC = () => {
             const response = await ticketApi.getTicketById(ticket.ticket_id);
             if (response.data.success && response.data.data) {
                 setSelectedTicket(response.data.data.ticket);
-                setAdminReply(response.data.data.ticket.admin_reply || '');
+                setMessageResponse(response.data.data.ticket.message_response || '');
             }
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to load ticket');
@@ -122,14 +122,14 @@ const HelpDesk: React.FC = () => {
     };
 
     const handleSendResponse = async () => {
-        if (!selectedTicket || !adminReply.trim()) {
+        if (!selectedTicket || !messageResponse.trim()) {
             error('Please enter a response message');
             return;
         }
 
         setSubmittingResponse(true);
         try {
-            await ticketApi.updateTicketStatus(selectedTicket.ticket_id, selectedStatus, adminReply.trim());
+            await ticketApi.updateTicketStatus(selectedTicket.ticket_id, selectedStatus, messageResponse.trim());
             success(`Ticket ${selectedStatus.toLowerCase()} successfully`);
             fetchTickets();
             closeViewTicket();
@@ -353,18 +353,18 @@ const HelpDesk: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Admin Reply Section (for users viewing response) */}
-                            {selectedTicket.admin_reply && (
+                            {/* Message Response Section (for users viewing response) */}
+                            {selectedTicket.message_response && (
                                 <div className="ticket-admin-reply">
-                                    <label>Admin Response</label>
+                                    <label>Message Response</label>
                                     <div className="admin-reply-content">
-                                        <p>{selectedTicket.admin_reply}</p>
+                                        <p>{selectedTicket.message_response}</p>
                                     </div>
                                 </div>
                             )}
 
                             {/* Pending Status Message (for users) */}
-                            {!isAdminOrSuperAdmin && !selectedTicket.admin_reply && selectedTicket.status === 'PENDING' && (
+                            {!isAdminOrSuperAdmin && !selectedTicket.message_response && selectedTicket.status === 'PENDING' && (
                                 <div className="ticket-pending-notice">
                                     <AlertCircle size={20} />
                                     <span>Waiting for response from our support team...</span>
@@ -378,8 +378,8 @@ const HelpDesk: React.FC = () => {
                                     <textarea
                                         className="admin-reply-textarea"
                                         placeholder="Enter your response to this ticket..."
-                                        value={adminReply}
-                                        onChange={(e) => setAdminReply(e.target.value)}
+                                        value={messageResponse}
+                                        onChange={(e) => setMessageResponse(e.target.value)}
                                         rows={4}
                                     />
                                     <div className="response-actions">
@@ -396,7 +396,7 @@ const HelpDesk: React.FC = () => {
                                         <button
                                             className="btn btn-primary"
                                             onClick={handleSendResponse}
-                                            disabled={submittingResponse || !adminReply.trim()}
+                                            disabled={submittingResponse || !messageResponse.trim()}
                                         >
                                             {submittingResponse ? 'Sending...' : <><Send size={16} /> Send Response</>}
                                         </button>
