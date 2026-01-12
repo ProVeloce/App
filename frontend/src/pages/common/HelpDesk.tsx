@@ -379,22 +379,52 @@ const HelpDesk: React.FC = () => {
                             </button>
                         </div>
                         <div className="preview-content">
-                            {attachmentPreview.url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? (
+                            {/* Image preview */}
+                            {attachmentPreview.filename.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i) ? (
                                 <img src={attachmentPreview.url} alt="Attachment preview" className="preview-image" />
-                            ) : attachmentPreview.url.match(/\.(pdf)$/i) ? (
-                                <iframe src={attachmentPreview.url} title="PDF Preview" className="preview-iframe" />
-                            ) : (
-                                <div className="preview-unsupported">
-                                    <FileText size={48} />
-                                    <p>Preview not available for this file type</p>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={() => handleDownloadAttachment(attachmentPreview.url)}
-                                    >
-                                        <Download size={16} /> Download to View
-                                    </button>
-                                </div>
-                            )}
+                            ) : /* PDF preview */
+                                attachmentPreview.filename.match(/\.(pdf)$/i) ? (
+                                    <iframe src={attachmentPreview.url} title="PDF Preview" className="preview-iframe" />
+                                ) : /* Video preview */
+                                    attachmentPreview.filename.match(/\.(mp4|webm|ogg|mov|avi)$/i) ? (
+                                        <video src={attachmentPreview.url} controls className="preview-video">
+                                            Your browser does not support video playback
+                                        </video>
+                                    ) : /* Audio preview */
+                                        attachmentPreview.filename.match(/\.(mp3|wav|ogg|m4a|aac)$/i) ? (
+                                            <div className="preview-audio-container">
+                                                <FileText size={64} className="audio-icon" />
+                                                <p className="audio-filename">{attachmentPreview.filename}</p>
+                                                <audio src={attachmentPreview.url} controls className="preview-audio" />
+                                            </div>
+                                        ) : /* Text/Code preview attempt via iframe */
+                                            attachmentPreview.filename.match(/\.(txt|json|xml|csv|log|md|html|htm|css|js|ts|jsx|tsx)$/i) ? (
+                                                <iframe src={attachmentPreview.url} title="Text Preview" className="preview-iframe preview-text" />
+                                            ) : (
+                                                /* Generic fallback viewer for all other types */
+                                                <div className="preview-generic">
+                                                    <div className="generic-file-icon">
+                                                        <FileText size={64} />
+                                                    </div>
+                                                    <p className="generic-filename">{attachmentPreview.filename}</p>
+                                                    <p className="generic-message">Preview available - click Download to save file</p>
+                                                </div>
+                                            )}
+                        </div>
+                        {/* Styled Download Button per POML spec */}
+                        <div className="preview-footer">
+                            <button
+                                className="preview-download-btn"
+                                onClick={() => {
+                                    // Need the original path, not blob URL
+                                    if (selectedTicket?.attachment_url) {
+                                        handleDownloadAttachment(selectedTicket.attachment_url);
+                                    }
+                                    closeAttachmentPreview();
+                                }}
+                            >
+                                <Download size={16} /> Download
+                            </button>
                         </div>
                     </div>
                 </div>
