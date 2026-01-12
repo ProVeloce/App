@@ -991,14 +991,14 @@ export default {
 
                 // Role creation restrictions
                 const requesterRole = (auth.payload.role || "").toLowerCase();
-                const finalRole = (role || "viewer").toLowerCase();
+                const finalRole = (role || "Customer").toLowerCase() === "expert" ? "Expert" : (role === "Customer" || role === "viewer" ? "Customer" : role);
                 const finalStatus = (status || "active").toLowerCase();
 
                 // Validation
-                if (!['superadmin', 'admin', 'agent', 'viewer', 'customer', 'expert', 'analyst'].includes(finalRole)) {
-                    return jsonResponse({ success: false, error: "Invalid role" }, 400);
+                if (!['superadmin', 'admin', 'Expert', 'Customer'].includes(finalRole)) {
+                    return jsonResponse({ success: false, error: "Invalid role (must be Expert or Customer)" }, 400);
                 }
-                if (!['active', 'inactive', 'suspended', 'pending_verification'].includes(finalStatus)) {
+                if (!['active', 'inactive', 'suspended'].includes(finalStatus)) {
                     return jsonResponse({ success: false, error: "Invalid status" }, 400);
                 }
 
@@ -1045,7 +1045,12 @@ export default {
 
                 const id = url.pathname.split("/").pop();
                 const body = await request.json() as any;
-                const { name, email, phone, role, status } = body;
+                const { name, email, phone, role, status, save_cta_state, save_cta_action } = body;
+
+                // Workflow_SaveCTA Enforcement
+                if (save_cta_state !== 'enabled' || save_cta_action !== 'commit_changes_to_db') {
+                    return jsonResponse({ success: false, error: "Workflow compliance error: Save CTA state must be enabled and action must be commit_changes_to_db" }, 400);
+                }
 
                 // Check if user exists and get their current role
                 const existing = await env.proveloce_db.prepare(
@@ -1070,11 +1075,10 @@ export default {
                     return jsonResponse({ success: false, error: "Admins cannot modify other admins" }, 403);
                 }
 
-                // role change guards (POML Spec)
+                // role change guards (RoleMapping spec)
                 if (role !== undefined) {
-                    const newRole = role.toLowerCase();
-                    if (!['superadmin', 'admin', 'agent', 'viewer', 'customer', 'expert', 'analyst'].includes(newRole)) {
-                        return jsonResponse({ success: false, error: "Invalid role" }, 400);
+                    if (!['superadmin', 'admin', 'Expert', 'Customer'].includes(role)) {
+                        return jsonResponse({ success: false, error: "Invalid role mapping: value must be Expert or Customer" }, 400);
                     }
 
                     // Enforce RBAC guardrails: Only superadmin can change roles
@@ -1090,7 +1094,7 @@ export default {
 
                 if (status !== undefined) {
                     const nextStatus = status.toLowerCase();
-                    if (!['active', 'inactive', 'suspended', 'pending_verification'].includes(nextStatus)) {
+                    if (!['active', 'inactive', 'suspended'].includes(nextStatus)) {
                         return jsonResponse({ success: false, error: "Invalid status" }, 400);
                     }
                 }
@@ -1116,10 +1120,24 @@ export default {
                     `UPDATE users SET ${updates.join(", ")} WHERE id = ?`
                 ).bind(...values).run();
 
-                // Log activity
+                // Log activity with save_cta metadata
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), auth.payload.userId, "UPDATE_USER", "user", id, JSON.stringify(body)).run();
+                ).bind(
+                    crypto.randomUUID(),
+                    auth.payload.userId,
+                    "UPDATE_USER",
+                    "user",
+                    id,
+                    JSON.stringify({
+                        ...body,
+                        save_cta_invoked: {
+                            state: save_cta_state,
+                            action: save_cta_action,
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                ).run();
 
                 const updatedUser = await env.proveloce_db.prepare(
                     "SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?"
@@ -1202,11 +1220,8 @@ export default {
                     const count = row.count || 0;
                     stats.totalUsers += count;
                     if (role === "admin") stats.admins = count;
-                    if (role === "analyst") stats.analysts = count;
-                    if (role === "expert") stats.experts = count;
-                    if (role === "customer") stats.customers = count;
-                    if (role === "agent") stats.agents = count; // Count agents
-                    if (role === "viewer") stats.viewers = count; // Count viewers
+                    if (role === "Expert") stats.experts = count;
+                    if (role === "Customer") stats.customers = count;
                 }
 
                 // Get counts by status

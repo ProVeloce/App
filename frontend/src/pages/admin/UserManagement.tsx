@@ -90,7 +90,11 @@ const UserManagement: React.FC = () => {
     const handleUpdateUser = async (id: string, updates: Partial<UserData>) => {
         setIsUpdating(id);
         try {
-            const response = await adminUserApi.updateUser(id, updates);
+            const response = await adminUserApi.updateUser(id, {
+                ...updates,
+                save_cta_state: 'enabled',
+                save_cta_action: 'commit_changes_to_db'
+            });
             if (response.data.success) {
                 showGlobalSuccess('User Updated', 'User details updated successfully');
                 fetchUsers();
@@ -160,7 +164,7 @@ const UserManagement: React.FC = () => {
                     <div className="stat-icon experts"><Award size={20} /></div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.experts}</span>
-                        <span className="stat-label">Agents</span>
+                        <span className="stat-label">Experts</span>
                     </div>
                 </div>
                 <div className="stat-card">
@@ -192,8 +196,8 @@ const UserManagement: React.FC = () => {
                         <option value="">All Roles</option>
                         <option value="superadmin">Superadmin</option>
                         <option value="admin">Admin</option>
-                        <option value="agent">Agent</option>
-                        <option value="viewer">Viewer</option>
+                        <option value="Expert">Expert</option>
+                        <option value="Customer">Customer</option>
                     </select>
                     <select
                         className="filter-select"
@@ -238,12 +242,12 @@ const UserManagement: React.FC = () => {
                                         {isSuperAdmin && u.role !== 'superadmin' ? (
                                             <select
                                                 className="filter-select select-sm"
-                                                value={u.role.toLowerCase()}
+                                                value={u.role}
                                                 onChange={(e) => handleUpdateUser(u.id, { role: e.target.value })}
                                                 disabled={isUpdating === u.id}
                                             >
-                                                <option value="viewer">Viewer</option>
-                                                <option value="agent">Agent</option>
+                                                <option value="Customer">Customer</option>
+                                                <option value="Expert">Expert</option>
                                                 <option value="admin">Admin</option>
                                                 <option value="superadmin">Superadmin</option>
                                             </select>

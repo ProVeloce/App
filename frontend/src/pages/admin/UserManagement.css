@@ -240,7 +240,7 @@
     border: 1px solid var(--warning-100);
 }
 
-.role-badge.user {
+.role-badge.customer {
     background: var(--success-50);
     color: var(--success-700);
     border: 1px solid var(--success-100);
@@ -261,15 +261,15 @@
     background: var(--bg-primary);
 }
 
-.status-Active {
+.status-active {
     color: var(--success-600);
 }
 
-.status-Suspended {
+.status-suspended {
     color: var(--warning-600);
 }
 
-.status-Deactivated {
+.status-inactive {
     color: var(--danger-600);
 }
 

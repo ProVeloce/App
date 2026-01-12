@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   phone TEXT,
   password_hash TEXT,
-  role TEXT DEFAULT 'viewer' NOT NULL,
+  role TEXT DEFAULT 'Customer' NOT NULL,
   status TEXT DEFAULT 'active' NOT NULL,
   email_verified INTEGER DEFAULT 0,
   avatar_data TEXT,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT role_check CHECK (role IN ('superadmin', 'admin', 'agent', 'viewer')),
+  CONSTRAINT role_check CHECK (role IN ('superadmin', 'admin', 'Expert', 'Customer')),
   CONSTRAINT status_check CHECK (status IN ('active', 'inactive', 'suspended'))
 );
 
