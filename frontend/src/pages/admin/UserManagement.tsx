@@ -112,7 +112,7 @@ const UserManagement: React.FC = () => {
         try {
             const response = await adminUserApi.deactivateUser(id);
             if (response.data.success) {
-                showGlobalSuccess('User Deactivated', 'User status set to Deactivated');
+                showGlobalSuccess('User Deactivated', 'User status set to inactive');
                 fetchUsers();
                 fetchStats();
             }
@@ -160,7 +160,7 @@ const UserManagement: React.FC = () => {
                     <div className="stat-icon experts"><Award size={20} /></div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.experts}</span>
-                        <span className="stat-label">Experts</span>
+                        <span className="stat-label">Agents</span>
                     </div>
                 </div>
                 <div className="stat-card">
@@ -190,10 +190,10 @@ const UserManagement: React.FC = () => {
                         onChange={(e) => setRoleFilter(e.target.value)}
                     >
                         <option value="">All Roles</option>
-                        <option value="superadmin">SuperAdmin</option>
+                        <option value="superadmin">Superadmin</option>
                         <option value="admin">Admin</option>
-                        <option value="expert">Expert</option>
-                        <option value="user">User</option>
+                        <option value="agent">Agent</option>
+                        <option value="viewer">Viewer</option>
                     </select>
                     <select
                         className="filter-select"
@@ -201,9 +201,9 @@ const UserManagement: React.FC = () => {
                         onChange={(e) => setStatusFilter(e.target.value)}
                     >
                         <option value="">All Statuses</option>
-                        <option value="Active">Active</option>
-                        <option value="Suspended">Suspended</option>
-                        <option value="Deactivated">Deactivated</option>
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="inactive">Inactive</option>
                     </select>
                 </div>
             </div>
@@ -242,10 +242,10 @@ const UserManagement: React.FC = () => {
                                                 onChange={(e) => handleUpdateUser(u.id, { role: e.target.value })}
                                                 disabled={isUpdating === u.id}
                                             >
-                                                <option value="user">User</option>
-                                                <option value="expert">Expert</option>
+                                                <option value="viewer">Viewer</option>
+                                                <option value="agent">Agent</option>
                                                 <option value="admin">Admin</option>
-                                                <option value="superadmin">SuperAdmin</option>
+                                                <option value="superadmin">Superadmin</option>
                                             </select>
                                         ) : (
                                             getRoleBadge(u.role)
@@ -253,14 +253,14 @@ const UserManagement: React.FC = () => {
                                     </td>
                                     <td>
                                         <select
-                                            className={`status-dropdown status-${u.status}`}
-                                            value={u.status}
+                                            className={`status-dropdown status-${u.status.toLowerCase()}`}
+                                            value={u.status.toLowerCase()}
                                             onChange={(e) => handleUpdateUser(u.id, { status: e.target.value })}
                                             disabled={isUpdating === u.id || (u.role === 'superadmin' && !isSuperAdmin)}
                                         >
-                                            <option value="Active">Active</option>
-                                            <option value="Suspended">Suspended</option>
-                                            <option value="Deactivated">Deactivated</option>
+                                            <option value="active">Active</option>
+                                            <option value="suspended">Suspended</option>
+                                            <option value="inactive">Inactive</option>
                                         </select>
                                     </td>
                                     <td>

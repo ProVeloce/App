@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE,
   phone TEXT,
   password_hash TEXT,
-  role TEXT DEFAULT 'user' NOT NULL,
-  status TEXT DEFAULT 'Active' NOT NULL,
+  role TEXT DEFAULT 'viewer' NOT NULL,
+  status TEXT DEFAULT 'active' NOT NULL,
   email_verified INTEGER DEFAULT 0,
   avatar_data TEXT,
   avatar_mime_type TEXT,
@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT role_check CHECK (role IN ('superadmin', 'admin', 'user', 'expert')),
-  CONSTRAINT status_check CHECK (status IN ('Active', 'Suspended', 'Deactivated'))
+  CONSTRAINT role_check CHECK (role IN ('superadmin', 'admin', 'agent', 'viewer')),
+  CONSTRAINT status_check CHECK (status IN ('active', 'inactive', 'suspended'))
 );
 
 -- USER PROFILES TABLE

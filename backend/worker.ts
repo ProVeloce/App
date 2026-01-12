@@ -991,16 +991,20 @@ export default {
 
                 // Role creation restrictions
                 const requesterRole = (auth.payload.role || "").toLowerCase();
-                const newRole = (role || "customer").toLowerCase();
+                const finalRole = (role || "viewer").toLowerCase();
+                const finalStatus = (status || "active").toLowerCase();
 
-                // Admin cannot create admin or superadmin users
-                if (requesterRole === "admin" && (newRole === "admin" || newRole === "superadmin")) {
-                    return jsonResponse({ success: false, error: "You don't have permission to create users with this role" }, 403);
+                // Validation
+                if (!['superadmin', 'admin', 'agent', 'viewer'].includes(finalRole)) {
+                    return jsonResponse({ success: false, error: "Invalid role" }, 400);
+                }
+                if (!['active', 'inactive', 'suspended'].includes(finalStatus)) {
+                    return jsonResponse({ success: false, error: "Invalid status" }, 400);
                 }
 
-                // Only superadmin can create superadmin users
-                if (newRole === "superadmin" && requesterRole !== "superadmin") {
-                    return jsonResponse({ success: false, error: "Only superadmin can create superadmin users" }, 403);
+                // Only superadmin can create superadmin or admin users
+                if ((finalRole === "superadmin" || finalRole === "admin") && requesterRole !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Only superadmin can create privileged users" }, 403);
                 }
 
                 // Hash password if provided
@@ -1014,12 +1018,12 @@ export default {
                 const id = crypto.randomUUID();
                 await env.proveloce_db.prepare(
                     "INSERT INTO users (id, name, email, phone, role, status, email_verified, password_hash) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
-                ).bind(id, name, email, phone || null, newRole, status || "active", passwordHash).run();
+                ).bind(id, name, email, phone || null, finalRole, finalStatus, passwordHash).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), auth.payload.userId, "CREATE_USER", "user", id, JSON.stringify({ name, email, role })).run();
+                ).bind(crypto.randomUUID(), auth.payload.userId, "CREATE_USER", "user", id, JSON.stringify({ name, email, role: finalRole })).run();
 
                 const newUser = await env.proveloce_db.prepare(
                     "SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?"
@@ -1066,24 +1070,27 @@ export default {
                     return jsonResponse({ success: false, error: "Admins cannot modify other admins" }, 403);
                 }
 
-                // privilege escalation prevention
+                // role change guards (POML Spec)
                 if (role !== undefined) {
                     const newRole = role.toLowerCase();
-                    if (!['superadmin', 'admin', 'user', 'expert'].includes(newRole)) {
+                    if (!['superadmin', 'admin', 'agent', 'viewer'].includes(newRole)) {
                         return jsonResponse({ success: false, error: "Invalid role" }, 400);
                     }
-                    // Admin cannot assign admin or superadmin roles
-                    if (requesterRole === "admin" && (newRole === "admin" || newRole === "superadmin")) {
-                        return jsonResponse({ success: false, error: "You don't have permission to assign this role" }, 403);
+
+                    // Enforce RBAC guardrails: Only superadmin can change roles
+                    if (requesterRole !== "superadmin") {
+                        return jsonResponse({ success: false, error: "Only superadmin can change roles" }, 403);
                     }
-                    // Only superadmin can assign superadmin role
-                    if (newRole === "superadmin" && requesterRole !== "superadmin") {
-                        return jsonResponse({ success: false, error: "Only superadmin can assign superadmin role" }, 403);
+
+                    // Prevent self-demotion
+                    if (existing.id === auth.payload.userId) {
+                        return jsonResponse({ success: false, error: "Superadmin cannot demote self" }, 403);
                     }
                 }
 
                 if (status !== undefined) {
-                    if (!['Active', 'Suspended', 'Deactivated'].includes(status)) {
+                    const nextStatus = status.toLowerCase();
+                    if (!['active', 'inactive', 'suspended'].includes(nextStatus)) {
                         return jsonResponse({ success: false, error: "Invalid status" }, 400);
                     }
                 }
@@ -1148,15 +1155,15 @@ export default {
                     return jsonResponse({ success: false, error: "Cannot delete superadmin" }, 403);
                 }
 
-                // Soft delete - set status to 'Deactivated'
+                // Update status to 'inactive' (POML Spec)
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET status = 'Deactivated', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                 ).bind(id).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), auth.payload.userId, "DELETE_USER", "user", id, JSON.stringify({ deactivatedUser: id, status: 'Deactivated' })).run();
+                ).bind(crypto.randomUUID(), auth.payload.userId, "DEACTIVATE_USER", "user", id, JSON.stringify({ oldRole: existing.role, newStatus: 'inactive' })).run();
 
                 return jsonResponse({ success: true, message: "User deactivated successfully" });
             }

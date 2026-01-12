@@ -40,16 +40,13 @@ oteException
 Note: if the execution fails to complete, your DB will return to its original state and you can safely retry.
 Ôö£ Checking if file needs uploading
 Ôöé
-Ôö£ ­ƒîÇ Uploading 3b3261c1-a83c-49dc-82df-4688cbdc785c.2a53aac81bfe9fdd.sql
-Ôöé ­ƒîÇ Uploading complete.
-Ôöé
+­ƒîÇ File already uploaded. Processing.
 
 [31mX [41;31m[[41
 ;97mERROR[41;31m][
-0m [1mno such 
-column: attachment 
-at offset 620: 
-SQLITE_ERROR[0m
+0m [1mFOREIGN KEY 
+constraint failed: S
+QLITE_CONSTRAINT[0m
 
 
 ƒ¬Á  Logs were 
@@ -57,5 +54,5 @@ written to "C:\Users
 \shrey\AppData\Roami
 ng\xdg.config\.wrang
 ler\logs\wrangler-20
-26-01-12_08-01-45_59
-9.log"
+26-01-12_08-49-37_08
+0.log"
