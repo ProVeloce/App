@@ -244,11 +244,13 @@ const HelpDesk: React.FC = () => {
                     <div className={`modal modal-content-advanced ticket-detail-modal ${isClosingViewTicket ? 'closing' : ''}`} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
-                                <div className="ticket-id-tag">{selectedTicket.ticket_id}</div>
+                                <div className="ticket-top-meta">
+                                    <span className="ticket-category-badge">{selectedTicket.category}</span>
+                                    <div className="ticket-id-tag">{selectedTicket.ticket_id}</div>
+                                </div>
                                 <h2 className="modal-title-advanced">{selectedTicket.subject}</h2>
-                                <div className="ticket-meta" style={{ marginTop: '8px' }}>
+                                <div className="ticket-meta" style={{ marginTop: '12px' }}>
                                     <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase()}`}>{selectedTicket.status}</span>
-                                    <span className="ticket-category">{selectedTicket.category}</span>
                                 </div>
                             </div>
                             <button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button>

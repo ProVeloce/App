@@ -3016,8 +3016,19 @@ export default {
                     // Strict Validation - Mandatory fields (no priority)
                     const missingFields: string[] = [];
                     if (!subject?.trim()) missingFields.push('subject');
-                    if (!description?.trim()) missingFields.push('description');
+                    else if (subject.length > 150) {
+                        return jsonResponse({ success: false, error: "VALIDATION_ERROR", message: "Subject must be 150 characters or less" }, 400);
+                    }
+
                     if (!category?.trim()) missingFields.push('category');
+                    else if (category.length > 100) {
+                        return jsonResponse({ success: false, error: "VALIDATION_ERROR", message: "Category must be 100 characters or less" }, 400);
+                    }
+
+                    if (!description?.trim()) missingFields.push('description');
+                    if (description?.length > 5000) {
+                        return jsonResponse({ success: false, error: "VALIDATION_ERROR", message: "Description must be 5000 characters or less" }, 400);
+                    }
 
                     if (missingFields.length > 0) {
                         return jsonResponse({

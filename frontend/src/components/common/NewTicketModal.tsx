@@ -106,7 +106,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
 
         if (!formData.category) newErrors.category = 'Please choose a category';
         if (!formData.subject.trim()) newErrors.subject = 'Subject is required';
-        if (formData.subject.length > 180) newErrors.subject = 'Subject must be 180 characters or less';
+        if (formData.subject.length > 150) newErrors.subject = 'Subject must be 150 characters or less';
         if (!formData.description.trim()) newErrors.description = 'Description is required';
         if (formData.description.length > 5000) newErrors.description = 'Description must be 5000 characters or less';
 
