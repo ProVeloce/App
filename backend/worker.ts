@@ -3046,8 +3046,8 @@ export default {
                         await env.others.put(filePath, attachmentFile.stream(), {
                             httpMetadata: { contentType: attachmentFile.type || 'application/octet-stream' }
                         });
-                        // Generate public URL (assuming R2 public bucket)
-                        attachmentUrl = `https://attachments.proveloce.com/${filePath}`;
+                        // Use internal API endpoint to serve attachments
+                        attachmentUrl = `/api/helpdesk/attachments/${filePath}`;
                     }
 
                     // Insert into tickets table with full user profile
@@ -3244,6 +3244,42 @@ export default {
                     message: "Ticket status updated successfully",
                     data: { ticketId, status, adminReply: reply }
                 });
+            }
+
+            // GET /api/helpdesk/attachments/* - Serve attachments from R2 (POML compliant)
+            if (url.pathname.startsWith("/api/helpdesk/attachments/") && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                // Extract the file path from URL
+                const filePath = url.pathname.replace("/api/helpdesk/attachments/", "");
+
+                if (!filePath || !env.others) {
+                    return jsonResponse({ success: false, error: "Attachment not found" }, 404);
+                }
+
+                try {
+                    const object = await env.others.get(filePath);
+                    if (!object) {
+                        return jsonResponse({ success: false, error: "Attachment not found in storage" }, 404);
+                    }
+
+                    const headers = new Headers();
+                    headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+                    headers.set("Cache-Control", "private, max-age=3600");
+                    // CORS headers for frontend access
+                    headers.set("Access-Control-Allow-Origin", "*");
+                    headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+
+                    return new Response(object.body, { headers });
+                } catch (err: any) {
+                    console.error("Attachment fetch error:", err);
+                    return jsonResponse({ success: false, error: "Failed to retrieve attachment" }, 500);
+                }
             }
 
             // =====================================================

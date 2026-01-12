@@ -114,18 +114,40 @@ const HelpDesk: React.FC = () => {
         }
     };
 
+    // Build full API URL for attachments
+    const getAttachmentUrl = (path: string) => {
+        const baseUrl = import.meta.env.VITE_API_URL || '';
+        // Path already includes /api/helpdesk/attachments/
+        return `${baseUrl}${path}`;
+    };
+
     // Open attachment in inline modal (POML: redirect=false, mode=popup)
-    const handleViewAttachment = (url: string) => {
-        const filename = url.split('/').pop() || 'attachment';
-        setAttachmentPreview({ show: true, url, filename });
+    const handleViewAttachment = async (path: string) => {
+        const filename = path.split('/').pop() || 'attachment';
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await fetch(getAttachmentUrl(path), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Failed to load attachment');
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            setAttachmentPreview({ show: true, url: blobUrl, filename });
+        } catch (err) {
+            error('Failed to load attachment');
+        }
     };
 
     // Direct download without redirect (POML: mode=direct, redirect=false)
-    const handleDownloadAttachment = async (url: string) => {
+    const handleDownloadAttachment = async (path: string) => {
         try {
-            const response = await fetch(url);
+            const token = localStorage.getItem('accessToken');
+            const response = await fetch(getAttachmentUrl(path), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Failed to download');
             const blob = await response.blob();
-            const filename = url.split('/').pop() || 'attachment';
+            const filename = path.split('/').pop() || 'attachment';
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
@@ -140,6 +162,10 @@ const HelpDesk: React.FC = () => {
     };
 
     const closeAttachmentPreview = () => {
+        // Revoke blob URL to free memory
+        if (attachmentPreview.url.startsWith('blob:')) {
+            window.URL.revokeObjectURL(attachmentPreview.url);
+        }
         setAttachmentPreview({ show: false, url: '', filename: '' });
     };
 
