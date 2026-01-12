@@ -295,10 +295,16 @@ const HelpDesk: React.FC = () => {
                                 {selectedTicket.attachment_url ? (
                                     <div className="attachment-actions">
                                         <button
-                                            className="vta-btn"
+                                            className="btn btn-secondary btn-sm"
                                             onClick={() => handleViewAttachment(selectedTicket.attachment_url!)}
                                         >
-                                            <Eye size={16} /> View Ticket Action
+                                            <Eye size={14} /> View
+                                        </button>
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => handleDownloadAttachment(selectedTicket.attachment_url!)}
+                                        >
+                                            <Download size={14} /> Download
                                         </button>
                                     </div>
                                 ) : (
@@ -407,7 +413,20 @@ const HelpDesk: React.FC = () => {
                                                 </div>
                                             )}
                         </div>
-                        {/* Download button removed per POML spec - DownloadButton visible=false */}
+                        {/* Styled Download Button (POML: mode=direct, visible=true) */}
+                        <div className="preview-footer">
+                            <button
+                                className="preview-download-btn"
+                                onClick={() => {
+                                    if (selectedTicket?.attachment_url) {
+                                        handleDownloadAttachment(selectedTicket.attachment_url);
+                                    }
+                                    closeAttachmentPreview();
+                                }}
+                            >
+                                <Download size={16} /> Download
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
