@@ -235,13 +235,13 @@ export default {
                     const currentStatus = user.status;
                     if (!currentStatus || currentStatus === 'pending_verification') {
                         await env.proveloce_db.prepare(
-                            "UPDATE users SET status = 'Active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                            "UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                         ).bind(user.id).run();
 
                         // Log the activation
                         await env.proveloce_db.prepare(
                             "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                        ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ reason: "Login Trigger", oldStatus: currentStatus, newStatus: "Active" })).run();
+                        ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ reason: "Login Trigger", oldStatus: currentStatus, newStatus: "active" })).run();
                     }
 
                     const token = await createJWT(
@@ -253,7 +253,7 @@ export default {
                         success: true,
                         message: "Login successful",
                         token,
-                        user: { id: user.id, name: user.name, email: user.email, role: user.role, status: 'Active' }
+                        user: { id: user.id, name: user.name, email: user.email, role: user.role, status: 'active' }
                     });
                 } catch (e: any) {
                     return jsonResponse({ success: false, error: e.message || "Login failed" }, 400);
@@ -412,8 +412,8 @@ export default {
                             userId,
                             googleUser.name,
                             googleUser.email,
-                            "user",
-                            "Active",
+                            "viewer",
+                            "active",
                             1,
                             googleUser.picture || null
                         ).run();
@@ -421,27 +421,27 @@ export default {
                         // Log activity
                         await env.proveloce_db.prepare(
                             "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                        ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "google", role: "user", status: "Active" })).run();
+                        ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "google", role: "viewer", status: "active" })).run();
 
                         user = {
                             id: userId,
                             name: googleUser.name,
                             email: googleUser.email,
-                            role: "user",
-                            status: "Active"
+                            role: "viewer",
+                            status: "active"
                         };
                     } else {
                         // existing user login trigger
                         if (!user.status || user.status === 'pending_verification') {
                             await env.proveloce_db.prepare(
-                                "UPDATE users SET status = 'Active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                                "UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                             ).bind(user.id).run();
 
                             await env.proveloce_db.prepare(
                                 "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                            ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ method: "google", oldStatus: user.status, newStatus: "Active" })).run();
+                            ).bind(crypto.randomUUID(), user.id, "USER_ACTIVATION", "user", user.id, JSON.stringify({ method: "google", oldStatus: user.status, newStatus: "active" })).run();
 
-                            user.status = "Active";
+                            user.status = "active";
                         }
                     }
 
@@ -893,8 +893,8 @@ export default {
                     // SuperAdmin cannot see other SuperAdmins (including themselves)
                     query += " AND role != 'superadmin'";
                 } else if (requesterRole === "admin") {
-                    // Admin can only see Customer, Expert, Analyst
-                    query += " AND role IN ('customer', 'expert', 'analyst')";
+                    // Admin can only see Customer, Expert, Analyst, Agent, Viewer
+                    query += " AND role IN ('customer', 'expert', 'analyst', 'agent', 'viewer')";
                 }
 
                 if (filterRole) {
@@ -995,10 +995,10 @@ export default {
                 const finalStatus = (status || "active").toLowerCase();
 
                 // Validation
-                if (!['superadmin', 'admin', 'agent', 'viewer'].includes(finalRole)) {
+                if (!['superadmin', 'admin', 'agent', 'viewer', 'customer', 'expert', 'analyst'].includes(finalRole)) {
                     return jsonResponse({ success: false, error: "Invalid role" }, 400);
                 }
-                if (!['active', 'inactive', 'suspended'].includes(finalStatus)) {
+                if (!['active', 'inactive', 'suspended', 'pending_verification'].includes(finalStatus)) {
                     return jsonResponse({ success: false, error: "Invalid status" }, 400);
                 }
 
@@ -1073,7 +1073,7 @@ export default {
                 // role change guards (POML Spec)
                 if (role !== undefined) {
                     const newRole = role.toLowerCase();
-                    if (!['superadmin', 'admin', 'agent', 'viewer'].includes(newRole)) {
+                    if (!['superadmin', 'admin', 'agent', 'viewer', 'customer', 'expert', 'analyst'].includes(newRole)) {
                         return jsonResponse({ success: false, error: "Invalid role" }, 400);
                     }
 
@@ -1090,7 +1090,7 @@ export default {
 
                 if (status !== undefined) {
                     const nextStatus = status.toLowerCase();
-                    if (!['active', 'inactive', 'suspended'].includes(nextStatus)) {
+                    if (!['active', 'inactive', 'suspended', 'pending_verification'].includes(nextStatus)) {
                         return jsonResponse({ success: false, error: "Invalid status" }, 400);
                     }
                 }
@@ -1185,6 +1185,8 @@ export default {
                     analysts: 0,
                     experts: 0,
                     customers: 0,
+                    agents: 0, // Added agent count
+                    viewers: 0, // Added viewer count
                     activeUsers: 0,
                     pendingUsers: 0,
                     recentUsers: [] as any[]
@@ -1203,6 +1205,8 @@ export default {
                     if (role === "analyst") stats.analysts = count;
                     if (role === "expert") stats.experts = count;
                     if (role === "customer") stats.customers = count;
+                    if (role === "agent") stats.agents = count; // Count agents
+                    if (role === "viewer") stats.viewers = count; // Count viewers
                 }
 
                 // Get counts by status
@@ -1311,7 +1315,7 @@ export default {
                     statusFilter = statusFilter.split(":")[0];
                 }
                 // Validate status is one of the allowed values
-                const validStatuses = ["PENDING", "APPROVED", "REJECTED", "DRAFT", "UNDER_REVIEW", "REQUIRES_CLARIFICATION", ""];
+                const validStatuses = ["PENDING", "APPROVED", "REJECTED", "DRAFT", "UNDER_REVIEW", "REQUIRES_CLARIFICATION", "REVOKED", ""];
                 if (statusFilter && !validStatuses.includes(statusFilter.toUpperCase())) {
                     statusFilter = null;
                 }
@@ -1660,18 +1664,18 @@ export default {
 
                 // Update application status to 'Approved'
                 await env.proveloce_db.prepare(
-                    "UPDATE expert_applications SET status = 'Approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE expert_applications SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                 ).bind(payload.userId, applicationId).run();
 
-                // Update user role to 'expert'
+                // Update user role to 'agent'
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET role = 'expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET role = 'agent', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
                 ).bind(app.user_id).run();
 
                 // Log activity
                 await env.proveloce_db.prepare(
                     "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                ).bind(crypto.randomUUID(), payload.userId, "APPROVE_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ approvedBy: payload.userId, userId: app.user_id, status: 'Approved', role: 'expert' })).run();
+                ).bind(crypto.randomUUID(), payload.userId, "APPROVE_EXPERT_APPLICATION", "expert_application", applicationId, JSON.stringify({ approvedBy: payload.userId, userId: app.user_id, status: 'approved', role: 'agent' })).run();
 
                 return jsonResponse({ success: true, message: "Application approved" });
             }

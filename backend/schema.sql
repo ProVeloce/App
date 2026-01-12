@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS expert_applications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT status_check CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Deactivated'))
+  CONSTRAINT status_check CHECK (status IN ('pending', 'approved', 'rejected', 'inactive'))
 );
 
 -- TASKS FOR EXPERT ASSIGNMENTS
