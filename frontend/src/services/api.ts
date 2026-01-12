@@ -383,6 +383,9 @@ export const ticketApi = {
 
     updateTicketStatus: (idOrNumber: string, status: string, reply?: string) =>
         api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/status`, { status, reply }),
+
+    assignTicket: (idOrNumber: string, assignedToId: string) =>
+        api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/assign`, { assignedToId }),
 };
 
 // Notification API

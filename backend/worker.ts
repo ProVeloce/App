@@ -3128,9 +3128,17 @@ export default {
                 }
 
                 const query = `
-                    SELECT * FROM tickets
+                    SELECT 
+                        t.*,
+                        u_resp.name as responder_name,
+                        u_resp.role as responder_role,
+                        u_assign.name as assigned_user_name,
+                        u_assign.role as assigned_user_role
+                    FROM tickets t
+                    LEFT JOIN users u_resp ON t.ticket_responder = u_resp.id
+                    LEFT JOIN users u_assign ON t.ticket_assigned_user = u_assign.id
                     ${whereClause ? 'WHERE ' + whereClause : ''}
-                    ORDER BY created_at DESC
+                    ORDER BY t.created_at DESC
                 `;
 
                 const result = await env.proveloce_db.prepare(query).bind(...params).all();
@@ -3161,8 +3169,16 @@ export default {
 
                 // Fetch and verify visibility
                 const ticket = await env.proveloce_db.prepare(`
-                    SELECT * FROM tickets
-                    WHERE ticket_id = ?
+                    SELECT 
+                        t.*,
+                        u_resp.name as responder_name,
+                        u_resp.role as responder_role,
+                        u_assign.name as assigned_user_name,
+                        u_assign.role as assigned_user_role
+                    FROM tickets t
+                    LEFT JOIN users u_resp ON t.ticket_responder = u_resp.id
+                    LEFT JOIN users u_assign ON t.ticket_assigned_user = u_assign.id
+                    WHERE t.ticket_id = ?
                 `).bind(ticketId).first() as any;
 
                 if (!ticket) {
@@ -3244,16 +3260,75 @@ export default {
                     return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
                 }
 
-                // Update ticket status and admin_reply
+                // Update ticket status, admin_reply and set responder
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET status = ?, admin_reply = ?, updated_at = CURRENT_TIMESTAMP
+                    UPDATE tickets SET 
+                        status = ?, 
+                        admin_reply = ?, 
+                        ticket_responder = ?,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE ticket_id = ?
-                `).bind(status, reply || null, ticketId).run();
+                `).bind(status, reply || null, payload.userId, ticketId).run();
 
                 return jsonResponse({
                     success: true,
                     message: "Ticket status updated successfully",
                     data: { ticketId, status, adminReply: reply }
+                });
+            }
+
+            // PATCH /api/helpdesk/tickets/:ticket_id/assign - Assign ticket to user (Enterprise v2.1)
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/assign$/) && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const ticketId = url.pathname.split('/')[4];
+                const { assignedToId } = await request.json() as { assignedToId: string };
+
+                if (!assignedToId) {
+                    return jsonResponse({ success: false, error: "assignedToId is required" }, 400);
+                }
+
+                // Verify requester is Admin or SuperAdmin
+                const requester = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+                const requesterRole = requester?.role?.toUpperCase() || '';
+
+                if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can assign tickets" }, 403);
+                }
+
+                // Verify assigned user exists and is at least an Expert or Admin
+                const assignedUser = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(assignedToId).first() as any;
+
+                if (!assignedUser) {
+                    return jsonResponse({ success: false, error: "Assigned user not found" }, 404);
+                }
+
+                const assignedRole = assignedUser.role?.toUpperCase() || '';
+                if (!['EXPERT', 'ADMIN', 'SUPERADMIN', 'CUSTOMER'].includes(assignedRole)) {
+                    // Although typically Experts/Admins, being flexible for now or specific roles
+                    return jsonResponse({ success: false, error: "Tickets can only be assigned to EXPERT, ADMIN or CUSTOMER (if applicable)" }, 400);
+                }
+
+                // Update ticket
+                await env.proveloce_db.prepare(`
+                    UPDATE tickets SET 
+                        ticket_assigned_user = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE ticket_id = ?
+                `).bind(assignedToId, ticketId).run();
+
+                return jsonResponse({
+                    success: true,
+                    message: "Ticket assigned successfully"
                 });
             }
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ticketApi } from '../../services/api';
+import { ticketApi, userApi, User as UserData } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User, Mail, Phone, Shield, FileText } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
@@ -21,6 +21,12 @@ interface Ticket {
     attachment_url: string | null;
     status: string;
     admin_reply: string | null;
+    ticket_responder: string | null;
+    responder_name: string | null;
+    responder_role: string | null;
+    ticket_assigned_user: string | null;
+    assigned_user_name: string | null;
+    assigned_user_role: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -42,6 +48,10 @@ const HelpDesk: React.FC = () => {
         show: false, url: '', filename: ''
     });
 
+    // Assignable users for admins
+    const [assignableUsers, setAssignableUsers] = useState<UserData[]>([]);
+    const [isAssigning, setIsAssigning] = useState(false);
+
     const { success, error } = useToast();
     const { user } = useAuth();
 
@@ -49,7 +59,23 @@ const HelpDesk: React.FC = () => {
     const isAdminOrSuperAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
     const canCreateTicket = userRole !== 'SUPERADMIN';
 
-    useEffect(() => { fetchTickets(); }, []);
+    useEffect(() => {
+        fetchTickets();
+        if (isAdminOrSuperAdmin) fetchAssignableUsers();
+    }, []);
+
+    const fetchAssignableUsers = async () => {
+        try {
+            const response = await userApi.getUsers();
+            if (response.data.success && response.data.data) {
+                // Filter for Experts and Admins
+                const filtered = response.data.data.data.filter((u: UserData) =>
+                    ['EXPERT', 'ADMIN', 'SUPERADMIN'].includes(u.role?.toUpperCase())
+                );
+                setAssignableUsers(filtered);
+            }
+        } catch (err) { console.error('Failed to load assignable users'); }
+    };
 
     const fetchTickets = async () => {
         try {
@@ -161,6 +187,21 @@ const HelpDesk: React.FC = () => {
         }
     };
 
+    const handleAssignTicket = async (assignedToId: string) => {
+        if (!selectedTicket) return;
+        setIsAssigning(true);
+        try {
+            await ticketApi.assignTicket(selectedTicket.ticket_id, assignedToId);
+            success('Ticket assigned successfully');
+            // Refresh ticket details
+            handleViewTicket(selectedTicket);
+        } catch (err: any) {
+            error(err.response?.data?.message || 'Failed to assign ticket');
+        } finally {
+            setIsAssigning(false);
+        }
+    };
+
     const closeAttachmentPreview = () => {
         // Revoke blob URL to free memory
         if (attachmentPreview.url.startsWith('blob:')) {
@@ -214,7 +255,7 @@ const HelpDesk: React.FC = () => {
                     </div>
                 ) : (
                     <div className="tickets-list">
-                        {tickets.map((t) => (
+                        {tickets.map((t: Ticket) => (
                             <div key={t.id} className="ticket-item" onClick={() => handleViewTicket(t)}>
                                 <div className="ticket-status">{getStatusIcon(t.status)}</div>
                                 <div className="ticket-content">
@@ -263,7 +304,7 @@ const HelpDesk: React.FC = () => {
                                     <label>Submitted By</label>
                                     <div className="identity-details">
                                         <div className="identity-row">
-                                            <User size={16} />
+                                            <UserIcon size={16} />
                                             <span>{selectedTicket.user_full_name || 'Unknown'}</span>
                                         </div>
                                         <div className="identity-row">
@@ -362,6 +403,56 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Bottom Meta Section - POML: position="bottom" */}
+                            <div className="ticket-bottom-meta-enterprise">
+                                <div className="meta-row-enterprise">
+                                    <div className="meta-item">
+                                        <label>Assigned To</label>
+                                        {selectedTicket.assigned_user_name ? (
+                                            <div className="meta-value">
+                                                <UserIcon size={14} />
+                                                <span>{selectedTicket.assigned_user_name} ({selectedTicket.assigned_user_role})</span>
+                                            </div>
+                                        ) : (
+                                            <div className="meta-value unassigned">Unassigned</div>
+                                        )}
+                                    </div>
+                                    <div className="meta-item">
+                                        <label>Responder</label>
+                                        {selectedTicket.responder_name ? (
+                                            <div className="meta-value">
+                                                <CheckCircle size={14} />
+                                                <span>{selectedTicket.responder_name} ({selectedTicket.responder_role})</span>
+                                            </div>
+                                        ) : (
+                                            <div className="meta-value unassigned">Not responded yet</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isAdminOrSuperAdmin && (
+                                    <div className="assign-ticket-section">
+                                        <label>Assign Ticket</label>
+                                        <div className="assign-controls">
+                                            <select
+                                                className="assign-select"
+                                                defaultValue={selectedTicket.ticket_assigned_user || ''}
+                                                onChange={(e) => handleAssignTicket(e.target.value)}
+                                                disabled={isAssigning}
+                                            >
+                                                <option value="">Select Assignee...</option>
+                                                {assignableUsers.map(u => (
+                                                    <option key={u.id} value={u.id}>
+                                                        {u.name} ({u.role})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {isAssigning && <div className="assign-loading-spinner" />}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
