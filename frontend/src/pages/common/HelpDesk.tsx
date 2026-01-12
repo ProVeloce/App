@@ -371,10 +371,10 @@ const HelpDesk: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Admin Response Form */}
-                            {isAdminOrSuperAdmin && selectedTicket.status === 'PENDING' && (
+                            {/* Admin/Expert Response Form */}
+                            {(isAdminOrSuperAdmin || (userRole === 'EXPERT' && selectedTicket.ticket_assigned_user === user?.id)) && selectedTicket.status === 'PENDING' && (
                                 <div className="admin-response-form">
-                                    <label>Send Response</label>
+                                    <label>{userRole === 'EXPERT' ? 'Respond to Assigned Ticket' : 'Send Response'}</label>
                                     <textarea
                                         className="admin-reply-textarea"
                                         placeholder="Enter your response to this ticket..."

@@ -3117,11 +3117,15 @@ export default {
                 let whereClause = '';
                 let params: any[] = [];
 
-                if (role === 'CUSTOMER' || role === 'EXPERT') {
-                    whereClause = 'user_id = ?';
+                if (role === 'CUSTOMER') {
+                    whereClause = 't.user_id = ?';
                     params = [payload.userId];
+                } else if (role === 'EXPERT') {
+                    // Experts see their own tickets OR tickets assigned to them
+                    whereClause = '(t.user_id = ? OR t.ticket_assigned_user = ?)';
+                    params = [payload.userId, payload.userId];
                 } else if (role === 'ADMIN') {
-                    whereClause = 'user_role IN (?, ?)';  // Only customer and expert tickets
+                    whereClause = 't.user_role IN (?, ?)';  // Only customer and expert tickets
                     params = ['CUSTOMER', 'EXPERT'];
                 } else if (role === 'SUPERADMIN') {
                     // No WHERE clause - see all tickets
@@ -3187,9 +3191,13 @@ export default {
 
                 // Check visibility permissions
                 let canView = false;
-                if (role === 'CUSTOMER' || role === 'EXPERT') {
+                if (role === 'CUSTOMER') {
                     canView = ticket.user_id === payload.userId;
+                } else if (role === 'EXPERT') {
+                    // Expert can view if they created it OR it's assigned to them
+                    canView = ticket.user_id === payload.userId || ticket.ticket_assigned_user === payload.userId;
                 } else if (role === 'ADMIN') {
+                    // Admins see Customer/Expert tickets
                     canView = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
                 } else if (role === 'SUPERADMIN') {
                     canView = true;
@@ -3234,11 +3242,6 @@ export default {
 
                 const role = user?.role?.toUpperCase() || '';
 
-                // Only Admin and SuperAdmin can update status
-                if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
-                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can update ticket status" }, 403);
-                }
-
                 // Get ticket by ticket_id
                 const ticket = await env.proveloce_db.prepare(
                     "SELECT * FROM tickets WHERE ticket_id = ?"
@@ -3248,11 +3251,16 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check - admins can update customer/expert tickets, superadmins can update all
+                // Permission check
                 let canUpdate = false;
-                if (role === 'ADMIN') {
+                if (role === 'EXPERT') {
+                    // Expert can update ONLY if ticket is assigned to them
+                    canUpdate = ticket.ticket_assigned_user === payload.userId;
+                } else if (role === 'ADMIN') {
+                    // Admin can update any Customer or Expert ticket
                     canUpdate = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
                 } else if (role === 'SUPERADMIN') {
+                    // SuperAdmin can update all
                     canUpdate = true;
                 }
 
