@@ -3117,19 +3117,18 @@ export default {
                 let whereClause = '';
                 let params: any[] = [];
 
-                if (role === 'CUSTOMER') {
-                    whereClause = 't.user_id = ?';
-                    params = [payload.userId];
-                } else if (role === 'EXPERT') {
-                    // Experts see their own tickets OR tickets assigned to them
+                if (role === 'SUPERADMIN') {
+                    // Superadmin sees everything
+                    whereClause = '';
+                    params = [];
+                } else if (role === 'ADMIN' || role === 'EXPERT') {
+                    // Admin/Expert see their own raised tickets OR tickets assigned to them
                     whereClause = '(t.user_id = ? OR t.ticket_assigned_user = ?)';
                     params = [payload.userId, payload.userId];
-                } else if (role === 'ADMIN') {
-                    // Admins see Customer/Expert tickets OR tickets they created herself
-                    whereClause = '(t.user_role IN (?, ?) OR t.user_id = ?)';
-                    params = ['CUSTOMER', 'EXPERT', payload.userId];
-                } else if (role === 'SUPERADMIN') {
-                    // No WHERE clause - see all tickets
+                } else {
+                    // Customers only see their own tickets
+                    whereClause = 't.user_id = ?';
+                    params = [payload.userId];
                 }
 
                 const query = `
@@ -3192,25 +3191,38 @@ export default {
 
                 // Check visibility permissions
                 let canView = false;
-                if (role === 'CUSTOMER') {
-                    canView = ticket.user_id === payload.userId;
-                } else if (role === 'EXPERT') {
-                    // Expert can view if they created it OR it's assigned to them
-                    canView = ticket.user_id === payload.userId || ticket.ticket_assigned_user === payload.userId;
-                } else if (role === 'ADMIN') {
-                    // Admins see Customer/Expert tickets OR tickets they created
-                    canView = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT' || ticket.user_id === payload.userId;
-                } else if (role === 'SUPERADMIN') {
+                if (role === 'SUPERADMIN') {
                     canView = true;
+                } else if (role === 'ADMIN' || role === 'EXPERT') {
+                    // Admin/Expert can view if raised by them OR assigned to them
+                    canView = ticket.user_id === payload.userId || ticket.ticket_assigned_user === payload.userId;
+                } else {
+                    // Customers only see their own
+                    canView = ticket.user_id === payload.userId;
                 }
 
                 if (!canView) {
                     return jsonResponse({ success: false, error: "Not authorized to view this ticket" }, 403);
                 }
 
+                // Fetch message thread
+                const messagesResult = await env.proveloce_db.prepare(`
+                    SELECT 
+                        m.*,
+                        u.name as sender_name,
+                        u.role as sender_role
+                    FROM ticket_messages m
+                    JOIN users u ON m.sender_id = u.id
+                    WHERE m.ticket_id = ?
+                    ORDER BY m.created_at ASC
+                `).bind(ticketId).all();
+
                 return jsonResponse({
                     success: true,
-                    data: { ticket }
+                    data: {
+                        ticket,
+                        messages: messagesResult.results || []
+                    }
                 });
             }
 
@@ -3252,37 +3264,49 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check
+                // Permission check per revised spec:
+                // SuperAdmin can respond to any ticket.
+                // Assigned User can respond to their assigned ticket.
                 let canUpdate = false;
-                if (role === 'EXPERT') {
-                    // Expert can update ONLY if ticket is assigned to them
-                    canUpdate = ticket.ticket_assigned_user === payload.userId;
-                } else if (role === 'ADMIN') {
-                    // Admin can update any Customer or Expert ticket
-                    canUpdate = ticket.user_role === 'CUSTOMER' || ticket.user_role === 'EXPERT';
-                } else if (role === 'SUPERADMIN') {
-                    // SuperAdmin can update all
+                if (role === 'SUPERADMIN') {
                     canUpdate = true;
+                } else {
+                    canUpdate = ticket.ticket_assigned_user === payload.userId;
                 }
 
                 if (!canUpdate) {
-                    return jsonResponse({ success: false, error: "Not authorized to update this ticket" }, 403);
+                    return jsonResponse({ success: false, error: "Only SuperAdmin or the Assigned Responder can respond to this ticket" }, 403);
                 }
 
-                // Update ticket status, message_response and set responder
+                // Update ticket status
                 await env.proveloce_db.prepare(`
                     UPDATE tickets SET 
                         status = ?, 
-                        message_response = ?, 
                         ticket_responder = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE ticket_id = ?
-                `).bind(status, reply || null, payload.userId, ticketId).run();
+                `).bind(status, payload.userId, ticketId).run();
+
+                // Insert into thread if message is provided
+                if (reply && reply.trim()) {
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO ticket_messages (ticket_id, sender_id, message)
+                        VALUES (?, ?, ?)
+                    `).bind(ticketId, payload.userId, reply.trim()).run();
+                }
+
+                // AUDIT TRAIL: Log response action
+                const logId = crypto.randomUUID();
+                const logMessage = `Ticket ${ticketId} status updated to ${status} with response by ${role.toLowerCase()}`;
+                await env.proveloce_db.prepare(`
+                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).bind(logId, payload.userId, 'RESPOND_TICKET', 'TICKET', ticketId, JSON.stringify({ message: logMessage, status })).run();
 
                 return jsonResponse({
                     success: true,
                     message: "Ticket status updated successfully",
-                    data: { ticketId, status, messageResponse: reply }
+                    data: { ticketId, status }
                 });
             }
 
@@ -3308,23 +3332,21 @@ export default {
                 ).bind(payload.userId).first() as any;
                 const requesterRole = requester?.role?.toUpperCase() || '';
 
-                if (requesterRole !== 'ADMIN' && requesterRole !== 'SUPERADMIN') {
-                    return jsonResponse({ success: false, error: "Only Admin or SuperAdmin can assign tickets" }, 403);
+                if (requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "Only SuperAdmin can assign tickets" }, 403);
                 }
 
-                // Verify assigned user exists and is at least an Expert or Admin
+                // Verify assigned user exists and has ADMIN role
                 const assignedUser = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
+                    "SELECT name, username, role FROM users WHERE id = ?"
                 ).bind(assignedToId).first() as any;
 
                 if (!assignedUser) {
                     return jsonResponse({ success: false, error: "Assigned user not found" }, 404);
                 }
 
-                const assignedRole = assignedUser.role?.toUpperCase() || '';
-                if (!['EXPERT', 'ADMIN', 'SUPERADMIN', 'CUSTOMER'].includes(assignedRole)) {
-                    // Although typically Experts/Admins, being flexible for now or specific roles
-                    return jsonResponse({ success: false, error: "Tickets can only be assigned to EXPERT, ADMIN or CUSTOMER (if applicable)" }, 400);
+                if (assignedUser.role?.toUpperCase() !== 'ADMIN') {
+                    return jsonResponse({ success: false, error: "Tickets can only be assigned to users with ADMIN role" }, 400);
                 }
 
                 // Update ticket
@@ -3335,9 +3357,83 @@ export default {
                     WHERE ticket_id = ?
                 `).bind(assignedToId, ticketId).run();
 
+                // AUDIT TRAIL: Log "Ticket <ticket_id> assigned to <admin_user.username> by superadmin"
+                const logId = crypto.randomUUID();
+                const logMessage = `Ticket ${ticketId} assigned to ${assignedUser.username || assignedUser.name} by superadmin`;
+                await env.proveloce_db.prepare(`
+                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).bind(logId, payload.userId, 'ASSIGN_TICKET', 'TICKET', ticketId, JSON.stringify({ message: logMessage, assignedTo: assignedToId })).run();
+
                 return jsonResponse({
                     success: true,
                     message: "Ticket assigned successfully"
+                });
+            }
+
+            // POST /api/helpdesk/tickets/:ticket_id/messages - Add message to thread (Revised Spec v3.0)
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/messages$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const ticketId = url.pathname.split('/')[4];
+                const { message } = await request.json() as { message: string };
+
+                if (!message || !message.trim()) {
+                    return jsonResponse({ success: false, error: "Message is required" }, 400);
+                }
+
+                // Get ticket to check permissions
+                const ticket = await env.proveloce_db.prepare(
+                    "SELECT * FROM tickets WHERE ticket_id = ?"
+                ).bind(ticketId).first() as any;
+
+                if (!ticket) {
+                    return jsonResponse({ success: false, error: "Ticket not found" }, 404);
+                }
+
+                // Get requester role
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+                const role = user?.role?.toUpperCase() || 'CUSTOMER';
+
+                // Permission check: SuperAdmin, Assigned User, or Raised User
+                let canPost = false;
+                if (role === 'SUPERADMIN') {
+                    canPost = true;
+                } else if (payload.userId === ticket.user_id || payload.userId === ticket.ticket_assigned_user) {
+                    canPost = true;
+                }
+
+                if (!canPost) {
+                    return jsonResponse({ success: false, error: "Not authorized to post to this ticket thread" }, 403);
+                }
+
+                // Insert message
+                await env.proveloce_db.prepare(`
+                    INSERT INTO ticket_messages (ticket_id, sender_id, message)
+                    VALUES (?, ?, ?)
+                `).bind(ticketId, payload.userId, message.trim()).run();
+
+                // If message is from raised user, set ticket back to OPEN if it was PENDING or CLOSED? 
+                // Spec doesn't specify, but good practice.
+
+                // AUDIT TRAIL
+                const logId = crypto.randomUUID();
+                const logMessage = `New message added to ticket ${ticketId} by ${role.toLowerCase()}`;
+                await env.proveloce_db.prepare(`
+                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).bind(logId, payload.userId, 'POST_MESSAGE', 'TICKET', ticketId, JSON.stringify({ message: logMessage })).run();
+
+                return jsonResponse({
+                    success: true,
+                    message: "Message posted successfully"
                 });
             }
 

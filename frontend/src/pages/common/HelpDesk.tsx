@@ -31,17 +31,32 @@ interface Ticket {
     updated_at: string;
 }
 
+interface TicketMessage {
+    id: number;
+    ticket_id: string;
+    sender_id: string;
+    sender_name: string;
+    sender_role: string;
+    message: string;
+    created_at: string;
+}
+
 const HelpDesk: React.FC = () => {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNewTicket, setShowNewTicket] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+    const [threadMessages, setThreadMessages] = useState<TicketMessage[]>([]);
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
 
     // Admin response state
     const [messageResponse, setMessageResponse] = useState('');
     const [selectedStatus, setSelectedStatus] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
     const [submittingResponse, setSubmittingResponse] = useState(false);
+
+    // General thread reply state
+    const [threadReply, setThreadReply] = useState('');
+    const [submittingThreadReply, setSubmittingThreadReply] = useState(false);
 
     // Attachment preview modal state
     const [attachmentPreview, setAttachmentPreview] = useState<{ show: boolean; url: string; filename: string }>({
@@ -56,8 +71,11 @@ const HelpDesk: React.FC = () => {
     const { user } = useAuth();
 
     const userRole = user?.role?.toUpperCase() || 'CUSTOMER';
-    const isAdminOrSuperAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+    const isSuperAdmin = userRole === 'SUPERADMIN';
+    const isAdmin = userRole === 'ADMIN';
+    const isAdminOrSuperAdmin = isAdmin || isSuperAdmin;
     const canCreateTicket = userRole !== 'SUPERADMIN';
+    const isAssignedResponder = selectedTicket?.ticket_assigned_user === user?.id;
 
     useEffect(() => {
         fetchTickets();
@@ -68,10 +86,8 @@ const HelpDesk: React.FC = () => {
         try {
             const response = await userApi.getUsers();
             if (response.data.success && response.data.data) {
-                // Filter for Experts and Admins
-                const filtered = response.data.data.data.filter((u: UserData) =>
-                    ['EXPERT', 'ADMIN', 'SUPERADMIN'].includes(u.role?.toUpperCase())
-                );
+                // Spec says can only assign to users with Admin role
+                const filtered = response.data.data.data.filter((u: UserData) => u.role?.toUpperCase() === 'ADMIN');
                 setAssignableUsers(filtered);
             }
         } catch (err) { console.error('Failed to load assignable users'); }
@@ -90,6 +106,7 @@ const HelpDesk: React.FC = () => {
             setSelectedTicket(null);
             setIsClosingViewTicket(false);
             setMessageResponse('');
+            setThreadReply('');
             setSelectedStatus('APPROVED');
         }, 300);
     };
@@ -114,7 +131,9 @@ const HelpDesk: React.FC = () => {
             const response = await ticketApi.getTicketById(ticket.ticket_id);
             if (response.data.success && response.data.data) {
                 setSelectedTicket(response.data.data.ticket);
-                setMessageResponse(response.data.data.ticket.message_response || '');
+                setThreadMessages(response.data.data.messages || []);
+                setMessageResponse(''); // Clear status reply input
+                setThreadReply(''); // Clear thread message input
             }
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to load ticket');
@@ -137,6 +156,25 @@ const HelpDesk: React.FC = () => {
             error(err.response?.data?.message || 'Failed to update ticket');
         } finally {
             setSubmittingResponse(false);
+        }
+    };
+
+    const handlePostMessage = async () => {
+        if (!selectedTicket || !threadReply.trim()) return;
+        setSubmittingThreadReply(true);
+        try {
+            await ticketApi.postTicketMessage(selectedTicket.ticket_id, threadReply.trim());
+            setThreadReply('');
+            // Refresh thread
+            const response = await ticketApi.getTicketById(selectedTicket.ticket_id);
+            if (response.data.success && response.data.data) {
+                setThreadMessages(response.data.data.messages || []);
+            }
+            success('Message posted');
+        } catch (err: any) {
+            error(err.response?.data?.message || 'Failed to post message');
+        } finally {
+            setSubmittingThreadReply(false);
         }
     };
 
@@ -353,15 +391,46 @@ const HelpDesk: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Message Response Section (for users viewing response) */}
-                            {selectedTicket.message_response && (
-                                <div className="ticket-admin-reply">
-                                    <label>Message Response</label>
-                                    <div className="admin-reply-content">
-                                        <p>{selectedTicket.message_response}</p>
-                                    </div>
+                            {/* Message Conversation Thread (Revised Spec v3.0) */}
+                            <div className="ticket-messages-thread">
+                                <label><MessageCircle size={16} /> Conversation History</label>
+                                <div className="messages-list">
+                                    {threadMessages.length > 0 ? (
+                                        threadMessages.map((msg) => (
+                                            <div key={msg.id} className={`message-item ${msg.sender_id === user?.id ? 'own-message' : 'other-message'}`}>
+                                                <div className="message-meta">
+                                                    <span className="sender-name">{msg.sender_name}</span>
+                                                    <span className="sender-role">({msg.sender_role})</span>
+                                                    <span className="message-time">{new Date(msg.created_at).toLocaleString()}</span>
+                                                </div>
+                                                <div className="message-text">
+                                                    <p>{msg.message}</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="no-messages">No messages in this thread yet.</p>
+                                    )}
                                 </div>
-                            )}
+                            </div>
+
+                            {/* Thread Reply Form (for anyone involved) */}
+                            <div className="thread-reply-form">
+                                <textarea
+                                    className="thread-reply-textarea"
+                                    placeholder="Type a message to the thread..."
+                                    value={threadReply}
+                                    onChange={(e) => setThreadReply(e.target.value)}
+                                    rows={2}
+                                />
+                                <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={handlePostMessage}
+                                    disabled={submittingThreadReply || !threadReply.trim()}
+                                >
+                                    {submittingThreadReply ? 'Posting...' : <><Send size={14} /> Post Message</>}
+                                </button>
+                            </div>
 
                             {/* Pending Status Message (for users) */}
                             {!isAdminOrSuperAdmin && !selectedTicket.message_response && selectedTicket.status === 'PENDING' && (
@@ -371,20 +440,20 @@ const HelpDesk: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Admin/Expert Response Form */}
-                            {(isAdminOrSuperAdmin || (userRole === 'EXPERT' && selectedTicket.ticket_assigned_user === user?.id)) && selectedTicket.status === 'PENDING' && (
-                                <div className="admin-response-form">
-                                    <label>{userRole === 'EXPERT' ? 'Respond to Assigned Ticket' : 'Send Response'}</label>
+                            {/* Status Update / Responder Form (Restricted per Spec) */}
+                            {(isSuperAdmin || isAssignedResponder) && selectedTicket.status === 'PENDING' && (
+                                <div className="admin-response-form status-update-form">
+                                    <label><Shield size={16} /> Update Status (Responder Option)</label>
                                     <textarea
                                         className="admin-reply-textarea"
-                                        placeholder="Enter your response to this ticket..."
+                                        placeholder="Optional final response message..."
                                         value={messageResponse}
                                         onChange={(e) => setMessageResponse(e.target.value)}
-                                        rows={4}
+                                        rows={3}
                                     />
                                     <div className="response-actions">
                                         <div className="status-selector">
-                                            <label>Status:</label>
+                                            <label>Final Status:</label>
                                             <select
                                                 value={selectedStatus}
                                                 onChange={(e) => setSelectedStatus(e.target.value as 'APPROVED' | 'REJECTED')}
@@ -396,9 +465,9 @@ const HelpDesk: React.FC = () => {
                                         <button
                                             className="btn btn-primary"
                                             onClick={handleSendResponse}
-                                            disabled={submittingResponse || !messageResponse.trim()}
+                                            disabled={submittingResponse}
                                         >
-                                            {submittingResponse ? 'Sending...' : <><Send size={16} /> Send Response</>}
+                                            {submittingResponse ? 'Updating...' : <><CheckCircle size={16} /> Update Status</>}
                                         </button>
                                     </div>
                                 </div>
@@ -431,9 +500,9 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {isAdminOrSuperAdmin && (
+                                {isSuperAdmin && (
                                     <div className="assign-ticket-section">
-                                        <label>Assign Ticket</label>
+                                        <label>Assign Ticket (SuperAdmin Only)</label>
                                         <div className="assign-controls">
                                             <select
                                                 className="assign-select"
