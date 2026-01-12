@@ -1079,3 +1079,126 @@
     padding: var(--space-4);
     font-style: italic;
 }
+
+/* simplified Response Workflow (Spec v4.0) */
+
+.contact-identity {
+    margin-top: 4px;
+    border-top: 1px dashed var(--border-light);
+    padding-top: 8px;
+}
+
+.contact-icon {
+    color: var(--primary-500) !important;
+}
+
+.ticket-simplified-messages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.message-box {
+    padding: var(--space-5);
+    border-radius: var(--radius-xl);
+    border: 1px solid transparent;
+}
+
+.message-box label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-3);
+}
+
+.raised-box {
+    background: var(--bg-secondary);
+    border-color: var(--border-light);
+}
+
+.raised-box label {
+    color: var(--text-muted);
+}
+
+.response-box {
+    background: var(--primary-50);
+    border-color: var(--primary-100);
+}
+
+.response-box label {
+    color: var(--primary-700);
+}
+
+.message-body {
+    font-size: 0.938rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.response-header label {
+    margin-bottom: 0;
+}
+
+.btn-edit-inline {
+    background: white;
+    border: 1px solid var(--primary-200);
+    color: var(--primary-600);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-edit-inline:hover {
+    background: var(--primary-600);
+    color: white;
+    border-color: var(--primary-600);
+}
+
+.edited-indicator {
+    display: inline-block;
+    margin-top: var(--space-3);
+    font-size: 0.7rem;
+    font-style: italic;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.enterprise-reply-form {
+    border: 2px solid var(--primary-100);
+    padding: var(--space-5);
+    background: white;
+}
+
+.enterprise-reply-form label {
+    display: block;
+    font-size: 0.813rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+}
+
+.reply-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}

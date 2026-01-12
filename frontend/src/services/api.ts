@@ -381,8 +381,8 @@ export const ticketApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         }),
 
-    postTicketMessage: (idOrNumber: string, message: string) =>
-        api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/messages`, { message }),
+    postTicketMessage: (idOrNumber: string, message: string, edit_requested?: boolean) =>
+        api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/messages`, { message, edit_requested }),
 
     updateTicketStatus: (idOrNumber: string, status: string, reply?: string) =>
         api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/status`, { status, reply }),

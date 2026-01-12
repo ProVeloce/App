@@ -25,7 +25,11 @@ interface Ticket {
     assigned_user_role: string | null;
     created_at: string;
     updated_at: string;
-    messages?: string; // Raw JSON from DB if not parsed
+    messages?: string; // Legacy field for old tickets
+    response_text?: string | null;
+    responder_id?: string | null;
+    edit_count?: number;
+    is_edited?: number;
 }
 
 interface TicketMessage {
@@ -52,6 +56,9 @@ const HelpDesk: React.FC = () => {
     // General thread reply state
     const [threadReply, setThreadReply] = useState('');
     const [submittingThreadReply, setSubmittingThreadReply] = useState(false);
+
+    // Response Editing state
+    const [isEditingResponse, setIsEditingResponse] = useState(false);
 
     // Attachment preview modal state
     const [attachmentPreview, setAttachmentPreview] = useState<{ show: boolean; url: string; filename: string }>({
@@ -123,16 +130,16 @@ const HelpDesk: React.FC = () => {
 
     const handleViewTicket = async (ticket: Ticket) => {
         try {
-            const ticketId = ticket.id; // Corrected to use id
+            const ticketId = ticket.id;
             const response = await ticketApi.getTicketById(ticketId);
             if (response.data.success && response.data.data) {
                 const fetchedTicket = response.data.data.ticket;
-                // Map id to ticket_id for UI components that might still use it
                 fetchedTicket.ticket_id = fetchedTicket.id;
                 setSelectedTicket(fetchedTicket);
                 setThreadMessages(response.data.data.messages || []);
                 setMessageResponse('');
                 setThreadReply('');
+                setIsEditingResponse(false);
             }
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to load ticket');
@@ -162,14 +169,13 @@ const HelpDesk: React.FC = () => {
         if (!selectedTicket || !threadReply.trim()) return;
         setSubmittingThreadReply(true);
         try {
-            await ticketApi.postTicketMessage(selectedTicket.ticket_id, threadReply.trim());
+            // Updated to support edit_requested flag (Spec v4.0)
+            await ticketApi.postTicketMessage(selectedTicket.ticket_id, threadReply.trim(), isEditingResponse);
             setThreadReply('');
-            // Refresh thread
-            const response = await ticketApi.getTicketById(selectedTicket.ticket_id);
-            if (response.data.success && response.data.data) {
-                setThreadMessages(response.data.data.messages || []);
-            }
-            success('Message posted');
+            setIsEditingResponse(false);
+            // Refresh ticket details
+            handleViewTicket(selectedTicket);
+            success(isEditingResponse ? 'Response edited' : 'Response posted');
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to post message');
         } finally {
@@ -348,12 +354,10 @@ const HelpDesk: React.FC = () => {
                                             <Mail size={16} />
                                             <span>{selectedTicket.user_email || 'No email'}</span>
                                         </div>
-                                        {selectedTicket.user_phone_number && (
-                                            <div className="identity-row">
-                                                <Phone size={16} />
-                                                <span>{selectedTicket.user_phone_number}</span>
-                                            </div>
-                                        )}
+                                        <div className="identity-row contact-identity">
+                                            <UserIcon size={16} className="contact-icon" />
+                                            <span>{selectedTicket.user_phone_number || 'No contact provided'}</span>
+                                        </div>
                                         <div className="identity-row">
                                             <Shield size={16} />
                                             <span className="role-badge">{selectedTicket.user_role}</span>
@@ -390,46 +394,62 @@ const HelpDesk: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Message Conversation Thread (Revised Spec v3.0) */}
-                            <div className="ticket-messages-thread">
-                                <label><MessageCircle size={16} /> Conversation History</label>
-                                <div className="messages-list">
-                                    {threadMessages.length > 0 ? (
-                                        threadMessages.map((msg, idx) => (
-                                            <div key={idx} className={`message-item ${msg.sender_id === user?.id ? 'own-message' : 'other-message'}`}>
-                                                <div className="message-meta">
-                                                    <span className="sender-name">{msg.sender_name}</span>
-                                                    <span className="sender-role">({msg.sender_role})</span>
-                                                    <span className="message-time">{new Date(msg.timestamp).toLocaleString()}</span>
-                                                </div>
-                                                <div className="message-text">
-                                                    <p>{msg.text}</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p className="no-messages">No messages in this thread yet.</p>
-                                    )}
+                            {/* Simplified Message View (Spec v4.0) */}
+                            <div className="ticket-simplified-messages">
+                                <div className="message-box raised-box">
+                                    <label><UserIcon size={14} /> Raised Message</label>
+                                    <p className="message-body">{selectedTicket.description}</p>
                                 </div>
+
+                                {selectedTicket.response_text && (
+                                    <div className="message-box response-box">
+                                        <div className="response-header">
+                                            <label><Shield size={14} /> Official Response</label>
+                                            {(isAdminOrSuperAdmin || selectedTicket.responder_id === user?.id) && (selectedTicket.edit_count || 0) < 1 && (
+                                                <button
+                                                    className="btn-edit-inline"
+                                                    onClick={() => {
+                                                        setIsEditingResponse(true);
+                                                        setThreadReply(selectedTicket.response_text || '');
+                                                    }}
+                                                >
+                                                    Edit
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="message-body">{selectedTicket.response_text}</p>
+                                        {selectedTicket.is_edited === 1 && (
+                                            <span className="edited-indicator">edited</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Thread Reply Form (for anyone involved) */}
-                            <div className="thread-reply-form">
-                                <textarea
-                                    className="thread-reply-textarea"
-                                    placeholder="Type a message to the thread..."
-                                    value={threadReply}
-                                    onChange={(e) => setThreadReply(e.target.value)}
-                                    rows={2}
-                                />
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={handlePostMessage}
-                                    disabled={submittingThreadReply || !threadReply.trim()}
-                                >
-                                    {submittingThreadReply ? 'Posting...' : <><Send size={14} /> Post Message</>}
-                                </button>
-                            </div>
+                            {/* Responder Input Form (Spec v4.0: Single Response / Final Edit) */}
+                            {((isAdminOrSuperAdmin && !selectedTicket.response_text) || isEditingResponse) && (
+                                <div className="thread-reply-form enterprise-reply-form">
+                                    <label>{isEditingResponse ? 'Edit Response (One-time only)' : 'Submit Official Response'}</label>
+                                    <textarea
+                                        className="thread-reply-textarea"
+                                        placeholder="Type the official response here..."
+                                        value={threadReply}
+                                        onChange={(e) => setThreadReply(e.target.value)}
+                                        rows={4}
+                                    />
+                                    <div className="reply-actions">
+                                        {isEditingResponse && (
+                                            <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingResponse(false)}>Cancel</button>
+                                        )}
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            onClick={handlePostMessage}
+                                            disabled={submittingThreadReply || !threadReply.trim()}
+                                        >
+                                            {submittingThreadReply ? 'Submitting...' : isEditingResponse ? 'Save Edit' : 'Send Response'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Notice for users (Optional, can be expanded) */}
                             {!isAdminOrSuperAdmin && selectedTicket.status === 'Open' && (

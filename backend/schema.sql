@@ -179,11 +179,17 @@ CREATE TABLE IF NOT EXISTS tickets (
     assigned_user_id TEXT DEFAULT NULL,                      -- FK → users.id
     messages JSON NOT NULL DEFAULT '[]',                      -- Array of {sender_id, text, timestamp}
     status TEXT NOT NULL DEFAULT 'Open',
+    -- Response Workflow (Spec v4.0)
+    responder_id TEXT DEFAULT NULL,                           -- User ID of the single responder
+    response_text TEXT DEFAULT NULL,                          -- The single consolidated response
+    edit_count INTEGER DEFAULT 0,                             -- Number of times edited (limit: 1)
+    is_edited INTEGER DEFAULT 0,                              -- 1 if edited, 0 otherwise
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Closed')),
     FOREIGN KEY (raised_by_user_id) REFERENCES users(id),
-    FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+    FOREIGN KEY (assigned_user_id) REFERENCES users(id),
+    FOREIGN KEY (responder_id) REFERENCES users(id)
 );
 
 -- EXPERT HELPDESK (LEGACY - DEPRECATED)
