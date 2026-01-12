@@ -125,7 +125,10 @@ const UserManagement: React.FC = () => {
 
     const getRoleBadge = (role: string) => {
         const r = role.toLowerCase();
-        return <span className={`role-badge ${r}`}>{role}</span>;
+        let displayRole = role;
+        if (r === 'agent') displayRole = 'Expert';
+        if (r === 'viewer') displayRole = 'Customer';
+        return <span className={`role-badge ${r}`}>{displayRole}</span>;
     };
 
     return (
@@ -160,7 +163,7 @@ const UserManagement: React.FC = () => {
                     <div className="stat-icon experts"><Award size={20} /></div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.experts}</span>
-                        <span className="stat-label">Agents</span>
+                        <span className="stat-label">Experts</span>
                     </div>
                 </div>
                 <div className="stat-card">
@@ -192,8 +195,8 @@ const UserManagement: React.FC = () => {
                         <option value="">All Roles</option>
                         <option value="superadmin">Superadmin</option>
                         <option value="admin">Admin</option>
-                        <option value="agent">Agent</option>
-                        <option value="viewer">Viewer</option>
+                        <option value="agent">Expert</option>
+                        <option value="viewer">Customer</option>
                     </select>
                     <select
                         className="filter-select"
@@ -242,8 +245,8 @@ const UserManagement: React.FC = () => {
                                                 onChange={(e) => handleUpdateUser(u.id, { role: e.target.value })}
                                                 disabled={isUpdating === u.id}
                                             >
-                                                <option value="viewer">Viewer</option>
-                                                <option value="agent">Agent</option>
+                                                <option value="viewer">Customer</option>
+                                                <option value="agent">Expert</option>
                                                 <option value="admin">Admin</option>
                                                 <option value="superadmin">Superadmin</option>
                                             </select>
