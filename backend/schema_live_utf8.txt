@@ -1,0 +1,35 @@
+﻿
+ Ôøà´©Å wrangler 4.54.0 (update available 4.58.0)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Resource location: remote 
+
+­ƒîÇ Executing on remote database proveloce_db (3b3261c1-a83c-49dc-82df-4688cbdc785c):
+­ƒîÇ To execute on your local development database, remove the --remote flag from your wrangler command.
+­ƒÜú Executed 1 command in 0.14ms
+[
+  {
+    "results": [
+      {
+        "sql": "CREATE TABLE \"tickets\" (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_number TEXT UNIQUE NOT NULL, category TEXT NOT NULL, subject TEXT NOT NULL, description TEXT NOT NULL, attachment TEXT DEFAULT NULL, raised_by_user_id TEXT NOT NULL, assigned_user_id TEXT DEFAULT NULL, messages JSON NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'Open', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, responder_id TEXT REFERENCES users(id), response_text TEXT, edit_count INTEGER DEFAULT 0, is_edited INTEGER DEFAULT 0, org_id TEXT DEFAULT 'ORG-DEFAULT', priority TEXT DEFAULT 'medium', locked_by TEXT DEFAULT NULL, assignee_role TEXT DEFAULT NULL, CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Closed')), FOREIGN KEY (raised_by_user_id) REFERENCES \"users_old_legacy\"(id), FOREIGN KEY (assigned_user_id) REFERENCES \"users_old_legacy\"(id))"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.138
+      },
+      "duration": 0.138,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 450560,
+      "rows_read": 100,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

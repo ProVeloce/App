@@ -2,14 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { ticketApi, userApi, User as UserData } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText, Paperclip } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
 
+interface TicketAttachment {
+    id: string;
+    filename: string;
+    filetype: string;
+    url: string;
+    uploaded_at?: string;
+}
+
 interface Ticket {
-    id: string; // The primary ticket identifier (e.g., PV-TK-...)
-    ticket_id: string; // Alias for id to maintain compatibility
+    id: string; // The database integer ID (returned as string)
+    ticket_id: string; // The primary ticket identifier (e.g., PV-TK-...)
     raised_by_user_id: string;
     user_full_name: string;
     user_email: string;
@@ -18,8 +26,9 @@ interface Ticket {
     subject: string;
     category: string;
     description: string;
-    attachment: string | null; // R2 object key
-    status: 'Open' | 'In Progress' | 'Closed';
+    attachment: string | null; // Legacy single attachment field
+    attachments?: TicketAttachment[]; // Spec v3.0 multiple attachments
+    status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
     assigned_user_id: string | null;
     assigned_user_name: string | null;
     assigned_user_role: string | null;
@@ -30,6 +39,9 @@ interface Ticket {
     responder_id?: string | null;
     edit_count?: number;
     is_edited?: number;
+    org_id?: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    locked_by?: string | null;
 }
 
 interface TicketMessage {
@@ -50,7 +62,7 @@ const HelpDesk: React.FC = () => {
 
     // Admin response state
     const [messageResponse, setMessageResponse] = useState('');
-    const [selectedStatus, setSelectedStatus] = useState<'Open' | 'In Progress' | 'Closed'>('Open');
+    const [selectedStatus, setSelectedStatus] = useState<'Open' | 'In Progress' | 'Resolved' | 'Closed'>('Open');
     const [submittingResponse, setSubmittingResponse] = useState(false);
 
     // General thread reply state
@@ -88,8 +100,12 @@ const HelpDesk: React.FC = () => {
         try {
             const response = await userApi.getUsers();
             if (response.data.success && response.data.data) {
-                // Spec says can only assign to users with Admin role
-                const filtered = response.data.data.data.filter((u: UserData) => u.role?.toUpperCase() === 'ADMIN');
+                // Filter by role (Admin/Expert/Superadmin) and org_id (if not superadmin)
+                const filtered = response.data.data.data.filter((u: UserData) => {
+                    const isCorrectRole = ['ADMIN', 'SUPERADMIN', 'EXPERT'].includes(u.role?.toUpperCase() || '');
+                    const isSameOrg = isSuperAdmin || u.org_id === user?.org_id;
+                    return isCorrectRole && isSameOrg && u.status === 'ACTIVE';
+                });
                 setAssignableUsers(filtered);
             }
         } catch (err) { console.error('Failed to load assignable users'); }
@@ -113,14 +129,18 @@ const HelpDesk: React.FC = () => {
         }, 300);
     };
 
-    const handleCreateTicket = async (data: { category: string; subject: string; description: string; attachment?: File | null }): Promise<{ ticketNumber: string }> => {
+    const handleCreateTicket = async (data: { category: string; subject: string; description: string; attachments: File[] }): Promise<{ ticketNumber: string }> => {
         const formData = new FormData();
         formData.append('category', data.category);
         formData.append('subject', data.subject);
         formData.append('description', data.description);
-        if (data.attachment) {
-            formData.append('attachment', data.attachment);
+
+        if (data.attachments && data.attachments.length > 0) {
+            data.attachments.forEach(file => {
+                formData.append('attachments', file);
+            });
         }
+
         const response = await ticketApi.createTicket(formData);
         const ticketNumber = response.data?.data?.ticketId || 'UNKNOWN';
         success('Ticket submitted successfully');
@@ -191,11 +211,12 @@ const HelpDesk: React.FC = () => {
     };
 
     // Open attachment in inline modal (POML: redirect=false, mode=popup)
-    const handleViewAttachment = async (path: string) => {
-        const filename = path.split('/').pop() || 'attachment';
+    const handleViewAttachment = async (urlOrPath: string) => {
+        const filename = urlOrPath.split('/').pop() || 'attachment';
         try {
             const token = localStorage.getItem('accessToken');
-            const response = await fetch(getAttachmentUrl(path), {
+            const url = urlOrPath.startsWith('http') ? urlOrPath : getAttachmentUrl(urlOrPath);
+            const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('Failed to load attachment');
@@ -208,15 +229,16 @@ const HelpDesk: React.FC = () => {
     };
 
     // Direct download without redirect (POML: mode=direct, redirect=false)
-    const handleDownloadAttachment = async (path: string) => {
+    const handleDownloadAttachment = async (urlOrPath: string) => {
         try {
             const token = localStorage.getItem('accessToken');
-            const response = await fetch(getAttachmentUrl(path), {
+            const url = urlOrPath.startsWith('http') ? urlOrPath : getAttachmentUrl(urlOrPath);
+            const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('Failed to download');
             const blob = await response.blob();
-            const filename = path.split('/').pop() || 'attachment';
+            const filename = urlOrPath.split('/').pop() || 'attachment';
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
@@ -234,12 +256,32 @@ const HelpDesk: React.FC = () => {
         if (!selectedTicket) return;
         setIsAssigning(true);
         try {
-            await ticketApi.assignTicket(selectedTicket.ticket_id, assignedToId);
-            success('Ticket assigned successfully');
+            if (selectedTicket.assigned_user_id) {
+                await ticketApi.reassignTicket(selectedTicket.ticket_id, assignedToId);
+                success('Ticket reassigned successfully');
+            } else {
+                await ticketApi.assignTicket(selectedTicket.ticket_id, assignedToId);
+                success('Ticket assigned successfully');
+            }
             // Refresh ticket details
             handleViewTicket(selectedTicket);
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to assign ticket');
+        } finally {
+            setIsAssigning(false);
+        }
+    };
+
+    const handleUnassignTicket = async () => {
+        if (!selectedTicket) return;
+        setIsAssigning(true);
+        try {
+            await ticketApi.unassignTicket(selectedTicket.ticket_id);
+            success('Ticket unassigned successfully');
+            // Refresh ticket details
+            handleViewTicket(selectedTicket);
+        } catch (err: any) {
+            error(err.response?.data?.message || 'Failed to unassign ticket');
         } finally {
             setIsAssigning(false);
         }
@@ -257,6 +299,7 @@ const HelpDesk: React.FC = () => {
         switch (status) {
             case 'Open': return <AlertCircle size={16} className="status-open" />;
             case 'In Progress': return <MessageCircle size={16} className="status-progress" />;
+            case 'Resolved': return <CheckCircle size={16} className="status-resolved" />;
             case 'Closed': return <CheckCircle size={16} className="status-closed" />;
             default: return <AlertCircle size={16} />;
         }
@@ -303,10 +346,13 @@ const HelpDesk: React.FC = () => {
                                 <div className="ticket-status">{getStatusIcon(t.status)}</div>
                                 <div className="ticket-content">
                                     <div className="ticket-id-small">{t.ticket_id}</div>
-                                    <h4>{t.subject}</h4>
+                                    <div className="ticket-subject-row">
+                                        <h4>{t.subject}</h4>
+                                        {(t.attachments?.length || 0) > 0 && <Paperclip size={14} className="attachment-indicator-icon" />}
+                                    </div>
                                     <div className="ticket-meta">
                                         <span className="ticket-category">{t.category}</span>
-                                        <span className={`ticket-status-badge ${t.status.toLowerCase()}`}>{t.status}</span>
+                                        <span className={`ticket-status-badge ${t.status.toLowerCase().replace(' ', '-')}`}>{t.status}</span>
                                         {isAdminOrSuperAdmin && <span className="ticket-user-badge">{t.user_full_name || 'Unknown User'}</span>}
                                     </div>
                                 </div>
@@ -373,9 +419,38 @@ const HelpDesk: React.FC = () => {
 
                             {/* Attachment Section */}
                             <div className="ticket-attachment">
-                                <label>Attachment</label>
-                                {selectedTicket.attachment ? (
-                                    <div className="attachment-actions">
+                                <label>Attachments ({(selectedTicket.attachments?.length || 0)})</label>
+                                {(selectedTicket.attachments?.length || 0) > 0 ? (
+                                    <div className="attachments-grid">
+                                        {selectedTicket.attachments?.map((att) => (
+                                            <div key={att.id} className="attachment-card">
+                                                <div className="attachment-info">
+                                                    <FileText size={16} />
+                                                    <span className="attachment-name" title={att.filename}>{att.filename}</span>
+                                                </div>
+                                                <div className="attachment-actions">
+                                                    <button
+                                                        className="btn btn-secondary btn-sm"
+                                                        onClick={() => handleViewAttachment(att.url)}
+                                                    >
+                                                        <Eye size={14} />
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary btn-sm"
+                                                        onClick={() => handleDownloadAttachment(att.url)}
+                                                    >
+                                                        <Download size={14} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : selectedTicket.attachment ? (
+                                    <div className="attachment-actions legacy-attachment">
+                                        <div className="attachment-info">
+                                            <FileText size={16} />
+                                            <span>Legacy Attachment</span>
+                                        </div>
                                         <button
                                             className="btn btn-secondary btn-sm"
                                             onClick={() => handleViewAttachment(selectedTicket.attachment!)}
@@ -390,7 +465,7 @@ const HelpDesk: React.FC = () => {
                                         </button>
                                     </div>
                                 ) : (
-                                    <p className="no-attachment">No attachment provided</p>
+                                    <p className="no-attachment">No attachments provided</p>
                                 )}
                             </div>
 
@@ -515,17 +590,23 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {isSuperAdmin && (
+                                {isAdminOrSuperAdmin && (
                                     <div className="assign-ticket-section">
-                                        <label>Assign Ticket (SuperAdmin Only)</label>
+                                        <label>{selectedTicket.assigned_user_id ? 'Update Assignment' : 'Assign Ticket'}</label>
                                         <div className="assign-controls">
                                             <select
                                                 className="assign-select"
-                                                defaultValue={selectedTicket.assigned_user_id || ''}
-                                                onChange={(e) => handleAssignTicket(e.target.value)}
+                                                value={selectedTicket.assigned_user_id || ''}
+                                                onChange={(e) => {
+                                                    if (e.target.value === '') {
+                                                        handleUnassignTicket();
+                                                    } else {
+                                                        handleAssignTicket(e.target.value);
+                                                    }
+                                                }}
                                                 disabled={isAssigning}
                                             >
-                                                <option value="">Select Assignee...</option>
+                                                <option value="">-- Unassigned --</option>
                                                 {assignableUsers.map(u => (
                                                     <option key={u.id} value={u.id}>
                                                         {u.name} ({u.role})
@@ -593,9 +674,7 @@ const HelpDesk: React.FC = () => {
                             <button
                                 className="preview-download-btn"
                                 onClick={() => {
-                                    if (selectedTicket?.attachment) {
-                                        handleDownloadAttachment(selectedTicket.attachment);
-                                    }
+                                    handleDownloadAttachment(attachmentPreview.url);
                                     closeAttachmentPreview();
                                 }}
                             >

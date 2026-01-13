@@ -43,6 +43,18 @@ function jsonResponse(data: any, status: number = 200): Response {
     });
 }
 
+async function createNotification(env: any, userId: string, type: string, title: string, message: string, link?: string): Promise<void> {
+    if (!env.proveloce_db) return;
+    try {
+        await env.proveloce_db.prepare(`
+            INSERT INTO notifications (id, user_id, type, title, message, link, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(crypto.randomUUID(), userId, type, title, message, link || null).run();
+    } catch (error) {
+        console.error("Failed to create notification:", error);
+    }
+}
+
 // =====================================================
 // JWT Helper Functions (Simple implementation for Workers)
 // =====================================================
@@ -221,7 +233,7 @@ export default {
                     }
 
                     const user = await env.proveloce_db.prepare(
-                        "SELECT id, name, email, role, password_hash FROM users WHERE email = ?"
+                        "SELECT id, name, email, role, org_id, suspended, password_hash FROM users WHERE email = ?"
                     ).bind(body.email).first();
 
                     if (!user) {
@@ -245,8 +257,8 @@ export default {
                     }
 
                     const token = await createJWT(
-                        { userId: user.id, email: user.email, name: user.name, role: user.role },
-                        env.JWT_SECRET || "default-secret"
+                        { userId: user.id, email: user.email, name: user.name, role: user.role, org_id: user.org_id || 'ORG-DEFAULT' },
+                        env.JWT_ACCESS_SECRET || "default-secret"
                     );
 
                     return jsonResponse({
@@ -400,7 +412,7 @@ export default {
 
                     // Check if user exists
                     let user = await env.proveloce_db.prepare(
-                        "SELECT id, name, email, role FROM users WHERE email = ?"
+                        "SELECT id, name, email, role, org_id, suspended FROM users WHERE email = ?"
                     ).bind(googleUser.email).first();
 
                     // Create user if doesn't exist
@@ -451,7 +463,8 @@ export default {
                             userId: user.id,
                             email: user.email,
                             name: user.name,
-                            role: user.role
+                            role: user.role,
+                            org_id: user.org_id || 'ORG-DEFAULT'
                         },
                         env.JWT_ACCESS_SECRET || "default-secret",
                         604800 // 7 days
@@ -1384,10 +1397,23 @@ export default {
                         JOIN users u ON u.id = ea.user_id
                     `;
                     const params: any[] = [];
+                    const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+                    const isAdmin = role === 'admin';
+
+                    let whereClauses = [];
+
+                    if (isAdmin) {
+                        whereClauses.push("ea.org_id = ?");
+                        params.push(requesterOrgId);
+                    }
 
                     if (statusFilter && statusFilter !== "") {
-                        query += ` WHERE LOWER(ea.status) = LOWER(?)`;
+                        whereClauses.push("LOWER(ea.status) = LOWER(?)");
                         params.push(statusFilter);
+                    }
+
+                    if (whereClauses.length > 0) {
+                        query += ` WHERE ${whereClauses.join(" AND ")}`;
                     }
 
                     query += ` ORDER BY ea.created_at DESC LIMIT 100`;
@@ -1416,9 +1442,15 @@ export default {
                         try { certificationUrls = row.certificationUrls ? JSON.parse(row.certificationUrls) : []; } catch { }
                         try { languages = row.languages ? JSON.parse(row.languages) : []; } catch { }
 
+                        let docMetadata = [];
+                        let imgMetadata = [];
+                        try { docMetadata = row.documents ? JSON.parse(row.documents) : []; } catch { }
+                        try { imgMetadata = row.images ? JSON.parse(row.images) : []; } catch { }
+
                         return {
                             id: row.id,
                             userId: row.userId,
+                            orgId: row.org_id,
                             status: (row.status || 'DRAFT').toUpperCase(),
                             dob: row.dob,
                             gender: row.gender,
@@ -1524,6 +1556,12 @@ export default {
 
                     if (!app) {
                         return jsonResponse({ success: false, error: "Application not found" }, 404);
+                    }
+
+                    // Tenant Isolation Check (Spec v2.0)
+                    const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+                    if (role === 'admin' && app.org_id !== requesterOrgId) {
+                        return jsonResponse({ success: false, error: "Access denied. Tenant mismatch." }, 403);
                     }
 
                     // Fetch all documents for this application
@@ -1849,14 +1887,16 @@ export default {
                     // AUTO-CREATE: If no application exists, create one with DRAFT status
                     if (!application) {
                         const newId = crypto.randomUUID();
+                        const userOrgId = payload.org_id || 'ORG-DEFAULT';
                         await env.proveloce_db.prepare(`
-                            INSERT INTO expert_applications (id, user_id, status, created_at, updated_at)
-                            VALUES (?, ?, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        `).bind(newId, payload.userId).run();
+                            INSERT INTO expert_applications (id, user_id, org_id, status, created_at, updated_at)
+                            VALUES (?, ?, ?, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        `).bind(newId, payload.userId, userOrgId).run();
 
                         application = {
                             id: newId,
                             user_id: payload.userId,
+                            org_id: userOrgId,
                             status: 'draft',
                             created_at: new Date().toISOString(),
                             updated_at: new Date().toISOString()
@@ -1946,9 +1986,10 @@ export default {
                     } else {
                         // Create new application with DRAFT status
                         const id = crypto.randomUUID();
+                        const userOrgId = payload.org_id || 'ORG-DEFAULT';
                         await env.proveloce_db.prepare(`
                             INSERT INTO expert_applications (
-                                id, user_id, status,
+                                id, user_id, org_id, status,
                                 dob, gender, address_line1, address_line2,
                                 city, state, country, pincode,
                                 government_id_type, government_id_url, profile_photo_url,
@@ -1958,9 +1999,9 @@ export default {
                                 available_days, available_time_slots,
                                 work_preference, communication_mode,
                                 terms_accepted, nda_accepted, signature_url
-                            ) VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         `).bind(
-                            id, payload.userId,
+                            id, payload.userId, userOrgId,
                             body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
                             body.city || null, body.state || null, body.country || null, body.pincode || null,
                             body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
@@ -2040,12 +2081,166 @@ export default {
                         "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
                     ).bind(crypto.randomUUID(), payload.userId, "SUBMIT_EXPERT_APPLICATION", "expert_application", existing.id, JSON.stringify({ timestamp: new Date().toISOString() })).run();
 
+                    // Notification
+                    await createNotification(
+                        env, payload.userId, 'INFO',
+                        'Application Submitted',
+                        'Your expert application has been submitted for review. We will notify you once a decision is made.',
+                        '/customer/expert-application'
+                    );
+
                     console.log(`✅ Application submitted for user ${payload.userId}`);
                     return jsonResponse({ success: true, message: "Application submitted successfully" });
                 } catch (error: any) {
                     console.error("Error submitting application:", error);
                     return jsonResponse({ success: false, error: "Failed to submit application" }, 500);
                 }
+            }
+
+            // POST /v1/expert_applications/submit - Spec v2.0 Submission
+            if (url.pathname === "/v1/expert_applications/submit" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload || !payload.userId) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as any;
+                    const { full_name, email, phone, address, expertise, experience, documents, images } = body;
+
+                    // Simplified storage as per Spec
+                    const id = crypto.randomUUID();
+                    const orgId = payload.org_id || 'ORG-DEFAULT';
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO expert_applications (
+                            id, user_id, org_id, status, full_name, email, phone, summary_bio, 
+                            skills, years_of_experience, documents, images, submitted_at, created_at, updated_at
+                        ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    `).bind(
+                        id, payload.userId, orgId,
+                        full_name || '', email || '', phone || null, address || null,
+                        expertise || '', experience || 0,
+                        JSON.stringify(documents || []),
+                        JSON.stringify(images || [])
+                    ).run();
+
+                    // Notification
+                    await createNotification(
+                        env, payload.userId, 'INFO',
+                        'Application Submitted',
+                        'Your expert application has been submitted for review. We will notify you once a decision is made.',
+                        '/customer/expert-application'
+                    );
+
+                    return jsonResponse({ success: true, message: "Application submitted successfully", id });
+                } catch (error: any) {
+                    console.error("Error in v1 submit:", error);
+                    return jsonResponse({ success: false, error: "Failed to submit" }, 500);
+                }
+            }
+
+            // POST /v1/expert_applications/:id/review - Spec v2.0 Unified Review
+            if (url.pathname.match(/^\/v1\/expert_applications\/[^\/]+\/review$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+
+                const role = (payload.role || "").toLowerCase();
+                const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+
+                if (role !== "admin" && role !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const pathParts = url.pathname.split("/");
+                const applicationId = pathParts[3];
+
+                const body = await request.json() as any;
+                const decision = (body.decision || "").toLowerCase(); // "approved" or "rejected"
+                const reason = body.reason || "";
+
+                if (!['approved', 'rejected'].includes(decision)) {
+                    return jsonResponse({ success: false, error: "Invalid decision. Must be 'approved' or 'rejected'." }, 400);
+                }
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                // Fetch app to check tenancy
+                const app = await env.proveloce_db.prepare(
+                    "SELECT user_id, org_id, status FROM expert_applications WHERE id = ?"
+                ).bind(applicationId).first() as any;
+
+                if (!app) return jsonResponse({ success: false, error: "Application not found" }, 404);
+
+                if (role === 'admin' && app.org_id !== requesterOrgId) {
+                    return jsonResponse({ success: false, error: "Tenant mismatch" }, 403);
+                }
+
+                if (app.status.toLowerCase() !== 'pending' && role !== 'superadmin') {
+                    return jsonResponse({ success: false, error: "Can only review pending applications" }, 400);
+                }
+
+                const reviewerId = payload.userId;
+
+                // Update application
+                await env.proveloce_db.prepare(`
+                    UPDATE expert_applications 
+                    SET status = ?, 
+                        reviewed_by = ?, 
+                        rejection_reason = ?,
+                        reviewed_at = CURRENT_TIMESTAMP, 
+                        updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = ?
+                `).bind(decision === 'approved' ? 'approved' : 'rejected', reviewerId, reason, applicationId).run();
+
+                // If approved, update user role
+                if (decision === 'approved') {
+                    await env.proveloce_db.prepare(
+                        "UPDATE users SET role = 'Expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).bind(app.user_id).run();
+                }
+
+                // Audit Log
+                await env.proveloce_db.prepare(`
+                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).bind(
+                    crypto.randomUUID(), reviewerId, "EXPERT_APPLICATION_REVIEWED", "expert_application", applicationId,
+                    JSON.stringify({ decision, reason, org_id: app.org_id, actor_id: reviewerId, actor_role: role, timestamp: new Date().toISOString() })
+                ).run();
+
+                // Notification to Applicant
+                if (decision === 'approved') {
+                    await createNotification(
+                        env, app.user_id, 'SUCCESS',
+                        'Application Approved! 🎉',
+                        'Congratulations! Your expert application has been approved. You now have access to expert features.',
+                        '/expert/dashboard'
+                    );
+                } else {
+                    await createNotification(
+                        env, app.user_id, 'WARNING',
+                        'Application Status Update',
+                        `Your expert application was reviewed and unfortunately was not approved at this time. Reason: ${reason || 'Please check with support for details.'}`,
+                        '/customer/expert-application'
+                    );
+                }
+
+                return jsonResponse({ success: true, message: `Application ${decision} successfully` });
             }
 
             // =====================================================
@@ -3062,7 +3257,7 @@ export default {
                     let category: string = '';
                     let subject: string = '';
                     let description: string = '';
-                    let attachmentFile: File | null = null;
+                    let attachmentFiles: File[] = [];
 
                     const contentType = request.headers.get('Content-Type') || '';
                     if (contentType.includes('multipart/form-data')) {
@@ -3070,9 +3265,15 @@ export default {
                         category = formData.get('category') as string || '';
                         subject = formData.get('subject') as string || '';
                         description = formData.get('description') as string || '';
-                        const file = formData.get('attachment');
-                        if (file && file instanceof File && file.size > 0) {
-                            attachmentFile = file;
+
+                        // Support multiple files with names 'attachments' or 'attachment'
+                        const files = formData.getAll('attachments');
+                        const singleFile = formData.get('attachment');
+
+                        if (files.length > 0) {
+                            attachmentFiles = files.filter(f => f instanceof File && f.size > 0) as File[];
+                        } else if (singleFile && singleFile instanceof File && singleFile.size > 0) {
+                            attachmentFiles = [singleFile];
                         }
                     } else {
                         const body = await request.json() as any;
@@ -3114,23 +3315,9 @@ export default {
                         String(now.getUTCDate()).padStart(2, '0');
                     const hhmm = String(now.getUTCHours()).padStart(2, '0') +
                         String(now.getUTCMinutes()).padStart(2, '0');
-                    const ticketId = `PV-TK-${yyyymmdd}-${hhmm}`;
-
-                    // Handle file attachment to R2
-                    let attachmentUrl: string | null = null;
-                    if (attachmentFile && env.others) {
-                        const fileId = crypto.randomUUID();
-                        const fileExt = attachmentFile.name.split('.').pop() || 'bin';
-                        const filePath = `helpdesk/${ticketId}/${fileId}.${fileExt}`;
-                        await env.others.put(filePath, attachmentFile.stream(), {
-                            httpMetadata: { contentType: attachmentFile.type || 'application/octet-stream' }
-                        });
-                        // Use internal API endpoint to serve attachments
-                        attachmentUrl = `/api/helpdesk/attachments/${filePath}`;
-                    }
+                    const ticketNumber = `PV-TK-${yyyymmdd}-${hhmm}`;
 
                     // Insert into tickets table using Unified Spec v3.0
-                    // messages array: [{sender_id, sender_name, sender_role, text, timestamp}]
                     const initialMessage = {
                         sender_id: payload.userId,
                         sender_name: sender?.name || 'User',
@@ -3139,28 +3326,58 @@ export default {
                         timestamp: new Date().toISOString()
                     };
 
-                    await env.proveloce_db.prepare(`
+                    const result = await env.proveloce_db.prepare(`
                         INSERT INTO tickets (
-                            ticket_number, category, subject, description, attachment, 
-                            raised_by_user_id, messages, status, created_at, updated_at
+                            ticket_number, category, subject, description, 
+                            raised_by_user_id, org_id, messages, status, created_at, updated_at
                         )
                         VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     `).bind(
-                        ticketId,
+                        ticketNumber,
                         category.trim(),
                         subject.trim(),
                         description.trim(),
-                        attachmentUrl,
                         payload.userId,
+                        sender.org_id || 'ORG-DEFAULT',
                         JSON.stringify([initialMessage])
                     ).run();
 
+                    const ticketDbId = result.meta.last_row_id;
+                    const fileAttachments: any[] = [];
+
+                    // Handle multiple file attachments to R2
+                    if (attachmentFiles.length > 0 && env.others) {
+                        for (const file of attachmentFiles) {
+                            const fileId = crypto.randomUUID();
+                            const fileExt = file.name.split('.').pop() || 'bin';
+                            const filePath = `helpdesk/${ticketNumber}/${fileId}.${fileExt}`;
+
+                            await env.others.put(filePath, file.stream(), {
+                                httpMetadata: { contentType: file.type || 'application/octet-stream' }
+                            });
+
+                            const attachmentUrl = `/api/helpdesk/attachments/${filePath}`;
+
+                            // Create FileReference in ticket_files
+                            await env.proveloce_db.prepare(`
+                                INSERT INTO ticket_files (id, ticket_id, filename, filetype, bucket, uploaded_at)
+                                VALUES (?, ?, ?, ?, 'others', CURRENT_TIMESTAMP)
+                            `).bind(fileId, ticketDbId, file.name, file.type).run();
+
+                            fileAttachments.push({
+                                id: fileId,
+                                filename: file.name,
+                                url: attachmentUrl
+                            });
+                        }
+                    }
+
                     return jsonResponse({
                         success: true,
-                        message: `Your ticket ${ticketId} has been created successfully`,
+                        message: `Your ticket ${ticketNumber} has been created successfully`,
                         data: {
-                            ticketId: ticketId,
-                            attachmentUrl: attachmentUrl
+                            ticketId: ticketNumber,
+                            attachments: fileAttachments
                         }
                     });
                 } catch (error: any) {
@@ -3178,26 +3395,30 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                const user = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
+                const requester = await env.proveloce_db.prepare(
+                    "SELECT role, org_id FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
-                const role = user?.role?.toUpperCase() || 'CUSTOMER';
+                const role = requester?.role?.toUpperCase() || 'CUSTOMER';
+                const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
 
-                // Unified Visibility Logic (Spec v3.0):
+                // Unified Visibility Logic (Spec v3.0 + Spec v1.0 RBAC):
                 // Superadmin: view_all(tickets)
-                // Assigned Admin: view_ticket(assigned)
-                // Raised User: view_ticket(raised)
-                // Deny All Others
+                // Admin: view_all(tickets) WHERE org_id = requesterOrgId
+                // Expert: view_ticket(assigned) WHERE org_id = requesterOrgId
+                // Raised User: view_ticket(raised) WHERE org_id = requesterOrgId
 
                 let whereClause = '';
                 let params: any[] = [];
 
                 if (role === 'SUPERADMIN') {
                     whereClause = '';
+                } else if (role === 'ADMIN') {
+                    whereClause = 'org_id = ?';
+                    params = [requesterOrgId];
                 } else {
-                    whereClause = '(raised_by_user_id = ? OR assigned_user_id = ?)';
-                    params = [payload.userId, payload.userId];
+                    whereClause = 'org_id = ? AND (raised_by_user_id = ? OR assigned_user_id = ?)';
+                    params = [requesterOrgId, payload.userId, payload.userId];
                 }
 
                 const query = `
@@ -3216,11 +3437,27 @@ export default {
                 `;
 
                 const result = await env.proveloce_db.prepare(query).bind(...params).all();
-                const tickets = result.results || [];
+                const rawTickets = result.results || [];
+
+                // Fetch attachments for each ticket
+                const ticketsWithFiles = await Promise.all(rawTickets.map(async (t: any) => {
+                    const files = await env.proveloce_db.prepare(`
+                        SELECT id, filename, filetype, bucket, uploaded_at
+                        FROM ticket_files WHERE ticket_id = ?
+                    `).bind(t.id).all();
+
+                    return {
+                        ...t,
+                        attachments: (files.results || []).map((f: any) => ({
+                            ...f,
+                            url: `/api/helpdesk/attachments/helpdesk/${t.ticket_number}/${f.id}.${f.filename.split('.').pop() || 'bin'}`
+                        }))
+                    };
+                }));
 
                 return jsonResponse({
                     success: true,
-                    data: { tickets }
+                    data: { tickets: ticketsWithFiles }
                 });
             }
 
@@ -3249,8 +3486,10 @@ export default {
                         u_raised.name as user_full_name,
                         u_raised.email as user_email,
                         u_raised.phone as user_phone_number,
+                        u_raised.org_id as user_org_id,
                         u_assign.name as assigned_user_name,
-                        u_assign.role as assigned_user_role
+                        u_assign.role as assigned_user_role,
+                        u_assign.org_id as assigned_user_org_id
                     FROM tickets t
                     LEFT JOIN users u_raised ON t.raised_by_user_id = u_raised.id
                     LEFT JOIN users u_assign ON t.assigned_user_id = u_assign.id
@@ -3261,14 +3500,40 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
+                // Tenant Isolation Check (Spec v1.0)
+                const requester = await env.proveloce_db.prepare(
+                    "SELECT role, org_id FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+
+                const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
+                const requesterRole = requester?.role?.toUpperCase() || '';
+
+                if (ticket.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "TENANT_MISMATCH", message: "Unauthorized tenant access." }, 403);
+                }
+
                 // Check visibility permissions: Superadmin OR Raised User OR Assigned User
                 const isRaisedByMe = ticket.raised_by_user_id === payload.userId;
                 const isAssignedToMe = ticket.assigned_user_id === payload.userId;
-                const isSuperAdmin = role === 'SUPERADMIN';
+                const isSuperAdmin = requesterRole === 'SUPERADMIN';
+                const isAdmin = requesterRole === 'ADMIN';
 
-                if (!isSuperAdmin && !isRaisedByMe && !isAssignedToMe) {
+                // Admins can see all tickets in their Org? Spec implies assignment RBAC but visibility usually follows.
+                // Spec says "All operations scoped to org_id".
+                if (!isSuperAdmin && !isAdmin && !isRaisedByMe && !isAssignedToMe) {
                     return jsonResponse({ success: false, error: "Not authorized to view this ticket" }, 403);
                 }
+
+                // Fetch attachments
+                const files = await env.proveloce_db.prepare(`
+                    SELECT id, filename, filetype, bucket, uploaded_at
+                    FROM ticket_files WHERE ticket_id = ?
+                `).bind(ticket.id).all();
+
+                const attachments = (files.results || []).map((f: any) => ({
+                    ...f,
+                    url: `/api/helpdesk/attachments/helpdesk/${ticket.ticket_number}/${f.id}.${f.filename.split('.').pop() || 'bin'}`
+                }));
 
                 // Parse messages from JSON
                 let messages = [];
@@ -3281,7 +3546,10 @@ export default {
                 return jsonResponse({
                     success: true,
                     data: {
-                        ticket,
+                        ticket: {
+                            ...ticket,
+                            attachments
+                        },
                         messages
                     }
                 });
@@ -3399,34 +3667,70 @@ export default {
 
                 // Verify requester is SuperAdmin (Spec v3.0: superadmin_only)
                 const requester = await env.proveloce_db.prepare(
-                    "SELECT role FROM users WHERE id = ?"
+                    "SELECT role, org_id, suspended FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
                 const requesterRole = requester?.role?.toUpperCase() || '';
+                const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
 
-                if (requesterRole !== 'SUPERADMIN') {
-                    return jsonResponse({ success: false, error: "Only SuperAdmin can assign tickets" }, 403);
+                if (requester.suspended === 1) {
+                    return jsonResponse({ success: false, error: "ACCOUNT_SUSPENDED", message: "Account is suspended." }, 403);
                 }
 
-                // Verify assigned user exists and has ADMIN role
+                if (requesterRole !== 'SUPERADMIN' && requesterRole !== 'ADMIN') {
+                    return jsonResponse({ success: false, error: "Only Admins can assign tickets" }, 403);
+                }
+
+                // Verify assigned user exists, has correct role, and same tenant
                 const assignedUser = await env.proveloce_db.prepare(
-                    "SELECT name, username, role FROM users WHERE id = ?"
+                    "SELECT name, role, org_id, suspended FROM users WHERE id = ?"
                 ).bind(assignedToId).first() as any;
 
                 if (!assignedUser) {
                     return jsonResponse({ success: false, error: "Assigned user not found" }, 404);
                 }
 
-                if (assignedUser.role?.toUpperCase() !== 'ADMIN' && assignedUser.role?.toUpperCase() !== 'SUPERADMIN') {
-                    return jsonResponse({ success: false, error: "Tickets can only be assigned to users with ADMIN or SUPERADMIN role" }, 400);
+                if (assignedUser.role?.toUpperCase() !== 'ADMIN' && assignedUser.role?.toUpperCase() !== 'SUPERADMIN' && assignedUser.role?.toUpperCase() !== 'EXPERT') {
+                    return jsonResponse({ success: false, error: "Tickets can only be assigned to ADMIN, SUPERADMIN, or EXPERT" }, 400);
+                }
+
+                if (assignedUser.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
+                    // SuperAdmin can cross-assign? Spec says "cross-tenant assignment is forbidden"
+                    return jsonResponse({ success: false, error: "TENANT_MISMATCH", message: "Cannot assign across tenants." }, 403);
+                }
+
+                if (assignedUser.suspended === 1) {
+                    return jsonResponse({ success: false, error: "TARGET_SUSPENDED", message: "Cannot assign to a suspended user." }, 400);
+                }
+
+                // Fetch ticket to check tenancy and status
+                const ticket = await env.proveloce_db.prepare(
+                    "SELECT org_id, status, locked_by FROM tickets WHERE id = ? OR ticket_number = ?"
+                ).bind(ticketId, ticketId).first() as any;
+
+                if (!ticket) {
+                    return jsonResponse({ success: false, error: "Ticket not found" }, 404);
+                }
+
+                if (ticket.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "TENANT_MISMATCH", message: "Unauthorized tenant access." }, 403);
+                }
+
+                if (['CLOSED', 'RESOLVED'].includes(ticket.status.toUpperCase())) {
+                    return jsonResponse({ success: false, error: "TICKET_CLOSED", message: "Cannot assign closed or resolved tickets." }, 400);
+                }
+
+                if (ticket.locked_by && ticket.locked_by !== payload.userId && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "TICKET_LOCKED", message: "Ticket is locked by another user." }, 403);
                 }
 
                 // Update ticket
                 await env.proveloce_db.prepare(`
                     UPDATE tickets SET 
                         assigned_user_id = ?,
+                        assignee_role = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? OR ticket_number = ?
-                `).bind(assignedToId, ticketId, ticketId).run();
+                `).bind(assignedToId, assignedUser.role, ticketId, ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
@@ -3440,6 +3744,74 @@ export default {
                     success: true,
                     message: "Ticket assigned successfully"
                 });
+            }
+
+            // POST /api/helpdesk/tickets/:ticket_id/reassign - Reassign ticket (Spec v1.0)
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/reassign$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const ticketId = url.pathname.split('/')[4];
+                const { assignedToId } = await request.json() as { assignedToId: string };
+
+                const requester = await env.proveloce_db.prepare("SELECT role, org_id FROM users WHERE id = ?").bind(payload.userId).first() as any;
+                const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
+                const requesterRole = requester?.role?.toUpperCase() || '';
+
+                if (requesterRole !== 'SUPERADMIN' && requesterRole !== 'ADMIN') {
+                    return jsonResponse({ success: false, error: "FORBIDDEN", message: "Role not permitted to reassign." }, 403);
+                }
+
+                const assignedUser = await env.proveloce_db.prepare("SELECT name, role, org_id FROM users WHERE id = ?").bind(assignedToId).first() as any;
+                if (!assignedUser || assignedUser.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "INVALID_ASSIGNEE", message: "Assignee must be in same tenant." }, 403);
+                }
+
+                const ticket = await env.proveloce_db.prepare("SELECT org_id, assigned_user_id FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
+                if (!ticket || ticket.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "TICKET_NOT_FOUND" }, 404);
+                }
+
+                const prevAssigneeId = ticket.assigned_user_id;
+
+                await env.proveloce_db.prepare(`
+                    UPDATE tickets SET assigned_user_id = ?, assignee_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                `).bind(assignedToId, assignedUser.role, ticketId, ticketId).run();
+
+                // Audit
+                await env.proveloce_db.prepare(`
+                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).bind(crypto.randomUUID(), payload.userId, 'REASSIGN_TICKET', 'TICKET', ticketId, JSON.stringify({ assignedTo: assignedToId, previousAssignee: prevAssigneeId })).run();
+
+                return jsonResponse({ success: true, message: "Ticket reassigned" });
+            }
+
+            // POST /api/helpdesk/tickets/:ticket_id/unassign - Unassign ticket (Spec v1.0)
+            if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/unassign$/) && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+
+                const ticketId = url.pathname.split('/')[4];
+                const requester = await env.proveloce_db.prepare("SELECT role, org_id FROM users WHERE id = ?").bind(payload.userId).first() as any;
+                const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
+
+                const ticket = await env.proveloce_db.prepare("SELECT org_id FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
+                if (!ticket || ticket.org_id !== requesterOrgId && requester.role?.toUpperCase() !== 'SUPERADMIN') {
+                    return jsonResponse({ success: false, error: "UNAUTHORIZED" }, 403);
+                }
+
+                await env.proveloce_db.prepare(`
+                    UPDATE tickets SET assigned_user_id = NULL, assignee_role = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                `).bind(ticketId, ticketId).run();
+
+                return jsonResponse({ success: true, message: "Ticket unassigned" });
             }
 
             // POST /api/helpdesk/tickets/:ticket_id/messages - Add message to thread (Revised Spec v3.0)

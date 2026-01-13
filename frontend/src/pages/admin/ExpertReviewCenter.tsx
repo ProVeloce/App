@@ -39,6 +39,14 @@ interface Application {
     email: string;
     phone?: string;
   };
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  expertise?: string;
+  experience?: string;
+  documents?: any[];
+  images?: any[];
 }
 
 const ExpertReviewCenter: React.FC = () => {
@@ -70,37 +78,25 @@ const ExpertReviewCenter: React.FC = () => {
     }
   };
 
-  const handleApprove = async (id: string) => {
+  const handleReview = async (id: string, decision: 'approved' | 'rejected') => {
+    let reason = '';
+    if (decision === 'rejected') {
+      const input = prompt('Enter rejection reason:');
+      if (!input) return;
+      reason = input;
+    }
+
     setActionLoading(id);
     try {
-      const response = await applicationApi.approveApplication(id);
+      const response = await applicationApi.reviewApplication(id, decision, reason);
       if (response.data.success) {
         // Refresh list
         fetchApplications();
       } else {
-        showGlobalError('Approval Failed', response.data.error || 'Failed to approve application');
+        showGlobalError('Review Failed', response.data.error || `Failed to ${decision} application`);
       }
     } catch (err: any) {
-      showGlobalError('Approval Failed', err.message || 'Failed to approve application');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    const reason = prompt('Enter rejection reason:');
-    if (!reason) return;
-
-    setActionLoading(id);
-    try {
-      const response = await applicationApi.rejectApplication(id, reason);
-      if (response.data.success) {
-        fetchApplications();
-      } else {
-        showGlobalError('Rejection Failed', response.data.error || 'Failed to reject application');
-      }
-    } catch (err: any) {
-      showGlobalError('Rejection Failed', err.message || 'Failed to reject application');
+      showGlobalError('Review Failed', err.message || `Failed to ${decision} application`);
     } finally {
       setActionLoading(null);
     }
@@ -252,11 +248,37 @@ const ExpertReviewCenter: React.FC = () => {
                     </div>
                   )}
 
+                  {((app.documents && app.documents.length > 0) || (app.images && app.images.length > 0)) && (
+                    <div className="section">
+                      <h4>Attachments</h4>
+                      <div className="attachments-grid">
+                        {app.documents?.map((doc: any, i: number) => (
+                          <div key={`doc-${i}`} className="attachment-item">
+                            <FileText size={16} />
+                            <span className="file-name">{doc.fileName || doc.name || `Document ${i + 1}`}</span>
+                            <button className="download-link" onClick={() => window.open(doc.url || doc.path, '_blank')}>
+                              <Download size={14} />
+                            </button>
+                          </div>
+                        ))}
+                        {app.images?.map((img: any, i: number) => (
+                          <div key={`img-${i}`} className="attachment-item">
+                            <Eye size={16} />
+                            <span className="file-name">{img.fileName || img.name || `Image ${i + 1}`}</span>
+                            <button className="preview-link" onClick={() => window.open(img.url || img.path, '_blank')}>
+                              <Eye size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {app.status === 'PENDING' && (
                     <div className="actions">
                       <button
                         className="btn-approve"
-                        onClick={() => handleApprove(app.id)}
+                        onClick={() => handleReview(app.id, 'approved')}
                         disabled={actionLoading === app.id}
                       >
                         {actionLoading === app.id ? <Loader className="spinner" size={16} /> : <CheckCircle size={16} />}
@@ -264,7 +286,7 @@ const ExpertReviewCenter: React.FC = () => {
                       </button>
                       <button
                         className="btn-reject"
-                        onClick={() => handleReject(app.id)}
+                        onClick={() => handleReview(app.id, 'rejected')}
                         disabled={actionLoading === app.id}
                       >
                         <XCircle size={16} />

@@ -15,7 +15,7 @@ interface TicketFormData {
     category: string;
     subject: string;
     description: string;
-    attachment?: File | null;
+    attachments: File[];
 }
 
 const CATEGORIES = [
@@ -35,7 +35,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
         category: '',
         subject: '',
         description: '',
-        attachment: null,
+        attachments: [],
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -93,7 +93,7 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
     };
 
     const resetForm = () => {
-        setFormData({ category: '', subject: '', description: '', attachment: null });
+        setFormData({ category: '', subject: '', description: '', attachments: [] });
         setErrors({});
         setTouched({});
         setErrorMessage('');
@@ -370,37 +370,53 @@ const NewTicketModal: React.FC<NewTicketModalProps> = ({ isOpen, onClose, onSubm
 
                                 {/* Attachment */}
                                 <div className="ntm-field">
-                                    <label className="ntm-label">Attachment <span className="ntm-optional">(optional)</span></label>
+                                    <label className="ntm-label">Attachments <span className="ntm-optional">(multiple files allowed, max 15MB each)</span></label>
                                     <div className="ntm-file-upload">
                                         <input
                                             type="file"
                                             id="ntm-file-input"
                                             className="ntm-file-input"
                                             accept=".png,.jpg,.jpeg,.pdf,.txt,.log"
+                                            multiple
                                             onChange={(e) => {
-                                                const file = e.target.files?.[0] || null;
-                                                if (file && file.size > 15 * 1024 * 1024) {
-                                                    setErrors(prev => ({ ...prev, attachment: 'File exceeds the 15 MB limit' }));
-                                                    return;
-                                                }
-                                                setFormData(prev => ({ ...prev, attachment: file }));
+                                                const newFiles = Array.from(e.target.files || []);
+                                                const validFiles = newFiles.filter(file => {
+                                                    if (file.size > 15 * 1024 * 1024) {
+                                                        setErrors(prev => ({ ...prev, attachment: `File ${file.name} exceeds the 15 MB limit` }));
+                                                        return false;
+                                                    }
+                                                    return true;
+                                                });
+                                                setFormData(prev => ({ ...prev, attachments: [...prev.attachments, ...validFiles] }));
                                                 setErrors(prev => ({ ...prev, attachment: '' }));
                                             }}
                                         />
                                         <label htmlFor="ntm-file-input" className="ntm-file-label">
                                             <Paperclip size={18} />
-                                            <span>{formData.attachment ? formData.attachment.name : 'Add logs, screenshots, or documents'}</span>
+                                            <span>{formData.attachments.length > 0 ? `${formData.attachments.length} file(s) selected` : 'Add logs, screenshots, or documents'}</span>
                                         </label>
-                                        {formData.attachment && (
-                                            <button
-                                                type="button"
-                                                className="ntm-file-clear"
-                                                onClick={() => setFormData(prev => ({ ...prev, attachment: null }))}
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        )}
                                     </div>
+
+                                    {/* Selected Files List */}
+                                    {formData.attachments.length > 0 && (
+                                        <div className="ntm-selected-files">
+                                            {formData.attachments.map((file, idx) => (
+                                                <div key={`${file.name}-${idx}`} className="ntm-file-tag">
+                                                    <span className="ntm-file-name" title={file.name}>{file.name}</span>
+                                                    <button
+                                                        type="button"
+                                                        className="ntm-file-remove"
+                                                        onClick={() => setFormData(prev => ({
+                                                            ...prev,
+                                                            attachments: prev.attachments.filter((_, i) => i !== idx)
+                                                        }))}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     {errors.attachment && (
                                         <span className="ntm-field-error"><AlertTriangle size={14} /> {errors.attachment}</span>
                                     )}

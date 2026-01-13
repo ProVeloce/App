@@ -18,6 +18,7 @@ export interface User {
     phone?: string;
     role: 'CUSTOMER' | 'EXPERT' | 'ANALYST' | 'ADMIN' | 'SUPERADMIN';
     status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
+    org_id?: string;
     emailVerified: boolean;
     lastLoginAt?: string;
     createdAt: string;
@@ -324,6 +325,14 @@ export const applicationApi = {
     rejectApplication: (id: string, reason: string) =>
         api.post<ApiResponse>(`/applications/${id}/reject`, { reason }),
 
+    // Spec v2.0 Unified Review
+    reviewApplication: (id: string, decision: 'approved' | 'rejected', reason?: string) =>
+        api.post<ApiResponse>(`/v1/expert_applications/${id}/review`, { decision, reason }),
+
+    // Spec v2.0 Submission
+    submitExpertApplication: (data: any) =>
+        api.post<ApiResponse>(`/v1/expert_applications/submit`, data),
+
     requestClarification: (id: string, message: string) =>
         api.post<ApiResponse>(`/applications/${id}/request-clarification`, { message }),
 
@@ -389,6 +398,12 @@ export const ticketApi = {
 
     assignTicket: (idOrNumber: string, assignedToId: string) =>
         api.patch<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/assign`, { assignedToId }),
+
+    reassignTicket: (idOrNumber: string, assignedToId: string) =>
+        api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/reassign`, { assignedToId }),
+
+    unassignTicket: (idOrNumber: string) =>
+        api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/unassign`, {}),
 };
 
 // Notification API

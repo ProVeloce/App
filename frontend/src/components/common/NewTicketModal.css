@@ -759,3 +759,55 @@
         width: 100%;
     }
 }
+
+/* Selected Files List */
+.ntm-selected-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.ntm-file-tag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #EFF6FF;
+    border: 1px solid #DBEAFE;
+    border-radius: 8px;
+    max-width: 100%;
+}
+
+.ntm-file-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #1E40AF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ntm-file-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: #DBEAFE;
+    color: #1E40AF;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ntm-file-remove:hover {
+    background: #BFDBFE;
+    color: #111827;
+}
+
+.ntm-label .ntm-optional {
+    margin-left: 4px;
+    font-size: 0.75rem;
+}

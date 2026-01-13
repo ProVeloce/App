@@ -117,6 +117,22 @@
     margin-bottom: 2px;
 }
 
+.ticket-subject-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.ticket-subject-row h4 {
+    margin-bottom: 0 !important;
+}
+
+.attachment-indicator-icon {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
 .ticket-meta {
     display: flex;
     gap: var(--space-3);
@@ -146,10 +162,20 @@
     border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
-.ticket-status-badge.closed {
+.ticket-status-badge.resolved {
     background: rgba(16, 185, 129, 0.1);
     color: #10b981;
     border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.ticket-status-badge.closed {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.status-resolved {
+    color: var(--success-600);
 }
 
 .status-text.open {
@@ -162,8 +188,13 @@
     font-weight: 600;
 }
 
-.status-text.closed {
+.status-text.resolved {
     color: #10b981;
+    font-weight: 600;
+}
+
+.status-text.closed {
+    color: #6366f1;
     font-weight: 600;
 }
 
@@ -615,32 +646,63 @@
     letter-spacing: 0.05em;
 }
 
-.attachment-actions {
+/* Attachment Grid */
+.attachments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+.attachment-card {
     display: flex;
-    gap: var(--space-2);
-}
-
-.attachment-actions .btn {
-    display: inline-flex;
     align-items: center;
-    gap: var(--space-1);
-}
-
-.btn-sm {
-    padding: var(--space-2) var(--space-3);
-    font-size: 0.75rem;
-}
-
-.btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-light);
-}
-
-.btn-secondary:hover {
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
     background: var(--bg-primary);
-    border-color: var(--primary-500);
-    color: var(--primary-600);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
+}
+
+.attachment-card:hover {
+    border-color: var(--primary-300);
+    background: var(--primary-25);
+}
+
+.attachment-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    flex: 1;
+}
+
+.attachment-info svg {
+    color: var(--primary-500);
+    flex-shrink: 0;
+}
+
+.attachment-name {
+    font-size: 0.813rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.legacy-attachment {
+    background: var(--bg-secondary);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.legacy-attachment .attachment-info {
+    flex: 1;
 }
 
 /* Attachment Preview Modal (POML: size=medium) */
