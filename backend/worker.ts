@@ -965,10 +965,10 @@ export default {
                 // Filter by roles if provided
                 const rolesParam = url.searchParams.get('roles');
                 if (rolesParam) {
-                    const requestedRoles = rolesParam.split(',').map(r => r.trim());
+                    const requestedRoles = rolesParam.split(',').map(r => r.trim().toUpperCase()).filter(r => r !== "");
                     if (requestedRoles.length > 0) {
                         const placeholders = requestedRoles.map(() => '?').join(',');
-                        query += ` AND role IN (${placeholders})`;
+                        query += ` AND UPPER(role) IN (${placeholders})`;
                         params.push(...requestedRoles);
                     }
                 }
