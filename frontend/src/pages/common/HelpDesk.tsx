@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ticketApi, userApi, User as UserData } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText, Paperclip } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText, Paperclip, Calendar } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
@@ -89,9 +89,14 @@ const HelpDesk: React.FC = () => {
     const userRole = user?.role?.toUpperCase() || 'CUSTOMER';
     const isSuperAdmin = userRole === 'SUPERADMIN';
     const isAdmin = userRole === 'ADMIN';
+    const isExpert = userRole === 'EXPERT';
     const isAdminOrSuperAdmin = isAdmin || isSuperAdmin;
     const canCreateTicket = userRole !== 'SUPERADMIN';
     const isAssignedResponder = selectedTicket?.assigned_user_id === user?.id;
+    // POML v1.2: Admin cannot respond/assign to their own raised tickets
+    const isOwnRaisedTicket = selectedTicket?.raised_by_user_id === user?.id;
+    const canAssignTickets = isSuperAdmin;
+    const canRespond = isSuperAdmin || (isAdmin && isAssignedResponder && !isOwnRaisedTicket);
 
     useEffect(() => {
         fetchTickets();
@@ -408,8 +413,8 @@ const HelpDesk: React.FC = () => {
                                             <span>{selectedTicket.user_phone_number || 'No contact provided'}</span>
                                         </div>
                                         <div className="identity-row">
-                                            <AlertCircle size={16} />
-                                            <span>{new Date(selectedTicket.created_at).toLocaleString()}</span>
+                                            <Calendar size={16} />
+                                            <span>Submitted: {new Date(selectedTicket.created_at).toLocaleString()}</span>
                                         </div>
                                         {selectedTicket.assigned_at && (
                                             <div className="identity-row">
@@ -543,8 +548,8 @@ const HelpDesk: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Status Update / Responder Form (Restricted per Spec) */}
-                            {(isSuperAdmin || isAssignedResponder) && selectedTicket.status !== 'Closed' && (
+                            {/* Status Update / Responder Form (POML v1.2: Uses canRespond) */}
+                            {canRespond && selectedTicket.status !== 'Closed' && (
                                 <div className="admin-response-form status-update-form">
                                     <label><CheckCircle size={16} /> Update Status</label>
                                     <textarea
@@ -561,7 +566,7 @@ const HelpDesk: React.FC = () => {
                                                 value={selectedStatus}
                                                 onChange={(e) => setSelectedStatus(e.target.value as any)}
                                             >
-                                                <option value="Open">Open</option>
+                                                {/* POML v1.2: Removed 'Open' from status options */}
                                                 <option value="In Progress">In Progress</option>
                                                 <option value="Resolved">Resolved</option>
                                                 <option value="Closed">Closed</option>
@@ -600,7 +605,7 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {isAdminOrSuperAdmin && (
+                                {canAssignTickets && (
                                     <div className="assign-ticket-section">
                                         <label>{selectedTicket.assigned_user_id ? 'Update Assignment' : 'Assign Ticket'}</label>
                                         <div className="assign-controls assign-searchable">

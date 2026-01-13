@@ -3472,10 +3472,11 @@ export default {
                 const role = requester?.role?.toUpperCase() || 'CUSTOMER';
                 const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
 
-                // Unified Visibility Logic (Spec v3.0 + Spec v1.0 RBAC):
+                // Unified Visibility Logic (POML Spec v1.0):
                 // Superadmin: view_all(tickets)
-                // Admin: view_ticket(assigned) WHERE org_id = requesterOrgId - Only assigned tickets
-                // Expert/Customer: view_ticket(raised OR assigned) WHERE org_id = requesterOrgId
+                // Admin: view_ticket(assigned_only) WHERE org_id = requesterOrgId
+                // Expert: view_ticket(assigned_only) WHERE org_id = requesterOrgId
+                // Customer: view_ticket(raised_only) WHERE org_id = requesterOrgId
 
                 let whereClause = '';
                 let params: any[] = [];
@@ -3486,9 +3487,14 @@ export default {
                     // Admins only see tickets assigned to them
                     whereClause = 't.org_id = ? AND t.assigned_user_id = ?';
                     params = [requesterOrgId, payload.userId];
+                } else if (role === 'EXPERT') {
+                    // Experts only see tickets assigned to them (cannot respond per POML)
+                    whereClause = 't.org_id = ? AND t.assigned_user_id = ?';
+                    params = [requesterOrgId, payload.userId];
                 } else {
-                    whereClause = 't.org_id = ? AND (t.raised_by_user_id = ? OR t.assigned_user_id = ?)';
-                    params = [requesterOrgId, payload.userId, payload.userId];
+                    // Customers see only tickets they raised
+                    whereClause = 't.org_id = ? AND t.raised_by_user_id = ?';
+                    params = [requesterOrgId, payload.userId];
                 }
 
                 const query = `
