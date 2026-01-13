@@ -962,6 +962,17 @@ export default {
                 let query = "SELECT id, name, email, phone, role, status, org_id FROM users WHERE status = 'active'";
                 const params: any[] = [];
 
+                // Filter by roles if provided
+                const rolesParam = url.searchParams.get('roles');
+                if (rolesParam) {
+                    const requestedRoles = rolesParam.split(',').map(r => r.trim());
+                    if (requestedRoles.length > 0) {
+                        const placeholders = requestedRoles.map(() => '?').join(',');
+                        query += ` AND role IN (${placeholders})`;
+                        params.push(...requestedRoles);
+                    }
+                }
+
                 if (role === 'SUPERADMIN') {
                     // SuperAdmin can see everyone active
                 } else if (role === 'ADMIN') {
@@ -1257,18 +1268,25 @@ export default {
                     recentUsers: [] as any[]
                 };
 
-                // Get counts by role
+                // Get counts by role (FILTERED BY ACTIVE STATUS per Spec)
                 const roleCounts = await env.proveloce_db.prepare(
-                    "SELECT role, COUNT(*) as count FROM users GROUP BY role"
+                    "SELECT role, COUNT(*) as count FROM users WHERE status = 'active' GROUP BY role"
                 ).all();
+
+                // Get Total Users count separately (all statuses)
+                const totalCount = await env.proveloce_db.prepare(
+                    "SELECT COUNT(*) as count FROM users"
+                ).first() as any;
+                stats.totalUsers = totalCount?.count || 0;
 
                 for (const row of roleCounts.results as any[]) {
                     const role = (row.role || "").toLowerCase();
                     const count = row.count || 0;
-                    stats.totalUsers += count;
                     if (role === "admin") stats.admins = count;
-                    if (role === "Expert") stats.experts = count;
-                    if (role === "Customer") stats.customers = count;
+                    if (role === "superadmin") stats.admins += count; // Include superadmins in admin count
+                    if (role === "expert") stats.experts = count;
+                    if (role === "customer") stats.customers = count;
+                    if (role === "analyst") stats.analysts = count;
                 }
 
                 // Get counts by status

@@ -99,13 +99,15 @@ const HelpDesk: React.FC = () => {
 
     const fetchAssignableUsers = async () => {
         try {
-            const response = await userApi.getUsers();
+            const response = await userApi.getUsers({ roles: 'ADMIN,SUPERADMIN,EXPERT' });
             if (response.data.success && response.data.data) {
                 // Filter by role (Admin/Expert/Superadmin) and org_id (if not superadmin)
+                // Note: Backend now filters roles, but we keep this for extra safety and org scoping
                 const filtered = response.data.data.data.filter((u: UserData) => {
                     const isCorrectRole = ['ADMIN', 'SUPERADMIN', 'EXPERT'].includes(u.role?.toUpperCase() || '');
                     const isSameOrg = isSuperAdmin || u.org_id === user?.org_id;
-                    return isCorrectRole && isSameOrg && u.status === 'ACTIVE';
+                    const isActive = (u.status?.toUpperCase() === 'ACTIVE');
+                    return isCorrectRole && isSameOrg && isActive;
                 });
                 setAssignableUsers(filtered);
             }
