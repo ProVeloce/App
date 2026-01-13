@@ -3414,10 +3414,10 @@ export default {
                 if (role === 'SUPERADMIN') {
                     whereClause = '';
                 } else if (role === 'ADMIN') {
-                    whereClause = 'org_id = ?';
+                    whereClause = 't.org_id = ?';
                     params = [requesterOrgId];
                 } else {
-                    whereClause = 'org_id = ? AND (raised_by_user_id = ? OR assigned_user_id = ?)';
+                    whereClause = 't.org_id = ? AND (t.raised_by_user_id = ? OR t.assigned_user_id = ?)';
                     params = [requesterOrgId, payload.userId, payload.userId];
                 }
 
@@ -3568,13 +3568,14 @@ export default {
                 const body = await request.json() as any;
                 const { status, reply } = body;
 
-                // Status mapping to Spec v3.0: Open, In Progress, Closed
+                // Status mapping to Spec v3.0: Open, In Progress, Resolved, Closed
                 let finalStatus = status;
                 if (status === 'APPROVED' || status === 'OPEN') finalStatus = 'Open';
                 else if (status === 'IN_PROGRESS') finalStatus = 'In Progress';
+                else if (status === 'RESOLVED') finalStatus = 'Resolved';
                 else if (status === 'REJECTED' || status === 'CLOSED') finalStatus = 'Closed';
 
-                const validStatuses = ['Open', 'In Progress', 'Closed'];
+                const validStatuses = ['Open', 'In Progress', 'Resolved', 'Closed'];
                 if (!finalStatus || !validStatuses.includes(finalStatus)) {
                     return jsonResponse({
                         success: false,
