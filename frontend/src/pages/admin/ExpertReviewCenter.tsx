@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { applicationApi, documentApi } from '../../services/api';
 import { showGlobalError } from '../../context/ErrorContext';
+import RejectExpertModal from '../../components/common/RejectExpertModal';
+import { useToast } from '../../context/ToastContext';
 import './ExpertReviewCenter.css';
 
 interface Application {
@@ -57,6 +59,12 @@ const ExpertReviewCenter: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('PENDING');
 
+  // Modal State
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+
+  const { success: toastSuccess, error: toastError } = useToast();
+
   useEffect(() => {
     fetchApplications();
   }, [statusFilter]);
@@ -79,24 +87,43 @@ const ExpertReviewCenter: React.FC = () => {
   };
 
   const handleReview = async (id: string, decision: 'approved' | 'rejected') => {
-    let reason = '';
     if (decision === 'rejected') {
-      const input = prompt('Enter rejection reason:');
-      if (!input) return;
-      reason = input;
+      setSelectedAppId(id);
+      setIsRejectModalOpen(true);
+      return;
     }
 
     setActionLoading(id);
     try {
-      const response = await applicationApi.reviewApplication(id, decision, reason);
+      const response = await applicationApi.reviewApplication(id, decision);
       if (response.data.success) {
-        // Refresh list
+        toastSuccess(`Expert application ${decision} successfully`);
         fetchApplications();
       } else {
         showGlobalError('Review Failed', response.data.error || `Failed to ${decision} application`);
       }
     } catch (err: any) {
       showGlobalError('Review Failed', err.message || `Failed to ${decision} application`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmReject = async (reason: string) => {
+    if (!selectedAppId) return;
+
+    setActionLoading(selectedAppId);
+    try {
+      const response = await applicationApi.reviewApplication(selectedAppId, 'rejected', reason);
+      if (response.data.success) {
+        toastSuccess('Expert application rejected successfully');
+        setIsRejectModalOpen(false);
+        fetchApplications();
+      } else {
+        showGlobalError('Rejection Failed', response.data.error || 'Failed to reject application');
+      }
+    } catch (err: any) {
+      showGlobalError('Rejection Failed', err.message || 'Failed to reject application');
     } finally {
       setActionLoading(null);
     }
@@ -300,6 +327,14 @@ const ExpertReviewCenter: React.FC = () => {
           ))}
         </div>
       )}
+
+      <RejectExpertModal
+        isOpen={isRejectModalOpen}
+        onClose={() => setIsRejectModalOpen(false)}
+        onConfirm={handleConfirmReject}
+        isLoading={actionLoading === selectedAppId}
+        expertEmail={applications.find(a => a.id === selectedAppId)?.user?.email}
+      />
     </div>
   );
 };
