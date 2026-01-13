@@ -2149,8 +2149,8 @@ export default {
                 }
             }
 
-            // POST /v1/expert_applications/submit - Spec v2.0 Submission
-            if (url.pathname === "/v1/expert_applications/submit" && request.method === "POST") {
+            // POST /api/v1/expert_applications/submit - Spec v2.0 Submission
+            if (url.pathname === "/api/v1/expert_applications/submit" && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization");
                 if (!authHeader || !authHeader.startsWith("Bearer ")) {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
@@ -2201,8 +2201,9 @@ export default {
                 }
             }
 
-            // POST /v1/expert_applications/:id/review - Spec v2.0 Unified Review
-            if (url.pathname.match(/^\/v1\/expert_applications\/[^\/]+\/review$/) && request.method === "POST") {
+            // POST /api/v1/expert_applications/:id/review - Spec v2.0 Unified Review
+            const reviewMatch = url.pathname.match(/^\/api\/v1\/expert_applications\/([^\/]+)\/review$/);
+            if (reviewMatch && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization");
                 if (!authHeader || !authHeader.startsWith("Bearer ")) return jsonResponse({ success: false, error: "Unauthorized" }, 401);
 
@@ -2218,8 +2219,7 @@ export default {
                     return jsonResponse({ success: false, error: "Access denied" }, 403);
                 }
 
-                const pathParts = url.pathname.split("/");
-                const applicationId = pathParts[3];
+                const applicationId = reviewMatch[1];
 
                 const body = await request.json() as any;
                 const decision = (body.decision || "").toLowerCase(); // "approved" or "rejected"
