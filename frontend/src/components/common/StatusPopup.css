@@ -81,6 +81,34 @@
     font-weight: 700;
     color: var(--text-primary, #111827);
     margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.title-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+.status-popup-icon.Info,
+.title-icon-wrapper svg {
+    color: inherit;
+}
+
+.status-popup-icon.Info {
+    color: #28a745;
+}
+
+.status-popup-icon.Warning {
+    color: #fd7e14;
+}
+
+.status-popup-icon.Critical {
+    color: #dc3545;
 }
 
 .status-popup-message {

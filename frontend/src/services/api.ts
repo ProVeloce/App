@@ -128,7 +128,7 @@ api.interceptors.response.use(
         if (response.data && response.data.success === false) {
             const { showGlobalError } = require('../context/ErrorContext');
             showGlobalError(
-                'Request Failed',
+                '',
                 response.data.error || response.data.message || 'An unexpected error occurred',
                 'Critical'
             );
