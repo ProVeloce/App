@@ -3474,9 +3474,8 @@ export default {
 
                 // Unified Visibility Logic (Spec v3.0 + Spec v1.0 RBAC):
                 // Superadmin: view_all(tickets)
-                // Admin: view_all(tickets) WHERE org_id = requesterOrgId
-                // Expert: view_ticket(assigned) WHERE org_id = requesterOrgId
-                // Raised User: view_ticket(raised) WHERE org_id = requesterOrgId
+                // Admin: view_ticket(assigned) WHERE org_id = requesterOrgId - Only assigned tickets
+                // Expert/Customer: view_ticket(raised OR assigned) WHERE org_id = requesterOrgId
 
                 let whereClause = '';
                 let params: any[] = [];
@@ -3484,8 +3483,9 @@ export default {
                 if (role === 'SUPERADMIN') {
                     whereClause = '';
                 } else if (role === 'ADMIN') {
-                    whereClause = 't.org_id = ?';
-                    params = [requesterOrgId];
+                    // Admins only see tickets assigned to them
+                    whereClause = 't.org_id = ? AND t.assigned_user_id = ?';
+                    params = [requesterOrgId, payload.userId];
                 } else {
                     whereClause = 't.org_id = ? AND (t.raised_by_user_id = ? OR t.assigned_user_id = ?)';
                     params = [requesterOrgId, payload.userId, payload.userId];

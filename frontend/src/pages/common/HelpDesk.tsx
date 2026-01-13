@@ -81,6 +81,7 @@ const HelpDesk: React.FC = () => {
     // Assignable users for admins
     const [assignableUsers, setAssignableUsers] = useState<UserData[]>([]);
     const [isAssigning, setIsAssigning] = useState(false);
+    const [adminSearchFilter, setAdminSearchFilter] = useState('');
 
     const { success, error } = useToast();
     const { user } = useAuth();
@@ -99,11 +100,11 @@ const HelpDesk: React.FC = () => {
 
     const fetchAssignableUsers = async () => {
         try {
-            const response = await userApi.getUsers({ roles: 'ADMIN,EXPERT' });
+            const response = await userApi.getUsers({ roles: 'ADMIN' });
             if (response.data.success && response.data.data) {
-                // Filter by role (Admin/Expert) and org_id (if not superadmin)
+                // Filter by role (Admin only) and org_id (if not superadmin)
                 const filtered = response.data.data.data.filter((u: UserData) => {
-                    const isCorrectRole = ['ADMIN', 'EXPERT'].includes(u.role?.toUpperCase() || '');
+                    const isCorrectRole = u.role?.toUpperCase() === 'ADMIN';
                     const isSameOrg = isSuperAdmin || u.org_id === user?.org_id;
                     const isActive = (u.status?.toUpperCase() === 'ACTIVE');
                     return isCorrectRole && isSameOrg && isActive;
@@ -602,7 +603,15 @@ const HelpDesk: React.FC = () => {
                                 {isAdminOrSuperAdmin && (
                                     <div className="assign-ticket-section">
                                         <label>{selectedTicket.assigned_user_id ? 'Update Assignment' : 'Assign Ticket'}</label>
-                                        <div className="assign-controls">
+                                        <div className="assign-controls assign-searchable">
+                                            <input
+                                                type="text"
+                                                className="assign-search-input"
+                                                placeholder="Search admins by name..."
+                                                value={adminSearchFilter}
+                                                onChange={(e) => setAdminSearchFilter(e.target.value)}
+                                                disabled={isAssigning}
+                                            />
                                             <select
                                                 className="assign-select"
                                                 value={selectedTicket.assigned_user_id || ''}
@@ -612,15 +621,18 @@ const HelpDesk: React.FC = () => {
                                                     } else {
                                                         handleAssignTicket(e.target.value);
                                                     }
+                                                    setAdminSearchFilter('');
                                                 }}
                                                 disabled={isAssigning}
                                             >
                                                 <option value="">-- Unassigned --</option>
-                                                {assignableUsers.map(u => (
-                                                    <option key={u.id} value={u.id}>
-                                                        {u.name} ({u.role})
-                                                    </option>
-                                                ))}
+                                                {assignableUsers
+                                                    .filter(u => u.name?.toLowerCase().includes(adminSearchFilter.toLowerCase()))
+                                                    .map(u => (
+                                                        <option key={u.id} value={u.id}>
+                                                            {u.name} (Admin)
+                                                        </option>
+                                                    ))}
                                             </select>
                                             {isAssigning && <div className="assign-loading-spinner" />}
                                         </div>
