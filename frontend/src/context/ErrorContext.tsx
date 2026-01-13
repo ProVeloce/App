@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 // Error type
+export type PopupSeverity = 'Info' | 'Warning' | 'Critical';
+
 export interface AppError {
     title: string;
     message: string;
     visible: boolean;
+    severity?: PopupSeverity;
 }
 
 // Context type
@@ -32,6 +35,7 @@ export const ErrorProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setErrorState({
             title: newError.title,
             message: newError.message,
+            severity: newError.severity || 'Critical',
             visible: true,
         });
     }, []);
@@ -78,11 +82,11 @@ export const registerGlobalErrorHandler = (handler: (error: Omit<AppError, 'visi
     globalSetError = handler;
 };
 
-export const showGlobalError = (title: string, message: string) => {
+export const showGlobalError = (title: string, message: string, severity: PopupSeverity = 'Critical') => {
     if (globalSetError) {
-        globalSetError({ title, message });
+        globalSetError({ title, message, severity });
     } else {
-        console.error(`[Error] ${title}: ${message}`);
+        console.error(`[Error] ${title}: ${message} (${severity})`);
     }
 };
 

@@ -100,10 +100,10 @@ const ExpertReviewCenter: React.FC = () => {
         toastSuccess(`Expert application ${decision} successfully`);
         fetchApplications();
       } else {
-        showGlobalError('Review Failed', response.data.error || `Failed to ${decision} application`);
+        showGlobalError('Review Failed', response.data.error || `Failed to ${decision} application`, 'Critical');
       }
     } catch (err: any) {
-      showGlobalError('Review Failed', err.message || `Failed to ${decision} application`);
+      showGlobalError('Review Failed', err.message || `Failed to ${decision} application`, 'Critical');
     } finally {
       setActionLoading(null);
     }
@@ -120,10 +120,10 @@ const ExpertReviewCenter: React.FC = () => {
         setIsRejectModalOpen(false);
         fetchApplications();
       } else {
-        showGlobalError('Rejection Failed', response.data.error || 'Failed to reject application');
+        showGlobalError('Rejection Failed', 'Failed to reject application', 'Critical');
       }
     } catch (err: any) {
-      showGlobalError('Rejection Failed', err.message || 'Failed to reject application');
+      showGlobalError('Rejection Failed', 'Failed to reject application', 'Critical');
     } finally {
       setActionLoading(null);
     }

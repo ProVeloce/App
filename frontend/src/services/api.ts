@@ -129,7 +129,8 @@ api.interceptors.response.use(
             const { showGlobalError } = require('../context/ErrorContext');
             showGlobalError(
                 'Request Failed',
-                response.data.error || response.data.message || 'An unexpected error occurred'
+                response.data.error || response.data.message || 'An unexpected error occurred',
+                'Critical'
             );
         }
         return response;

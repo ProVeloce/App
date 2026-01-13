@@ -10,7 +10,7 @@ import { SessionProvider } from './context/SessionContext';
 import { ErrorProvider } from './context/ErrorContext';
 import { LoadingProvider } from './context/LoadingContext';
 import SessionManager from './components/common/SessionManager';
-import GlobalErrorModal from './components/common/GlobalErrorModal';
+import StatusPopup from './components/common/StatusPopup';
 import './styles/index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -24,7 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                                 <ToastProvider>
                                     <SessionManager>
                                         <App />
-                                        <GlobalErrorModal />
+                                        <StatusPopup />
                                         <Analytics />
                                     </SessionManager>
                                 </ToastProvider>
