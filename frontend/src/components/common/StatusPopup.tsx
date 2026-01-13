@@ -48,36 +48,21 @@ const StatusPopup: React.FC = () => {
         return null;
     }
 
-    const { severity = 'Critical', message } = error;
+    const { severity = 'Critical', title, message } = error;
 
-    const getSeverityConfig = () => {
+    const renderIcon = () => {
         switch (severity) {
             case 'Info':
-                return {
-                    title: 'Information',
-                    icon: <Info size={40} />,
-                    titleIcon: <Info size={20} />,
-                    color: '#28a745'
-                };
+                return <Info size={36} />;
             case 'Warning':
-                return {
-                    title: 'Warning',
-                    icon: <AlertTriangle size={40} />,
-                    titleIcon: <AlertTriangle size={20} />,
-                    color: '#fd7e14'
-                };
+                return <AlertTriangle size={36} />;
             case 'Critical':
             default:
-                return {
-                    title: 'Critical Error',
-                    icon: <AlertCircle size={40} />,
-                    titleIcon: <AlertCircle size={20} />,
-                    color: '#dc3545'
-                };
+                return <AlertCircle size={36} />;
         }
     };
 
-    const config = getSeverityConfig();
+    const displayTitle = title || (severity === 'Info' ? 'Information' : severity === 'Warning' ? 'Warning' : 'Critical Error');
 
     return (
         <div
@@ -97,13 +82,10 @@ const StatusPopup: React.FC = () => {
                 </button>
 
                 <div className={`status-popup-icon modal-icon-advanced ${severity}`}>
-                    {config.icon}
+                    {renderIcon()}
                 </div>
 
-                <h2 className="status-popup-title modal-title-advanced">
-                    <span className="title-icon-wrapper">{config.titleIcon}</span>
-                    {config.title}
-                </h2>
+                <h2 className="status-popup-title modal-title-advanced">{displayTitle}</h2>
 
                 <p className="status-popup-message modal-text-advanced">
                     {message || 'An unexpected error occurred. Please try again.'}
