@@ -948,6 +948,40 @@ export default {
                 });
             }
 
+            // GET /api/users - General user listing (Enterprise v2.2)
+            if (url.pathname === "/api/users" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string; role?: string; org_id?: string } | null;
+
+                if (!payload) return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+
+                const role = (payload.role || "").toUpperCase();
+                const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+
+                let query = "SELECT id, name, email, phone, role, status, org_id FROM users WHERE status = 'active'";
+                const params: any[] = [];
+
+                if (role === 'SUPERADMIN') {
+                    // SuperAdmin can see everyone active
+                } else if (role === 'ADMIN') {
+                    // Admins see people in their org
+                    query += " AND org_id = ?";
+                    params.push(requesterOrgId);
+                } else {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const result = await env.proveloce_db.prepare(query).bind(...params).all();
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        data: result.results
+                    }
+                });
+            }
+
             // GET /api/admin/users/:id - Get single user
             if (url.pathname.match(/^\/api\/admin\/users\/[^\/]+$/) && request.method === "GET") {
                 const auth = await checkAdminRole(request);
@@ -3729,6 +3763,7 @@ export default {
                     UPDATE tickets SET 
                         assigned_user_id = ?,
                         assignee_role = ?,
+                        assigned_at = CURRENT_TIMESTAMP,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? OR ticket_number = ?
                 `).bind(assignedToId, assignedUser.role, ticketId, ticketId).run();

@@ -52,8 +52,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     };
 
     return (
-        <div 
-            className={`confirm-modal-overlay modal-overlay-advanced ${isClosing ? 'closing' : ''}`} 
+        <div
+            className={`confirm-modal-overlay modal-overlay-advanced ${isClosing ? 'closing' : ''}`}
             onClick={handleBackdropClick}
         >
             <div className={`confirm-modal modal-content-advanced ${variant} ${isClosing ? 'closing' : ''}`}>
@@ -66,14 +66,14 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                     <X size={20} />
                 </button>
 
-                <div className={`confirm-modal-icon modal-icon-advanced ${variant}`}>
+                <div className={`confirm-modal-icon modal-icon-advanced ${variant} ${isLoading ? 'confirmed' : ''}`}>
                     <AlertTriangle size={32} />
                 </div>
 
                 <h3 className="confirm-modal-title modal-title-advanced">{title}</h3>
                 <p className="confirm-modal-message modal-text-advanced">{message}</p>
 
-                <div className="confirm-modal-actions modal-buttons-advanced">
+                <div className={`confirm-modal-actions modal-buttons-advanced ${isLoading ? 'confirmed' : ''}`}>
                     <button
                         className="btn btn-outline modal-button-advanced modal-button-hover"
                         onClick={onCancel}

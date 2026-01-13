@@ -42,6 +42,7 @@ interface Ticket {
     org_id?: string;
     priority?: 'low' | 'medium' | 'high' | 'urgent';
     locked_by?: string | null;
+    assigned_at?: string | null;
 }
 
 interface TicketMessage {
@@ -142,7 +143,7 @@ const HelpDesk: React.FC = () => {
         }
 
         const response = await ticketApi.createTicket(formData);
-        const ticketNumber = response.data?.data?.ticketId || 'UNKNOWN';
+        const ticketNumber = response.data?.data?.ticketNumber || response.data?.data?.ticketId || 'UNKNOWN';
         success('Ticket submitted successfully');
         fetchTickets();
         return { ticketNumber };
@@ -401,13 +402,19 @@ const HelpDesk: React.FC = () => {
                                             <span>{selectedTicket.user_email || 'No email'}</span>
                                         </div>
                                         <div className="identity-row contact-identity">
-                                            <UserIcon size={16} className="contact-icon" />
+                                            <Phone size={16} className="contact-icon" />
                                             <span>{selectedTicket.user_phone_number || 'No contact provided'}</span>
                                         </div>
                                         <div className="identity-row">
-                                            <Shield size={16} />
-                                            <span className="role-badge">{selectedTicket.user_role}</span>
+                                            <AlertCircle size={16} />
+                                            <span>{new Date(selectedTicket.created_at).toLocaleString()}</span>
                                         </div>
+                                        {selectedTicket.assigned_at && (
+                                            <div className="identity-row">
+                                                <CheckCircle size={16} />
+                                                <span className="assigned-date-label">Assigned: {new Date(selectedTicket.assigned_at).toLocaleString()}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -479,7 +486,7 @@ const HelpDesk: React.FC = () => {
                                 {selectedTicket.response_text && (
                                     <div className="message-box response-box">
                                         <div className="response-header">
-                                            <label><Shield size={14} /> Official Response</label>
+                                            <label><MessageCircle size={14} /> Message</label>
                                             {(isAdminOrSuperAdmin || selectedTicket.responder_id === user?.id) && (selectedTicket.edit_count || 0) < 1 && (
                                                 <button
                                                     className="btn-edit-inline"
@@ -537,7 +544,7 @@ const HelpDesk: React.FC = () => {
                             {/* Status Update / Responder Form (Restricted per Spec) */}
                             {(isSuperAdmin || isAssignedResponder) && selectedTicket.status !== 'Closed' && (
                                 <div className="admin-response-form status-update-form">
-                                    <label><Shield size={16} /> Update Status (Responder Option)</label>
+                                    <label><CheckCircle size={16} /> Update Status</label>
                                     <textarea
                                         className="admin-reply-textarea"
                                         placeholder="Optional final response message..."
@@ -554,6 +561,7 @@ const HelpDesk: React.FC = () => {
                                             >
                                                 <option value="Open">Open</option>
                                                 <option value="In Progress">In Progress</option>
+                                                <option value="Resolved">Resolved</option>
                                                 <option value="Closed">Closed</option>
                                             </select>
                                         </div>

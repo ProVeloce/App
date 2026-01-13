@@ -77,10 +77,12 @@
   }
 
   70% {
+    opacity: 1;
     transform: scale(0.9) rotate(-3deg);
   }
 
   100% {
+    opacity: 1;
     transform: scale(1) rotate(0);
   }
 }
@@ -192,6 +194,15 @@
 .modal-button-advanced {
   animation: buttonSlideIn 0.3s var(--smooth-out) forwards;
   opacity: 0;
+}
+
+/* Confirmed State - As per Specification */
+.modal-icon-advanced.confirmed,
+.modal-buttons-advanced.confirmed {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+  pointer-events: none;
 }
 
 .modal-button-advanced:nth-child(1) {

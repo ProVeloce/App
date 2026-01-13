@@ -184,9 +184,10 @@ CREATE TABLE IF NOT EXISTS tickets (
     response_text TEXT DEFAULT NULL,                          -- The single consolidated response
     edit_count INTEGER DEFAULT 0,                             -- Number of times edited (limit: 1)
     is_edited INTEGER DEFAULT 0,                              -- 1 if edited, 0 otherwise
+    assigned_at TIMESTAMP DEFAULT NULL,                       -- When the ticket was assigned
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Closed')),
+    CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Resolved', 'Closed')), 
     FOREIGN KEY (raised_by_user_id) REFERENCES users(id),
     FOREIGN KEY (assigned_user_id) REFERENCES users(id),
     FOREIGN KEY (responder_id) REFERENCES users(id)
