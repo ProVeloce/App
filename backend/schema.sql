@@ -50,9 +50,13 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 CREATE TABLE IF NOT EXISTS expert_applications (
   id TEXT PRIMARY KEY,
   user_id TEXT UNIQUE,
-  status TEXT DEFAULT 'Pending' NOT NULL,
+  org_id TEXT,
+  status TEXT DEFAULT 'pending' NOT NULL,
   
   -- Personal Details
+  full_name TEXT,
+  email TEXT,
+  phone TEXT,
   dob TEXT,
   gender TEXT,
   address_line1 TEXT,
@@ -78,6 +82,10 @@ CREATE TABLE IF NOT EXISTS expert_applications (
   project_rate REAL,
   languages TEXT,
   
+  -- Documents & Images (Spec v2.0)
+  documents TEXT,              -- JSON array of file objects
+  images TEXT,                 -- JSON array of image objects
+  
   -- Availability
   available_days TEXT,
   available_time_slots TEXT,
@@ -99,7 +107,18 @@ CREATE TABLE IF NOT EXISTS expert_applications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT status_check CHECK (status IN ('pending', 'approved', 'rejected', 'inactive'))
+  CONSTRAINT status_check CHECK (status IN ('pending', 'approved', 'rejected', 'inactive', 'revoked', 'draft'))
+);
+
+-- AUDIT LOGS (Expert Rejection Spec)
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    action TEXT NOT NULL,
+    expert_id TEXT NOT NULL,
+    expert_email TEXT,
+    reason TEXT,
+    performed_by TEXT,
+    performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- TASKS FOR EXPERT ASSIGNMENTS

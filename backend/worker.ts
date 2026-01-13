@@ -2231,10 +2231,13 @@ export default {
 
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
-                // Fetch app to check tenancy
-                const app = await env.proveloce_db.prepare(
-                    "SELECT user_id, org_id, status FROM expert_applications WHERE id = ?"
-                ).bind(applicationId).first() as any;
+                // Fetch app to check tenancy and get email for audit
+                const app = await env.proveloce_db.prepare(`
+                    SELECT ea.user_id, ea.org_id, ea.status, u.email as user_email 
+                    FROM expert_applications ea 
+                    JOIN users u ON ea.user_id = u.id 
+                    WHERE ea.id = ?
+                `).bind(applicationId).first() as any;
 
                 if (!app) return jsonResponse({ success: false, error: "Application not found" }, 404);
 
@@ -2247,33 +2250,48 @@ export default {
                 }
 
                 const reviewerId = payload.userId;
+                const status = decision === 'approved' ? 'approved' : 'rejected';
+                const auditAction = decision === 'approved' ? 'APPROVE_EXPERT' : 'REJECT_EXPERT';
 
-                // Update application
-                await env.proveloce_db.prepare(`
-                    UPDATE expert_applications 
-                    SET status = ?, 
-                        reviewed_by = ?, 
-                        rejection_reason = ?,
-                        reviewed_at = CURRENT_TIMESTAMP, 
-                        updated_at = CURRENT_TIMESTAMP 
-                    WHERE id = ?
-                `).bind(decision === 'approved' ? 'approved' : 'rejected', reviewerId, reason, applicationId).run();
+                // Batch transaction for Atomicity
+                const statements = [
+                    // 1. Update application status
+                    env.proveloce_db.prepare(`
+                        UPDATE expert_applications 
+                        SET status = ?, 
+                            reviewed_by = ?, 
+                            rejection_reason = ?,
+                            reviewed_at = CURRENT_TIMESTAMP, 
+                            updated_at = CURRENT_TIMESTAMP 
+                        WHERE id = ?
+                    `).bind(status, reviewerId, reason, applicationId),
+
+                    // 2. Audit Log (Spec: audit_logs table)
+                    env.proveloce_db.prepare(`
+                        INSERT INTO audit_logs (id, action, expert_id, expert_email, reason, performed_by, performed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    `).bind(crypto.randomUUID(), auditAction, applicationId, app.user_email, reason, reviewerId),
+
+                    // 3. Activity Log (Standard: activity_logs table for broad tracking)
+                    env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).bind(
+                        crypto.randomUUID(), reviewerId, "EXPERT_APPLICATION_REVIEWED", "expert_application", applicationId,
+                        JSON.stringify({ decision, reason, org_id: app.org_id, actor_id: reviewerId, actor_role: role, timestamp: new Date().toISOString() })
+                    )
+                ];
 
                 // If approved, update user role
                 if (decision === 'approved') {
-                    await env.proveloce_db.prepare(
-                        "UPDATE users SET role = 'Expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-                    ).bind(app.user_id).run();
+                    statements.push(
+                        env.proveloce_db.prepare(
+                            "UPDATE users SET role = 'Expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                        ).bind(app.user_id)
+                    );
                 }
 
-                // Audit Log
-                await env.proveloce_db.prepare(`
-                    INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                `).bind(
-                    crypto.randomUUID(), reviewerId, "EXPERT_APPLICATION_REVIEWED", "expert_application", applicationId,
-                    JSON.stringify({ decision, reason, org_id: app.org_id, actor_id: reviewerId, actor_role: role, timestamp: new Date().toISOString() })
-                ).run();
+                await env.proveloce_db.batch(statements);
 
                 // Notification to Applicant
                 if (decision === 'approved') {
