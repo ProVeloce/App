@@ -37,7 +37,7 @@ const HelpDesk = lazy(() => import('./pages/common/HelpDesk'));
 const ChangePassword = lazy(() => import('./pages/common/ChangePassword'));
 
 // Customer Portal
-const ExpertApplication = lazy(() => import('./pages/customer/ExpertApplicationPage'));
+const ExpertApplication = lazy(() => import('./pages/customer/ExpertApplication'));
 const ApplicationStatus = lazy(() => import('./pages/customer/ApplicationStatus'));
 const ExpertSearch = lazy(() => import('./pages/customer/ExpertSearch'));
 const ExpertProfile = lazy(() => import('./pages/customer/ExpertProfile'));
