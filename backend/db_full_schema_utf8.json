@@ -1,0 +1,128 @@
+﻿[
+  {
+    "results": [
+      {
+        "name": "_cf_KV",
+        "sql": "CREATE TABLE _cf_KV (\n        key TEXT PRIMARY KEY,\n        value BLOB\n      ) WITHOUT ROWID"
+      },
+      {
+        "name": "user_profiles",
+        "sql": "CREATE TABLE user_profiles (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT UNIQUE,\r\n  dob TEXT,\r\n  gender TEXT,\r\n  address_line1 TEXT,\r\n  address_line2 TEXT,\r\n  city TEXT,\r\n  state TEXT,\r\n  country TEXT,\r\n  pincode TEXT,\r\n  bio TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, full_name TEXT, phone_number TEXT,\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "tasks",
+        "sql": "CREATE TABLE tasks (\r\n  id TEXT PRIMARY KEY,\r\n  title TEXT NOT NULL,\r\n  description TEXT,\r\n  attachments TEXT,\r\n  deadline TIMESTAMP,\r\n  status TEXT DEFAULT 'pending',\r\n  priority TEXT DEFAULT 'medium',\r\n  assigned_to_id TEXT,\r\n  created_by_id TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, domain TEXT, price_budget REAL, admin_id TEXT REFERENCES \"users_old_legacy\"(id),\r\n  FOREIGN KEY (assigned_to_id) REFERENCES \"users_old_legacy\"(id),\r\n  FOREIGN KEY (created_by_id) REFERENCES \"users_old_legacy\"(id)\r\n)"
+      },
+      {
+        "name": "task_submissions",
+        "sql": "CREATE TABLE task_submissions (\r\n  id TEXT PRIMARY KEY,\r\n  task_id TEXT,\r\n  expert_id TEXT,\r\n  message TEXT,\r\n  file_urls TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id)\r\n)"
+      },
+      {
+        "name": "notifications",
+        "sql": "CREATE TABLE notifications (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT,\r\n  type TEXT DEFAULT 'info',\r\n  title TEXT NOT NULL,\r\n  message TEXT,\r\n  link TEXT,\r\n  is_read INTEGER DEFAULT 0,\r\n  read_at TIMESTAMP,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "refresh_tokens",
+        "sql": "CREATE TABLE refresh_tokens (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT,\r\n  token TEXT UNIQUE,\r\n  expires_at TIMESTAMP,\r\n  revoked_at TIMESTAMP,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "activity_logs",
+        "sql": "CREATE TABLE activity_logs (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT,\r\n  action TEXT,\r\n  entity_type TEXT,\r\n  entity_id TEXT,\r\n  metadata TEXT,\r\n  ip_address TEXT,\r\n  user_agent TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "expert_documents",
+        "sql": "CREATE TABLE expert_documents (\r\n    id TEXT PRIMARY KEY,\r\n    user_id TEXT NOT NULL,\r\n    application_id TEXT,\r\n    document_type TEXT NOT NULL CHECK (document_type IN ('profile', 'government_id', 'resume', 'certificate', 'portfolio', 'other')),\r\n    file_name TEXT NOT NULL,\r\n    file_type TEXT NOT NULL,\r\n    file_size INTEGER NOT NULL,\r\n    r2_object_key TEXT NOT NULL UNIQUE,\r\n    review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected')),\r\n    reviewed_by TEXT,\r\n    reviewed_at TEXT,\r\n    rejection_reason TEXT,\r\n    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),\r\n    updated_at TEXT NOT NULL DEFAULT (datetime('now')), application_status TEXT DEFAULT 'draft' CHECK (application_status IN ('draft', 'submitted')),\r\n    FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "expert_certifications",
+        "sql": "CREATE TABLE expert_certifications (\r\n  id TEXT PRIMARY KEY,\r\n  expert_id TEXT NOT NULL,\r\n  title TEXT NOT NULL,\r\n  issuer TEXT NOT NULL,\r\n  credential_id TEXT,\r\n  credential_url TEXT,\r\n  issue_date TEXT NOT NULL,\r\n  expiry_date TEXT,\r\n  file_name TEXT,\r\n  r2_object_key TEXT,\r\n  file_url TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "expert_portfolio",
+        "sql": "CREATE TABLE expert_portfolio (\r\n  id TEXT PRIMARY KEY,\r\n  expert_id TEXT NOT NULL,\r\n  title TEXT NOT NULL,\r\n  description TEXT,\r\n  skills TEXT,\r\n  project_url TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "expert_portfolio_files",
+        "sql": "CREATE TABLE expert_portfolio_files (\r\n  id TEXT PRIMARY KEY,\r\n  portfolio_id TEXT NOT NULL,\r\n  expert_id TEXT NOT NULL,\r\n  file_name TEXT NOT NULL,\r\n  file_type TEXT,\r\n  file_size INTEGER,\r\n  r2_object_key TEXT NOT NULL,\r\n  file_url TEXT,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (portfolio_id) REFERENCES expert_portfolio(id) ON DELETE CASCADE,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "expert_earnings",
+        "sql": "CREATE TABLE expert_earnings (\r\n  id TEXT PRIMARY KEY,\r\n  expert_id TEXT NOT NULL,\r\n  task_id TEXT,\r\n  amount REAL NOT NULL DEFAULT 0,\r\n  platform_fee REAL DEFAULT 0,\r\n  net_amount REAL NOT NULL DEFAULT 0,\r\n  payment_status TEXT DEFAULT 'pending',\r\n  payout_reference TEXT,\r\n  payout_date TIMESTAMP,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE,\r\n  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL\r\n)"
+      },
+      {
+        "name": "expert_tasks",
+        "sql": "CREATE TABLE expert_tasks (\r\n  id TEXT PRIMARY KEY,\r\n  task_id TEXT NOT NULL,\r\n  expert_id TEXT NOT NULL,\r\n  admin_id TEXT,\r\n  status TEXT DEFAULT 'PENDING',\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE,\r\n  FOREIGN KEY (admin_id) REFERENCES \"users_old_legacy\"(id),\r\n  UNIQUE(task_id, expert_id)\r\n)"
+      },
+      {
+        "name": "payments",
+        "sql": "CREATE TABLE payments (\r\n  id TEXT PRIMARY KEY,\r\n  task_id TEXT,\r\n  expert_id TEXT NOT NULL,\r\n  amount REAL NOT NULL DEFAULT 0,\r\n  status TEXT DEFAULT 'INITIATED',\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,\r\n  FOREIGN KEY (expert_id) REFERENCES \"users_old_legacy\"(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "sqlite_sequence",
+        "sql": "CREATE TABLE sqlite_sequence(name,seq)"
+      },
+      {
+        "name": "tickets_legacy",
+        "sql": "CREATE TABLE tickets_legacy (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT,\r\n  assigned_to_id TEXT,\r\n  category TEXT,\r\n  priority TEXT DEFAULT 'medium',\r\n  subject TEXT NOT NULL,\r\n  description TEXT,\r\n  status TEXT DEFAULT 'open',\r\n  attachments TEXT,\r\n  resolved_at TIMESTAMP,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy\"(id),\r\n  FOREIGN KEY (assigned_to_id) REFERENCES \"users_old_legacy\"(id)\r\n)"
+      },
+      {
+        "name": "expert_applications",
+        "sql": "CREATE TABLE \"expert_applications\" (\r\n  id TEXT PRIMARY KEY,\r\n  user_id TEXT UNIQUE,\r\n  status TEXT DEFAULT 'pending' NOT NULL,\r\n  dob TEXT,\r\n  gender TEXT,\r\n  address_line1 TEXT,\r\n  address_line2 TEXT,\r\n  city TEXT,\r\n  state TEXT,\r\n  country TEXT,\r\n  pincode TEXT,\r\n  government_id_type TEXT,\r\n  government_id_url TEXT,\r\n  profile_photo_url TEXT,\r\n  domains TEXT,\r\n  years_of_experience INTEGER,\r\n  summary_bio TEXT,\r\n  skills TEXT,\r\n  resume_url TEXT,\r\n  portfolio_urls TEXT,\r\n  certification_urls TEXT,\r\n  working_type TEXT,\r\n  hourly_rate REAL,\r\n  project_rate REAL,\r\n  languages TEXT,\r\n  available_days TEXT,\r\n  available_time_slots TEXT,\r\n  work_preference TEXT,\r\n  communication_mode TEXT,\r\n  terms_accepted INTEGER DEFAULT 0,\r\n  nda_accepted INTEGER DEFAULT 0,\r\n  signature_url TEXT,\r\n  reviewed_by TEXT,\r\n  reviewed_at TIMESTAMP,\r\n  rejection_reason TEXT,\r\n  internal_notes TEXT,\r\n  submitted_at TIMESTAMP,\r\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, org_id TEXT DEFAULT 'ORG-DEFAULT', documents TEXT DEFAULT '[]', images TEXT DEFAULT '[]',\r\n  FOREIGN KEY (user_id) REFERENCES \"users_old_legacy_v2\"(id) ON DELETE CASCADE,\r\n  CONSTRAINT status_check CHECK (status IN ('pending', 'approved', 'rejected', 'inactive'))\r\n)"
+      },
+      {
+        "name": "ticket_files",
+        "sql": "CREATE TABLE ticket_files (\r\n    id TEXT PRIMARY KEY,\r\n    ticket_id INTEGER NOT NULL,\r\n    filename TEXT NOT NULL,\r\n    filetype TEXT NOT NULL,\r\n    bucket TEXT DEFAULT 'others',\r\n    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n    FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE\r\n)"
+      },
+      {
+        "name": "audit_logs",
+        "sql": "CREATE TABLE audit_logs (\r\n    id TEXT PRIMARY KEY,\r\n    action TEXT NOT NULL,\r\n    expert_id TEXT NOT NULL,\r\n    expert_email TEXT,\r\n    reason TEXT,\r\n    performed_by TEXT,\r\n    performed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\r\n)"
+      },
+      {
+        "name": "tickets",
+        "sql": "CREATE TABLE \"tickets\" (\r\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\r\n    ticket_number TEXT UNIQUE NOT NULL,\r\n    category TEXT NOT NULL,\r\n    subject TEXT NOT NULL,\r\n    description TEXT NOT NULL,\r\n    attachment TEXT DEFAULT NULL,\r\n    raised_by_user_id TEXT NOT NULL,\r\n    assigned_user_id TEXT DEFAULT NULL,\r\n    messages JSON NOT NULL DEFAULT '[]',\r\n    status TEXT NOT NULL DEFAULT 'Open',\r\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n    responder_id TEXT,\r\n    response_text TEXT,\r\n    edit_count INTEGER DEFAULT 0,\r\n    is_edited INTEGER DEFAULT 0,\r\n    org_id TEXT DEFAULT 'ORG-DEFAULT',\r\n    priority TEXT DEFAULT 'medium',\r\n    locked_by TEXT DEFAULT NULL,\r\n    assignee_role TEXT DEFAULT NULL,\r\n    assigned_at TIMESTAMP,\r\n    CONSTRAINT status_check CHECK (status IN ('Open', 'In Progress', 'Resolved', 'Closed'))\r\n)"
+      },
+      {
+        "name": "users_old_legacy",
+        "sql": "CREATE TABLE users_old_legacy (\r\n    id TEXT PRIMARY KEY\r\n)"
+      },
+      {
+        "name": "expert_time_slots",
+        "sql": "CREATE TABLE expert_time_slots (id TEXT PRIMARY KEY, expert_id TEXT NOT NULL, slot_label TEXT NOT NULL, day_type TEXT NOT NULL DEFAULT 'both', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      },
+      {
+        "name": "connect_requests",
+        "sql": "CREATE TABLE connect_requests (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, expert_id TEXT NOT NULL, requested_date DATE NOT NULL, requested_day_type TEXT NOT NULL, requested_slot_label TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', customer_note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      },
+      {
+        "name": "sessions",
+        "sql": "CREATE TABLE sessions (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, expert_id TEXT NOT NULL, customer_id TEXT NOT NULL, scheduled_date DATE NOT NULL, scheduled_slot_label TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled', started_at TIMESTAMP, ended_at TIMESTAMP, duration_seconds INTEGER, room_id TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      },
+      {
+        "name": "session_messages",
+        "sql": "CREATE TABLE session_messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, sender_id TEXT NOT NULL, content_text TEXT, attachment_url TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+      },
+      {
+        "name": "users",
+        "sql": "CREATE TABLE users (\r\n    id TEXT PRIMARY KEY,\r\n    name TEXT NOT NULL,\r\n    email TEXT UNIQUE NOT NULL,\r\n    phone TEXT,\r\n    password_hash TEXT,\r\n    role TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('customer', 'expert', 'admin', 'superadmin', 'analyst', 'viewer')),\r\n    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'pending_verification')),\r\n    email_verified INTEGER DEFAULT 0,\r\n    avatar_data BLOB,\r\n    avatar_mime_type TEXT,\r\n    location TEXT,\r\n    verified INTEGER DEFAULT 0,\r\n    rating REAL DEFAULT 0.0,\r\n    skills TEXT,\r\n    domains TEXT,\r\n    availability TEXT,\r\n    last_login_at TIMESTAMP,\r\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\r\n    org_id TEXT DEFAULT 'ORG-DEFAULT',\r\n    suspended INTEGER DEFAULT 0,\r\n    profile_photo_url TEXT,\r\n    bio TEXT,\r\n    availability_type TEXT DEFAULT 'both',\r\n    dob TEXT\r\n)"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2367
+      },
+      "duration": 0.2367,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 376832,
+      "rows_read": 82,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
