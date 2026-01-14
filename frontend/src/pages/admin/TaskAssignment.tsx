@@ -144,6 +144,29 @@ const TaskAssignment: React.FC = () => {
         }
     };
 
+    const handleAssignTask = async (taskId: string, expertId: string) => {
+        try {
+            const response = await fetch(`${API_BASE}/api/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ assignedTo: expertId || null })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                success('Task assigned successfully');
+                fetchTasks();
+            } else {
+                error(data.error || 'Failed to assign task');
+            }
+        } catch (err) {
+            error('Failed to assign task');
+        }
+    };
+
     const resetForm = () => {
         setTitle('');
         setDescription('');
@@ -229,7 +252,17 @@ const TaskAssignment: React.FC = () => {
                                     </td>
                                     <td>{getStatusBadge(task.status)}</td>
                                     {canCreateTask && (
-                                        <td>
+                                        <td className="actions-cell">
+                                            <select
+                                                className="assign-select"
+                                                value={task.assigned_to || ''}
+                                                onChange={(e) => handleAssignTask(task.id, e.target.value)}
+                                            >
+                                                <option value="">-- Assign To --</option>
+                                                {assignableUsers.map(u => (
+                                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                                ))}
+                                            </select>
                                             <select
                                                 className="status-select"
                                                 value={task.status}

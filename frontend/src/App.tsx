@@ -39,6 +39,9 @@ const ChangePassword = lazy(() => import('./pages/common/ChangePassword'));
 // Customer Portal
 const ExpertApplication = lazy(() => import('./pages/customer/ExpertApplication'));
 const ApplicationStatus = lazy(() => import('./pages/customer/ApplicationStatus'));
+const ExpertSearch = lazy(() => import('./pages/customer/ExpertSearch'));
+const ExpertProfile = lazy(() => import('./pages/customer/ExpertProfile'));
+const MyConnectRequests = lazy(() => import('./pages/customer/MyConnectRequests'));
 
 // Expert Portal
 const ExpertDashboard = lazy(() => import('./pages/expert/ExpertDashboard'));
@@ -46,6 +49,10 @@ const PortfolioManager = lazy(() => import('./pages/expert/PortfolioManager'));
 const CertificationsManager = lazy(() => import('./pages/expert/CertificationsManager'));
 const TaskManagement = lazy(() => import('./pages/expert/TaskManagement'));
 const Earnings = lazy(() => import('./pages/expert/Earnings'));
+const ConnectRequestsInbox = lazy(() => import('./pages/expert/ConnectRequestsInbox'));
+
+// Session (Common for Customer and Expert)
+const SessionRoom = lazy(() => import('./pages/common/SessionRoom'));
 
 // Admin Portal
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -97,11 +104,15 @@ function App() {
                     <Route path="/notifications" element={<Notifications />} />
                     <Route path="/help-desk" element={<HelpDesk />} />
                     <Route path="/change-password" element={<ChangePassword />} />
+                    <Route path="/session/:sessionId" element={<SessionRoom />} />
 
                     {/* Customer Routes */}
                     <Route element={<RoleRoute allowedRoles={['CUSTOMER']} />}>
                         <Route path="/customer/apply-expert" element={<ExpertApplication />} />
                         <Route path="/customer/application-status" element={<ApplicationStatus />} />
+                        <Route path="/customer/find-experts" element={<ExpertSearch />} />
+                        <Route path="/customer/expert/:expertId" element={<ExpertProfile />} />
+                        <Route path="/customer/my-requests" element={<MyConnectRequests />} />
                     </Route>
 
                     {/* Expert Routes */}
@@ -111,6 +122,7 @@ function App() {
                         <Route path="/expert/certifications" element={<CertificationsManager />} />
                         <Route path="/expert/tasks" element={<TaskManagement />} />
                         <Route path="/expert/earnings" element={<Earnings />} />
+                        <Route path="/expert/connect-requests" element={<ConnectRequestsInbox />} />
                     </Route>
 
                     {/* Analyst Routes */}

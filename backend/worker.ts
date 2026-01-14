@@ -4478,6 +4478,478 @@ export default {
             }
 
             // =====================================================
+            // Expert Connect - Search & Discovery
+            // =====================================================
+
+            // GET /api/experts/search - Search experts with filters
+            if (url.pathname === "/api/experts/search" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                const domain = url.searchParams.get("domain");
+                const slotLabel = url.searchParams.get("slot_label");
+                const dayType = url.searchParams.get("day_type");
+
+                try {
+                    let query = `
+                        SELECT DISTINCT u.id, u.name, u.email, u.role, u.status
+                        FROM users u
+                        LEFT JOIN expert_time_slots s ON s.expert_id = u.id
+                        WHERE UPPER(u.role) = 'EXPERT' AND UPPER(u.status) = 'ACTIVE'
+                    `;
+                    const params: any[] = [];
+
+                    if (slotLabel) {
+                        query += ` AND s.slot_label = ?`;
+                        params.push(slotLabel);
+                    }
+                    if (dayType) {
+                        query += ` AND (s.day_type = ? OR s.day_type = 'both')`;
+                        params.push(dayType);
+                    }
+
+                    query += ` ORDER BY u.name ASC`;
+
+                    const result = await env.proveloce_db.prepare(query).bind(...params).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { experts: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error searching experts:", error);
+                    return jsonResponse({ success: false, error: "Failed to search experts" }, 500);
+                }
+            }
+
+            // GET /api/experts/:id/public - Get expert public profile
+            const expertPublicMatch = url.pathname.match(/^\/api\/experts\/([^\/]+)\/public$/);
+            if (expertPublicMatch && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const expertId = expertPublicMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    // Get public profile (non-confidential only)
+                    const expert = await env.proveloce_db.prepare(`
+                        SELECT id, name, role, status, created_at
+                        FROM users WHERE id = ? AND UPPER(role) = 'EXPERT'
+                    `).bind(expertId).first();
+
+                    if (!expert) {
+                        return jsonResponse({ success: false, error: "Expert not found" }, 404);
+                    }
+
+                    // Get expert's time slots
+                    const slots = await env.proveloce_db.prepare(`
+                        SELECT slot_label, day_type FROM expert_time_slots WHERE expert_id = ?
+                    `).bind(expertId).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            expert,
+                            slots: slots.results || []
+                        }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching expert:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch expert" }, 500);
+                }
+            }
+
+            // =====================================================
+            // Expert Connect - Connect Requests
+            // =====================================================
+
+            // POST /api/connect-requests - Create connect request
+            if (url.pathname === "/api/connect-requests" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as {
+                        expertId: string;
+                        requestedDate: string;
+                        requestedDayType: string;
+                        requestedSlotLabel: string;
+                        customerNote?: string;
+                    };
+
+                    if (!body.expertId || !body.requestedDate || !body.requestedDayType || !body.requestedSlotLabel) {
+                        return jsonResponse({ success: false, error: "Missing required fields" }, 400);
+                    }
+
+                    const requestId = crypto.randomUUID();
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO connect_requests (id, customer_id, expert_id, requested_date, requested_day_type, requested_slot_label, customer_note, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+                    `).bind(
+                        requestId,
+                        payload.userId,
+                        body.expertId,
+                        body.requestedDate,
+                        body.requestedDayType,
+                        body.requestedSlotLabel,
+                        body.customerNote || null
+                    ).run();
+
+                    // Notify expert
+                    await createNotification(
+                        env,
+                        body.expertId,
+                        'INFO',
+                        'New Connect Request',
+                        'You have received a new connect request.',
+                        '/expert/connect-requests'
+                    );
+
+                    return jsonResponse({ success: true, message: "Connect request sent", id: requestId });
+                } catch (error: any) {
+                    console.error("Error creating connect request:", error);
+                    return jsonResponse({ success: false, error: "Failed to create connect request" }, 500);
+                }
+            }
+
+            // GET /api/connect-requests - List connect requests
+            if (url.pathname === "/api/connect-requests" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                const role = (payload.role || "").toUpperCase();
+                const viewType = url.searchParams.get("view") || "customer"; // customer or expert
+
+                try {
+                    let query: string;
+                    let params: any[];
+
+                    if (viewType === "expert" && role === "EXPERT") {
+                        // Expert inbox
+                        query = `
+                            SELECT r.*, u.name as customer_name
+                            FROM connect_requests r
+                            JOIN users u ON u.id = r.customer_id
+                            WHERE r.expert_id = ?
+                            ORDER BY r.created_at DESC
+                        `;
+                        params = [payload.userId];
+                    } else {
+                        // Customer's own requests
+                        query = `
+                            SELECT r.*, u.name as expert_name
+                            FROM connect_requests r
+                            JOIN users u ON u.id = r.expert_id
+                            WHERE r.customer_id = ?
+                            ORDER BY r.created_at DESC
+                        `;
+                        params = [payload.userId];
+                    }
+
+                    const result = await env.proveloce_db.prepare(query).bind(...params).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { requests: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching connect requests:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch connect requests" }, 500);
+                }
+            }
+
+            // PATCH /api/connect-requests/:id - Accept/Reject request (expert only)
+            const connectRequestMatch = url.pathname.match(/^\/api\/connect-requests\/([^\/]+)$/);
+            if (connectRequestMatch && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const requestId = connectRequestMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as { status: 'accepted' | 'rejected' };
+
+                    if (!body.status || !['accepted', 'rejected'].includes(body.status)) {
+                        return jsonResponse({ success: false, error: "Invalid status" }, 400);
+                    }
+
+                    // Verify expert owns the request
+                    const request_data = await env.proveloce_db.prepare(`
+                        SELECT * FROM connect_requests WHERE id = ? AND expert_id = ?
+                    `).bind(requestId, payload.userId).first() as any;
+
+                    if (!request_data) {
+                        return jsonResponse({ success: false, error: "Request not found or unauthorized" }, 404);
+                    }
+
+                    // Update status
+                    await env.proveloce_db.prepare(`
+                        UPDATE connect_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    `).bind(body.status, requestId).run();
+
+                    // If accepted, create session
+                    if (body.status === 'accepted') {
+                        const sessionId = crypto.randomUUID();
+                        const roomId = `room-${sessionId.substring(0, 8)}`;
+
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO sessions (id, request_id, expert_id, customer_id, scheduled_date, scheduled_slot_label, status, room_id)
+                            VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?)
+                        `).bind(
+                            sessionId,
+                            requestId,
+                            request_data.expert_id,
+                            request_data.customer_id,
+                            request_data.requested_date,
+                            request_data.requested_slot_label,
+                            roomId
+                        ).run();
+
+                        // Notify customer
+                        await createNotification(
+                            env,
+                            request_data.customer_id,
+                            'SUCCESS',
+                            'Connect Request Accepted',
+                            'Your connect request has been accepted. A session is scheduled.',
+                            '/customer/my-requests'
+                        );
+                    } else {
+                        // Notify customer of rejection
+                        await createNotification(
+                            env,
+                            request_data.customer_id,
+                            'WARNING',
+                            'Connect Request Rejected',
+                            'Your connect request was not accepted.',
+                            '/customer/my-requests'
+                        );
+                    }
+
+                    return jsonResponse({ success: true, message: `Request ${body.status}` });
+                } catch (error: any) {
+                    console.error("Error updating connect request:", error);
+                    return jsonResponse({ success: false, error: "Failed to update connect request" }, 500);
+                }
+            }
+
+            // =====================================================
+            // Expert Connect - Sessions
+            // =====================================================
+
+            // GET /api/sessions - List sessions
+            if (url.pathname === "/api/sessions" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT s.*, 
+                               e.name as expert_name,
+                               c.name as customer_name
+                        FROM sessions s
+                        JOIN users e ON e.id = s.expert_id
+                        JOIN users c ON c.id = s.customer_id
+                        WHERE s.expert_id = ? OR s.customer_id = ?
+                        ORDER BY s.scheduled_date DESC
+                    `).bind(payload.userId, payload.userId).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { sessions: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching sessions:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch sessions" }, 500);
+                }
+            }
+
+            // POST /api/sessions/:id/start - Start session
+            const sessionStartMatch = url.pathname.match(/^\/api\/sessions\/([^\/]+)\/start$/);
+            if (sessionStartMatch && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const sessionId = sessionStartMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        UPDATE sessions SET status = 'live', started_at = CURRENT_TIMESTAMP WHERE id = ?
+                    `).bind(sessionId).run();
+
+                    return jsonResponse({ success: true, message: "Session started" });
+                } catch (error: any) {
+                    console.error("Error starting session:", error);
+                    return jsonResponse({ success: false, error: "Failed to start session" }, 500);
+                }
+            }
+
+            // POST /api/sessions/:id/end - End session
+            const sessionEndMatch = url.pathname.match(/^\/api\/sessions\/([^\/]+)\/end$/);
+            if (sessionEndMatch && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const sessionId = sessionEndMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        UPDATE sessions 
+                        SET status = 'ended', ended_at = CURRENT_TIMESTAMP,
+                            duration_seconds = CAST((julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400 AS INTEGER)
+                        WHERE id = ?
+                    `).bind(sessionId).run();
+
+                    return jsonResponse({ success: true, message: "Session ended" });
+                } catch (error: any) {
+                    console.error("Error ending session:", error);
+                    return jsonResponse({ success: false, error: "Failed to end session" }, 500);
+                }
+            }
+
+            // GET /api/sessions/:id/messages - Get session messages
+            const sessionMessagesMatch = url.pathname.match(/^\/api\/sessions\/([^\/]+)\/messages$/);
+            if (sessionMessagesMatch && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const sessionId = sessionMessagesMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT m.*, u.name as sender_name
+                        FROM session_messages m
+                        JOIN users u ON u.id = m.sender_id
+                        WHERE m.session_id = ?
+                        ORDER BY m.created_at ASC
+                    `).bind(sessionId).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { messages: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching messages:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch messages" }, 500);
+                }
+            }
+
+            // POST /api/sessions/:id/messages - Send message
+            if (sessionMessagesMatch && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const sessionId = sessionMessagesMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as { content: string; attachmentUrl?: string };
+
+                    if (!body.content && !body.attachmentUrl) {
+                        return jsonResponse({ success: false, error: "Message content required" }, 400);
+                    }
+
+                    const messageId = crypto.randomUUID();
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO session_messages (id, session_id, sender_id, content_text, attachment_url)
+                        VALUES (?, ?, ?, ?, ?)
+                    `).bind(
+                        messageId,
+                        sessionId,
+                        payload.userId,
+                        body.content || null,
+                        body.attachmentUrl || null
+                    ).run();
+
+                    return jsonResponse({ success: true, message: "Message sent", id: messageId });
+                } catch (error: any) {
+                    console.error("Error sending message:", error);
+                    return jsonResponse({ success: false, error: "Failed to send message" }, 500);
+                }
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 
