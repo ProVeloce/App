@@ -35,17 +35,18 @@ const ExpertApplicationPage: React.FC = () => {
                 documentApi.getMyDocuments()
             ]);
 
-            if (appRes.success) {
-                setApplication(appRes.data.application);
+            // Access .data from AxiosResponse, then .success from ApiResponse
+            if (appRes.data.success && appRes.data.data) {
+                setApplication(appRes.data.data.application);
                 setProfileData({
-                    phone: appRes.data.application.profile_phone || '',
-                    dob: appRes.data.application.profile_dob || '',
-                    address: appRes.data.application.profile_address || ''
+                    phone: appRes.data.data.application.profile_phone || '',
+                    dob: appRes.data.data.application.profile_dob || '',
+                    address: appRes.data.data.application.profile_address || ''
                 });
             }
 
-            if (docsRes.success) {
-                setDocuments(docsRes.data.documents || []);
+            if (docsRes.data.success && docsRes.data.data) {
+                setDocuments(docsRes.data.data.documents || []);
             }
         } catch (error) {
             console.error('Error fetching application data:', error);
@@ -60,7 +61,7 @@ const ExpertApplicationPage: React.FC = () => {
         try {
             setSaving(true);
             const res = await applicationApi.saveDraft(profileData);
-            if (res.success) {
+            if (res.data.success) {
                 toast.success('Profile saved successfully');
             }
         } catch (error) {
@@ -285,8 +286,8 @@ const ExpertApplicationPage: React.FC = () => {
                 <button
                     onClick={async () => {
                         try {
-                            const res = await applicationApi.submitApplication({});
-                            if (res.success) {
+                            const res = await applicationApi.submitApplication();
+                            if (res.data.success) {
                                 toast.success('Application submitted successfully!');
                                 fetchApplicationData();
                             }
