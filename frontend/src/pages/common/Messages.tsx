@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Avatar from '../../components/common/Avatar';
+import { MessageSquare, Search, Send, User, Plus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
