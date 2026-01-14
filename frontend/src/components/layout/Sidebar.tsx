@@ -41,8 +41,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
     // Customer Portal - Complete Navigation
     { label: 'Home', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
-    { label: 'Search Expert', icon: <Users size={20} />, path: '/customer/experts', roles: ['CUSTOMER'] },
-    { label: 'Book Service', icon: <Briefcase size={20} />, path: '/customer/book-service', roles: ['CUSTOMER'] },
+    { label: 'Search Expert', icon: <Users size={20} />, path: '/customer/find-experts', roles: ['CUSTOMER'] },
     { label: 'My Bookings', icon: <ClipboardList size={20} />, path: '/customer/my-requests', roles: ['CUSTOMER'] },
     { label: 'Apply as Expert', icon: <FileText size={20} />, path: '/customer/apply-expert', roles: ['CUSTOMER'] },
     { label: 'Application Status', icon: <CheckCircle size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
