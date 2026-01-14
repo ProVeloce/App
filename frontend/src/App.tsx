@@ -106,7 +106,7 @@ function App() {
                     <Route path="/help-desk" element={<HelpDesk />} />
                     <Route path="/change-password" element={<ChangePassword />} />
                     <Route path="/messages" element={<Messages />} />
-                    <Route path="/session/:sessionId" element={<SessionRoom />} />
+                    <Route path="/session" element={<SessionRoom />} />
 
                     {/* Customer Routes */}
                     <Route element={<RoleRoute allowedRoles={['CUSTOMER']} />}>

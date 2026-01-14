@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSession } from '../../context/SessionContext';
 import SessionTimeoutModal from './SessionTimeoutModal';
-import { isRouteMapped } from '../../utils/sessionUrl';
 
 /**
  * SessionManager component that bridges AuthContext and SessionContext.
@@ -17,14 +16,12 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
     const { user, logout, isAuthenticated } = useAuth();
     const {
         sessionId,
-        encodedToken,
         isSessionExpired,
         showTimeoutWarning,
         remainingTime,
         startSession,
         endSession,
         dismissWarning,
-        encodeCurrentUrl,
     } = useSession();
     const navigate = useNavigate();
     const location = useLocation();
@@ -32,17 +29,9 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
     // Start session when user logs in
     useEffect(() => {
         if (isAuthenticated && user && !sessionId) {
-            const newSessionId = startSession();
-            // Only update URL for protected routes, not public pages
-            if (newSessionId && isRouteMapped(location.pathname)) {
-                const encodedPath = encodeCurrentUrl(location.pathname);
-                // Validate encoded path is a proper 128-char hex token
-                if (encodedPath && encodedPath.length === 128 && /^[a-f0-9]+$/i.test(encodedPath)) {
-                    window.history.replaceState(null, '', `/${encodedPath}`);
-                }
-            }
+            startSession();
         }
-    }, [isAuthenticated, user, sessionId, startSession, encodeCurrentUrl, location.pathname]);
+    }, [isAuthenticated, user, sessionId, startSession]);
 
     // Update URL when navigating to protected routes
     useEffect(() => {
@@ -56,15 +45,8 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
         if (isPublicRoute) return;
 
-        // Check if current path is a mapped route (should be encoded)
-        if (isRouteMapped(location.pathname)) {
-            const encodedPath = encodeCurrentUrl(location.pathname);
-            // Validate encoded path is a proper 128-char hex token before updating URL
-            if (encodedPath && encodedPath.length === 128 && /^[a-f0-9]+$/i.test(encodedPath)) {
-                window.history.replaceState(null, '', `/${encodedPath}`);
-            }
-        }
-    }, [location.pathname, isAuthenticated, sessionId, encodeCurrentUrl]);
+        // Internal state is managed via SessionContext, no longer injecting tokens into URL
+    }, [location.pathname, isAuthenticated, sessionId]);
 
     // End session when user logs out
     useEffect(() => {

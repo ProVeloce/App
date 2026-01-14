@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useSession } from '../../context/SessionContext';
 import './MyConnectRequests.css';
 
 interface ConnectRequest {
@@ -35,6 +36,7 @@ const MyConnectRequests: React.FC = () => {
     const { user } = useAuth();
     const { success, error } = useToast();
     const navigate = useNavigate();
+    const { setActiveSession } = useSession();
     const token = getAccessToken();
 
     const [requests, setRequests] = useState<ConnectRequest[]>([]);
@@ -95,7 +97,8 @@ const MyConnectRequests: React.FC = () => {
     };
 
     const handleJoinSession = (sessionId: string) => {
-        navigate(`/session/${sessionId}`);
+        setActiveSession(sessionId);
+        navigate('/session');
     };
 
     const getSessionForRequest = (requestId: string) => {

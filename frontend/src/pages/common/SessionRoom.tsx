@@ -3,7 +3,8 @@ import { Video, MessageSquare, Clock, Send, Paperclip, PhoneOff, X } from 'lucid
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useSession } from '../../context/SessionContext';
 import './SessionRoom.css';
 
 interface Message {
@@ -29,9 +30,9 @@ interface SessionData {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend.proveloce.com';
 
 const SessionRoom: React.FC = () => {
-    const { sessionId } = useParams<{ sessionId: string }>();
     const { user } = useAuth();
     const { success, error } = useToast();
+    const { activeSessionId: sessionId } = useSession();
     const navigate = useNavigate();
     const token = getAccessToken();
     const chatRef = useRef<HTMLDivElement>(null);

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useSession } from '../../context/SessionContext';
 import './ConnectRequestsInbox.css';
 
 interface ConnectRequest {
@@ -30,6 +31,7 @@ const ConnectRequestsInbox: React.FC = () => {
     const { user } = useAuth();
     const { success, error } = useToast();
     const navigate = useNavigate();
+    const { setActiveSession } = useSession();
     const token = getAccessToken();
 
     const [requests, setRequests] = useState<ConnectRequest[]>([]);
@@ -110,7 +112,8 @@ const ConnectRequestsInbox: React.FC = () => {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                navigate(`/session/${session.id}`);
+                setActiveSession(session.id);
+                navigate('/session');
             } catch (err) {
                 error('Failed to start session');
             }

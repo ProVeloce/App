@@ -37,11 +37,6 @@ const DashboardLayout: React.FC = () => {
                 <main className="dashboard-content">
                     <Outlet />
                 </main>
-                {sessionId && (
-                    <footer className="dashboard-footer">
-                        <span className="session-id">Session ID: {sessionId}</span>
-                    </footer>
-                )}
             </div>
         </div>
     );
