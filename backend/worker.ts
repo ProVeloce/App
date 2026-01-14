@@ -4283,6 +4283,201 @@ export default {
             }
 
             // =====================================================
+            // POML Task Assignment - CRUD Endpoints
+            // =====================================================
+
+            // GET /api/tasks - List tasks
+            if (url.pathname === "/api/tasks" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const role = (payload.role || "").toUpperCase();
+                const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                let whereClause = "";
+                let params: any[] = [];
+
+                if (role === "SUPERADMIN") {
+                    whereClause = "1=1";
+                } else if (role === "ADMIN") {
+                    whereClause = "t.org_id = ?";
+                    params = [requesterOrgId];
+                } else {
+                    // Experts and others see only tasks assigned to them
+                    whereClause = "t.assigned_to = ?";
+                    params = [payload.userId];
+                }
+
+                try {
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT t.*, u.name as assigned_user_name
+                        FROM tasks t
+                        LEFT JOIN users u ON t.assigned_to = u.id
+                        WHERE ${whereClause}
+                        ORDER BY t.created_at DESC
+                    `).bind(...params).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { tasks: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching tasks:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch tasks" }, 500);
+                }
+            }
+
+            // POST /api/tasks - Create task
+            if (url.pathname === "/api/tasks" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const role = (payload.role || "").toUpperCase();
+                if (role !== "ADMIN" && role !== "SUPERADMIN") {
+                    return jsonResponse({ success: false, error: "Only admins can create tasks" }, 403);
+                }
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as {
+                        title: string;
+                        description: string;
+                        assignedTo?: string;
+                        dueDate?: string;
+                    };
+
+                    if (!body.title || !body.description) {
+                        return jsonResponse({ success: false, error: "Title and description are required" }, 400);
+                    }
+
+                    const taskId = crypto.randomUUID();
+                    const orgId = payload.org_id || 'ORG-DEFAULT';
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO tasks (id, title, description, assigned_to, due_date, status, org_id, created_by, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    `).bind(
+                        taskId,
+                        body.title,
+                        body.description,
+                        body.assignedTo || null,
+                        body.dueDate || null,
+                        orgId,
+                        payload.userId
+                    ).run();
+
+                    // Notify assigned user if any
+                    if (body.assignedTo) {
+                        await createNotification(
+                            env, body.assignedTo, 'INFO',
+                            'New Task Assigned',
+                            `You have been assigned a new task: ${body.title}`,
+                            '/expert/tasks'
+                        );
+                    }
+
+                    return jsonResponse({ success: true, message: "Task created", id: taskId });
+                } catch (error: any) {
+                    console.error("Error creating task:", error);
+                    return jsonResponse({ success: false, error: "Failed to create task" }, 500);
+                }
+            }
+
+            // GET /api/tasks/:id - Get single task
+            const taskIdMatch = url.pathname.match(/^\/api\/tasks\/([^\/]+)$/);
+            if (taskIdMatch && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const taskId = taskIdMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const task = await env.proveloce_db.prepare(`
+                        SELECT t.*, u.name as assigned_user_name
+                        FROM tasks t
+                        LEFT JOIN users u ON t.assigned_to = u.id
+                        WHERE t.id = ?
+                    `).bind(taskId).first();
+
+                    if (!task) {
+                        return jsonResponse({ success: false, error: "Task not found" }, 404);
+                    }
+
+                    return jsonResponse({ success: true, data: { task } });
+                } catch (error: any) {
+                    console.error("Error fetching task:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch task" }, 500);
+                }
+            }
+
+            // PATCH /api/tasks/:id - Update task
+            if (taskIdMatch && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const taskId = taskIdMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as { status?: string; assignedTo?: string };
+
+                    const updates: string[] = [];
+                    const params: any[] = [];
+
+                    if (body.status) {
+                        updates.push("status = ?");
+                        params.push(body.status);
+                    }
+                    if (body.assignedTo !== undefined) {
+                        updates.push("assigned_to = ?");
+                        params.push(body.assignedTo || null);
+                    }
+                    updates.push("updated_at = CURRENT_TIMESTAMP");
+
+                    params.push(taskId);
+
+                    await env.proveloce_db.prepare(`
+                        UPDATE tasks SET ${updates.join(", ")} WHERE id = ?
+                    `).bind(...params).run();
+
+                    return jsonResponse({ success: true, message: "Task updated" });
+                } catch (error: any) {
+                    console.error("Error updating task:", error);
+                    return jsonResponse({ success: false, error: "Failed to update task" }, 500);
+                }
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 
