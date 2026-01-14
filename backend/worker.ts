@@ -130,6 +130,93 @@ async function verifyJWT(token: string, secret: string): Promise<any> {
 }
 
 // =====================================================
+// POML v1.0 Refresh Token Management
+// =====================================================
+
+async function storeRefreshToken(env: any, userId: string, token: string, expiresAt: Date): Promise<void> {
+    if (!env.proveloce_db) return;
+    try {
+        await env.proveloce_db.prepare(`
+            INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(crypto.randomUUID(), userId, token, expiresAt.toISOString()).run();
+
+        // Audit log: refresh_token_stored
+        await env.proveloce_db.prepare(`
+            INSERT INTO activity_logs (id, user_id, action, details, created_at)
+            VALUES (?, ?, 'refresh_token_stored', ?, CURRENT_TIMESTAMP)
+        `).bind(crypto.randomUUID(), userId, JSON.stringify({ expires_at: expiresAt.toISOString() })).run();
+    } catch (error) {
+        console.error("Failed to store refresh token:", error);
+    }
+}
+
+async function validateRefreshToken(env: any, token: string): Promise<{ valid: boolean; userId?: string; error?: string }> {
+    if (!env.proveloce_db) return { valid: false, error: "Database not configured" };
+    try {
+        const result = await env.proveloce_db.prepare(`
+            SELECT user_id, expires_at, revoked_at
+            FROM refresh_tokens
+            WHERE token = ?
+        `).bind(token).first() as any;
+
+        if (!result) return { valid: false, error: "Token not found" };
+        if (result.revoked_at) return { valid: false, error: "Token has been revoked" };
+        if (new Date(result.expires_at) < new Date()) return { valid: false, error: "Token has expired" };
+
+        // Audit log: refresh_token_fetched
+        await env.proveloce_db.prepare(`
+            INSERT INTO activity_logs (id, user_id, action, details, created_at)
+            VALUES (?, ?, 'refresh_token_fetched', ?, CURRENT_TIMESTAMP)
+        `).bind(crypto.randomUUID(), result.user_id, JSON.stringify({ expires_at: result.expires_at })).run();
+
+        return { valid: true, userId: result.user_id };
+    } catch (error) {
+        console.error("Failed to validate refresh token:", error);
+        return { valid: false, error: "Validation failed" };
+    }
+}
+
+async function revokeRefreshToken(env: any, token: string, userId?: string): Promise<boolean> {
+    if (!env.proveloce_db) return false;
+    try {
+        await env.proveloce_db.prepare(`
+            UPDATE refresh_tokens
+            SET revoked_at = CURRENT_TIMESTAMP
+            WHERE token = ?
+        `).bind(token).run();
+
+        // Audit log: refresh_token_revoked
+        if (userId) {
+            await env.proveloce_db.prepare(`
+                INSERT INTO activity_logs (id, user_id, action, details, created_at)
+                VALUES (?, ?, 'refresh_token_revoked', ?, CURRENT_TIMESTAMP)
+            `).bind(crypto.randomUUID(), userId, JSON.stringify({ revoked_at: new Date().toISOString() })).run();
+        }
+
+        return true;
+    } catch (error) {
+        console.error("Failed to revoke refresh token:", error);
+        return false;
+    }
+}
+
+async function revokeAllUserTokens(env: any, userId: string): Promise<boolean> {
+    if (!env.proveloce_db) return false;
+    try {
+        await env.proveloce_db.prepare(`
+            UPDATE refresh_tokens
+            SET revoked_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND revoked_at IS NULL
+        `).bind(userId).run();
+        return true;
+    } catch (error) {
+        console.error("Failed to revoke all user tokens:", error);
+        return false;
+    }
+}
+
+// =====================================================
 // Google OAuth Helper Functions
 // =====================================================
 
@@ -338,6 +425,107 @@ export default {
                 } catch (error: any) {
                     console.error("Error fetching user:", error);
                     return jsonResponse({ success: false, error: "Failed to fetch user" }, 500);
+                }
+            }
+
+            // =====================================================
+            // POST /api/auth/refresh - POML v1.0 Refresh Token
+            // =====================================================
+
+            if (url.pathname === "/api/auth/refresh" && request.method === "POST") {
+                try {
+                    const body = await request.json() as { refreshToken?: string };
+
+                    if (!body.refreshToken) {
+                        return jsonResponse({ success: false, error: "Refresh token is required" }, 400);
+                    }
+
+                    if (!env.proveloce_db) {
+                        return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                    }
+
+                    // Validate the refresh token
+                    const validation = await validateRefreshToken(env, body.refreshToken);
+
+                    if (!validation.valid) {
+                        return jsonResponse({ success: false, error: validation.error || "Invalid refresh token" }, 401);
+                    }
+
+                    // Get user info for new access token
+                    const user = await env.proveloce_db.prepare(
+                        "SELECT id, name, email, role, org_id FROM users WHERE id = ?"
+                    ).bind(validation.userId).first() as any;
+
+                    if (!user) {
+                        return jsonResponse({ success: false, error: "User not found" }, 404);
+                    }
+
+                    // Revoke old refresh token (rotation)
+                    await revokeRefreshToken(env, body.refreshToken, validation.userId);
+
+                    // Create new access token
+                    const newAccessToken = await createJWT(
+                        { userId: user.id, email: user.email, name: user.name, role: user.role, org_id: user.org_id || 'ORG-DEFAULT' },
+                        env.JWT_ACCESS_SECRET || "default-secret"
+                    );
+
+                    // Create new refresh token (24h rotation per POML spec)
+                    const newRefreshToken = crypto.randomUUID();
+                    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+                    await storeRefreshToken(env, user.id, newRefreshToken, expiresAt);
+
+                    return jsonResponse({
+                        success: true,
+                        accessToken: newAccessToken,
+                        refreshToken: newRefreshToken,
+                        expiresIn: 604800 // 7 days for access token
+                    });
+                } catch (e: any) {
+                    console.error("Refresh token error:", e);
+                    return jsonResponse({ success: false, error: "Token refresh failed" }, 500);
+                }
+            }
+
+            // =====================================================
+            // POST /api/auth/logout - POML v1.0 Token Revocation
+            // =====================================================
+
+            if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+                try {
+                    const authHeader = request.headers.get("Authorization");
+                    let userId: string | undefined;
+
+                    // Try to get userId from access token if provided
+                    if (authHeader && authHeader.startsWith("Bearer ")) {
+                        const token = authHeader.substring(7);
+                        const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                        if (payload) {
+                            userId = payload.userId;
+                        }
+                    }
+
+                    const body = await request.json() as { refreshToken?: string; revokeAll?: boolean };
+
+                    if (!env.proveloce_db) {
+                        return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                    }
+
+                    if (body.revokeAll && userId) {
+                        // Revoke ALL user tokens
+                        await revokeAllUserTokens(env, userId);
+                        return jsonResponse({ success: true, message: "All tokens revoked" });
+                    }
+
+                    if (body.refreshToken) {
+                        // Revoke specific refresh token
+                        await revokeRefreshToken(env, body.refreshToken, userId);
+                        return jsonResponse({ success: true, message: "Token revoked" });
+                    }
+
+                    return jsonResponse({ success: true, message: "Logout successful" });
+                } catch (e: any) {
+                    console.error("Logout error:", e);
+                    return jsonResponse({ success: false, error: "Logout failed" }, 500);
                 }
             }
 
@@ -2146,6 +2334,73 @@ export default {
                 } catch (error: any) {
                     console.error("Error submitting application:", error);
                     return jsonResponse({ success: false, error: "Failed to submit application" }, 500);
+                }
+            }
+
+            // GET /api/applications - POML Expert Review v1.0: RBAC-filtered applications list
+            if (url.pathname === "/api/applications" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                const role = (payload.role || "").toUpperCase();
+                const requesterOrgId = payload.org_id || 'ORG-DEFAULT';
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                // POML v1.0 RBAC:
+                // - Superadmin: view all applications
+                // - Admin: view all applications in their org
+                // - Expert: view ONLY submitted + validated applications (no drafts)
+                let whereClause = "";
+                let params: any[] = [];
+
+                if (role === "SUPERADMIN") {
+                    // Superadmin sees all
+                    whereClause = "1=1";
+                } else if (role === "ADMIN") {
+                    // Admin sees all in their org
+                    whereClause = "org_id = ?";
+                    params = [requesterOrgId];
+                } else if (role === "EXPERT") {
+                    // Expert ONLY sees submitted + validated applications (POML v1.0)
+                    whereClause = "org_id = ? AND status = 'submitted' AND validated = 1";
+                    params = [requesterOrgId];
+                } else {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                // Optional status filter from query params
+                const statusFilter = url.searchParams.get("status");
+                if (statusFilter && role !== "EXPERT") {
+                    whereClause += " AND status = ?";
+                    params.push(statusFilter);
+                }
+
+                try {
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT ea.*, u.name as user_name, u.email as user_email
+                        FROM expert_applications ea
+                        LEFT JOIN users u ON ea.user_id = u.id
+                        WHERE ${whereClause}
+                        ORDER BY ea.created_at DESC
+                    `).bind(...params).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { applications: result.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching applications:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch applications" }, 500);
                 }
             }
 
