@@ -52,8 +52,6 @@ const menuItems: MenuItem[] = [
     // Expert Portal - Complete Navigation
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/expert/dashboard', roles: ['EXPERT'] },
     { label: 'View Requests', icon: <ClipboardList size={20} />, path: '/expert/connect-requests', roles: ['EXPERT'] },
-    { label: 'Appointments', icon: <Briefcase size={20} />, path: '/expert/appointments', roles: ['EXPERT'] },
-    { label: 'Messages', icon: <Bell size={20} />, path: '/expert/messages', roles: ['EXPERT'] },
     { label: 'Portfolio', icon: <FolderOpen size={20} />, path: '/expert/portfolio', roles: ['EXPERT'] },
     { label: 'Certifications', icon: <Award size={20} />, path: '/expert/certifications', roles: ['EXPERT'] },
     { label: 'Tasks', icon: <Briefcase size={20} />, path: '/expert/tasks', roles: ['EXPERT'] },
