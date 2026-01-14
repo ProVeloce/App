@@ -832,7 +832,7 @@ export default {
                 }
 
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, phone, role, profile_photo_url, profile_image, created_at FROM users WHERE id = ?"
+                    "SELECT id, name, email, phone, role, profile_photo_url, profile_image, avatar_data, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const profile = await env.proveloce_db.prepare(
@@ -852,7 +852,7 @@ export default {
                             created_at: user?.created_at,
                             profile: {
                                 ...profile,
-                                avatarUrl: user?.profile_image || user?.profile_photo_url || null
+                                avatarUrl: user?.profile_image || user?.profile_photo_url || user?.avatar_data || null
                             }
                         },
                         profileCompletion: profile ? 80 : 20

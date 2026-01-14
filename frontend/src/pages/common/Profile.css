@@ -56,6 +56,8 @@
     width: 100px;
     height: 100px;
     margin: 0 auto var(--space-4);
+    overflow: hidden;
+    border-radius: var(--radius-full);
 }
 
 .avatar-wrapper img,
