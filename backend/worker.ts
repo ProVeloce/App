@@ -832,14 +832,14 @@ export default {
                 }
 
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?"
+                    "SELECT id, name, email, phone, role, profile_photo_url, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
                 ).bind(payload.userId).first() as any;
 
-                // Return user data with phone explicitly at top level
+                // Return user data with phone and avatarUrl explicitly at top level
                 return jsonResponse({
                     success: true,
                     data: {
@@ -850,7 +850,10 @@ export default {
                             phone: user?.phone || null,
                             role: user?.role,
                             created_at: user?.created_at,
-                            profile: profile || null
+                            profile: {
+                                ...profile,
+                                avatarUrl: user?.profile_photo_url || null
+                            }
                         },
                         profileCompletion: profile ? 80 : 20
                     }
@@ -952,6 +955,92 @@ export default {
                         }
                     }
                 });
+            }
+
+            // POST /api/profiles/me/avatar - Upload profile avatar to R2
+            if (url.pathname === "/api/profiles/me/avatar" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db || !env.others) {
+                    return jsonResponse({ success: false, error: "Storage not configured" }, 500);
+                }
+
+                try {
+                    // Parse multipart form data
+                    const contentType = request.headers.get("Content-Type") || "";
+                    if (!contentType.includes("multipart/form-data")) {
+                        return jsonResponse({ success: false, error: "Content-Type must be multipart/form-data" }, 400);
+                    }
+
+                    const formData = await request.formData();
+                    const file = formData.get("avatar") as File | null;
+
+                    if (!file) {
+                        return jsonResponse({ success: false, error: "No avatar file provided" }, 400);
+                    }
+
+                    // Validate file size (max 5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        return jsonResponse({ success: false, error: "File size must be less than 5MB" }, 400);
+                    }
+
+                    // Validate file type
+                    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+                    if (!allowedTypes.includes(file.type)) {
+                        return jsonResponse({ success: false, error: "Only JPEG, PNG, GIF, and WebP images are allowed" }, 400);
+                    }
+
+                    // Generate unique filename
+                    const ext = file.name.split(".").pop() || "jpg";
+                    const timestamp = Date.now();
+                    const r2Key = `profile-photos/${payload.userId}-${timestamp}.${ext}`;
+
+                    // Upload to R2 'others' bucket
+                    const fileBuffer = await file.arrayBuffer();
+                    await env.others.put(r2Key, fileBuffer, {
+                        httpMetadata: {
+                            contentType: file.type,
+                        },
+                    });
+
+                    // Construct public URL
+                    const avatarUrl = `https://pub-others.r2.dev/${r2Key}`;
+
+                    // Update user's profile_photo_url in database
+                    await env.proveloce_db.prepare(
+                        "UPDATE users SET profile_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).bind(avatarUrl, payload.userId).run();
+
+                    // Also update user_profiles.avatar_url if the table has that column
+                    try {
+                        await env.proveloce_db.prepare(
+                            "UPDATE user_profiles SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?"
+                        ).bind(avatarUrl, payload.userId).run();
+                    } catch (e) {
+                        // Ignore if avatar_url column doesn't exist in user_profiles
+                    }
+
+                    console.log(`✅ Avatar uploaded for user ${payload.userId}: ${r2Key}`);
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Avatar uploaded successfully",
+                        data: { avatarUrl }
+                    });
+                } catch (error: any) {
+                    console.error("Avatar upload error:", error);
+                    return jsonResponse({ success: false, error: "Failed to upload avatar" }, 500);
+                }
             }
 
             // =====================================================
