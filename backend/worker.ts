@@ -2228,7 +2228,14 @@ export default {
 
                     return jsonResponse({
                         success: true,
-                        data: { application }
+                        data: {
+                            application: {
+                                ...application,
+                                profile_phone: application.profile_phone || "",
+                                profile_dob: application.profile_dob || "",
+                                profile_address: application.profile_address || ""
+                            }
+                        }
                     });
                 } catch (error: any) {
                     console.error("Error fetching/creating application:", error);
@@ -2236,7 +2243,7 @@ export default {
                 }
             }
 
-            // POST /api/expert-application - Save/update draft
+            // POST /api/expert-application - Save/update draft (POML v1.0)
             if (url.pathname === "/api/expert-application" && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization");
                 if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -2257,82 +2264,50 @@ export default {
                 try {
                     const body = await request.json() as any;
 
-                    // Check if application exists and its current status
+                    // Check if application exists
                     const existing = await env.proveloce_db.prepare(
                         "SELECT id, status FROM expert_applications WHERE user_id = ?"
                     ).bind(payload.userId).first() as any;
 
-                    // GUARD: Don't allow overwriting PENDING or APPROVED applications
                     if (existing) {
                         const currentStatus = (existing.status || '').toLowerCase();
                         if (currentStatus === 'pending') {
-                            return jsonResponse({
-                                success: false,
-                                error: "Cannot modify application while it's under review"
-                            }, 400);
+                            return jsonResponse({ success: false, error: "Cannot modify application while it's under review" }, 400);
                         }
                         if (currentStatus === 'approved') {
-                            return jsonResponse({
-                                success: false,
-                                error: "Your application has already been approved"
-                            }, 400);
+                            return jsonResponse({ success: false, error: "Your application has already been approved" }, 400);
                         }
 
-                        // Update existing application - ALWAYS set status to 'draft' when saving
+                        // Update existing application (POML fields)
                         await env.proveloce_db.prepare(`
                             UPDATE expert_applications SET
+                                profile_phone = ?, 
+                                profile_dob = ?, 
+                                profile_address = ?,
                                 status = 'draft',
-                                dob = ?, gender = ?, address_line1 = ?, address_line2 = ?,
-                                city = ?, state = ?, country = ?, pincode = ?,
-                                government_id_type = ?, government_id_url = ?, profile_photo_url = ?,
-                                domains = ?, years_of_experience = ?, summary_bio = ?, skills = ?,
-                                resume_url = ?, portfolio_urls = ?, certification_urls = ?,
-                                working_type = ?, hourly_rate = ?, languages = ?,
-                                available_days = ?, available_time_slots = ?,
-                                work_preference = ?, communication_mode = ?,
-                                terms_accepted = ?, nda_accepted = ?, signature_url = ?,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE user_id = ?
                         `).bind(
-                            body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
-                            body.city || null, body.state || null, body.country || null, body.pincode || null,
-                            body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
-                            JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
-                            body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
-                            body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
-                            JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
-                            body.workPreference || null, body.communicationMode || null,
-                            body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null,
+                            body.phone || "",
+                            body.dob || "",
+                            body.address || "",
                             payload.userId
                         ).run();
                     } else {
-                        // Create new application with DRAFT status
+                        // Create new application draft
                         const id = crypto.randomUUID();
                         const userOrgId = payload.org_id || 'ORG-DEFAULT';
                         await env.proveloce_db.prepare(`
                             INSERT INTO expert_applications (
                                 id, user_id, org_id, status,
-                                dob, gender, address_line1, address_line2,
-                                city, state, country, pincode,
-                                government_id_type, government_id_url, profile_photo_url,
-                                domains, years_of_experience, summary_bio, skills,
-                                resume_url, portfolio_urls, certification_urls,
-                                working_type, hourly_rate, languages,
-                                available_days, available_time_slots,
-                                work_preference, communication_mode,
-                                terms_accepted, nda_accepted, signature_url
-                            ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                profile_phone, profile_dob, profile_address,
+                                created_at, updated_at
+                            ) VALUES (?, ?, ?, 'draft', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                         `).bind(
                             id, payload.userId, userOrgId,
-                            body.dob || null, body.gender || null, body.addressLine1 || null, body.addressLine2 || null,
-                            body.city || null, body.state || null, body.country || null, body.pincode || null,
-                            body.governmentIdType || null, body.governmentIdUrl || null, body.profilePhotoUrl || null,
-                            JSON.stringify(body.domains || []), body.yearsOfExperience || 0, body.summaryBio || null, JSON.stringify(body.skills || []),
-                            body.resumeUrl || null, JSON.stringify(body.portfolioLinks || []), JSON.stringify(body.certificationUrls || []),
-                            body.workingType || null, body.expectedRate || null, JSON.stringify(body.languages || []),
-                            JSON.stringify(body.availableDays || []), JSON.stringify(body.availableTimeSlots || []),
-                            body.workPreference || null, body.communicationMode || null,
-                            body.termsAccepted ? 1 : 0, body.ndaAccepted ? 1 : 0, body.signatureUrl || null
+                            body.phone || "",
+                            body.dob || "",
+                            body.address || ""
                         ).run();
                     }
 
@@ -2416,6 +2391,77 @@ export default {
                 } catch (error: any) {
                     console.error("Error submitting application:", error);
                     return jsonResponse({ success: false, error: "Failed to submit application" }, 500);
+                }
+            }
+
+            // POST /api/v1/expert_documents/upload - Upload document (POML v1.0)
+            if (url.pathname === "/api/v1/expert_documents/upload" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Invalid or expired token" }, 401);
+                }
+
+                if (!env.proveloce_db || !env.EXPERT_APPLICATION) {
+                    return jsonResponse({ success: false, error: "Cloud resources not configured" }, 500);
+                }
+
+                try {
+                    const formData = await request.formData();
+                    const file = formData.get("file") as File;
+                    const documentType = formData.get("type") as string || "other";
+
+                    if (!file) {
+                        return jsonResponse({ success: false, error: "No file provided" }, 400);
+                    }
+
+                    // 1. Upload to R2
+                    const r2Key = `docs/${payload.userId}/${crypto.randomUUID()}-${file.name.replace(/\s+/g, '_')}`;
+                    await env.EXPERT_APPLICATION.put(r2Key, file.stream(), {
+                        httpMetadata: { contentType: file.type }
+                    });
+
+                    const r2Url = `https://backend.proveloce.com/api/attachments/${r2Key}`;
+
+                    // 2. Get application_id for this user
+                    const application = await env.proveloce_db.prepare(
+                        "SELECT id FROM expert_applications WHERE user_id = ?"
+                    ).bind(payload.userId).first() as any;
+
+                    if (!application) {
+                        return jsonResponse({ success: false, error: "Expert application not found" }, 404);
+                    }
+
+                    // 3. Save to expert_documents
+                    const docId = crypto.randomUUID();
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO expert_documents (
+                            id, user_id, application_id, document_type, 
+                            file_name, file_type, file_size, r2_object_key, r2_url
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(
+                        docId, payload.userId, application.id, documentType,
+                        file.name, file.type, file.size, r2Key, r2Url
+                    ).run();
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Document uploaded successfully",
+                        data: {
+                            id: docId,
+                            url: r2Url,
+                            fileName: file.name
+                        }
+                    });
+                } catch (error: any) {
+                    console.error("Error uploading document:", error);
+                    return jsonResponse({ success: false, error: "Failed to upload document" }, 500);
                 }
             }
 
