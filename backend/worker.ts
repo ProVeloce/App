@@ -5167,6 +5167,273 @@ export default {
             }
 
             // =====================================================
+            // Direct Messaging System
+            // =====================================================
+
+            // GET /api/messages/conversations - List all conversations
+            if (url.pathname === "/api/messages/conversations" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    // Get unique conversations with last message
+                    const conversations = await env.proveloce_db.prepare(`
+                        SELECT 
+                            CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END as other_user_id,
+                            u.name as other_user_name,
+                            u.profile_photo_url as other_user_avatar,
+                            m.content as last_message,
+                            m.created_at as last_message_at,
+                            (SELECT COUNT(*) FROM user_messages um WHERE um.sender_id = CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END AND um.receiver_id = ? AND um.read_at IS NULL) as unread_count
+                        FROM user_messages m
+                        JOIN users u ON u.id = CASE WHEN m.sender_id = ? THEN m.receiver_id ELSE m.sender_id END
+                        WHERE m.sender_id = ? OR m.receiver_id = ?
+                        GROUP BY other_user_id
+                        ORDER BY m.created_at DESC
+                    `).bind(payload.userId, payload.userId, payload.userId, payload.userId, payload.userId, payload.userId).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { conversations: conversations.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching conversations:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch conversations" }, 500);
+                }
+            }
+
+            // GET /api/messages/:userId - Get messages with a specific user
+            const messagesMatch = url.pathname.match(/^\/api\/messages\/([^\/]+)$/);
+            if (messagesMatch && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const otherUserId = messagesMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    // Get messages between the two users
+                    const messages = await env.proveloce_db.prepare(`
+                        SELECT m.*, u.name as sender_name
+                        FROM user_messages m
+                        JOIN users u ON u.id = m.sender_id
+                        WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+                        ORDER BY m.created_at ASC
+                    `).bind(payload.userId, otherUserId, otherUserId, payload.userId).all();
+
+                    // Mark messages as read
+                    await env.proveloce_db.prepare(`
+                        UPDATE user_messages SET read_at = CURRENT_TIMESTAMP
+                        WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
+                    `).bind(otherUserId, payload.userId).run();
+
+                    // Get other user info
+                    const otherUser = await env.proveloce_db.prepare(
+                        "SELECT id, name, profile_photo_url FROM users WHERE id = ?"
+                    ).bind(otherUserId).first();
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            messages: messages.results || [],
+                            otherUser: otherUser || null
+                        }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching messages:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch messages" }, 500);
+                }
+            }
+
+            // POST /api/messages/:userId - Send a message to a user
+            if (messagesMatch && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const receiverId = messagesMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    const body = await request.json() as { content: string };
+
+                    if (!body.content || body.content.trim() === "") {
+                        return jsonResponse({ success: false, error: "Message content is required" }, 400);
+                    }
+
+                    const messageId = crypto.randomUUID();
+
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO user_messages (id, sender_id, receiver_id, content)
+                        VALUES (?, ?, ?, ?)
+                    `).bind(messageId, payload.userId, receiverId, body.content.trim()).run();
+
+                    // Notify receiver
+                    await createNotification(
+                        env,
+                        receiverId,
+                        'INFO',
+                        'New Message',
+                        'You have received a new message',
+                        '/messages'
+                    );
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Message sent",
+                        data: { id: messageId }
+                    });
+                } catch (error: any) {
+                    console.error("Error sending message:", error);
+                    return jsonResponse({ success: false, error: "Failed to send message" }, 500);
+                }
+            }
+
+            // GET /api/messages/users/search - Search users to message
+            if (url.pathname === "/api/messages/users/search" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                const query = url.searchParams.get("q") || "";
+
+                try {
+                    const users = await env.proveloce_db.prepare(`
+                        SELECT id, name, email, role, profile_photo_url
+                        FROM users
+                        WHERE id != ? AND (name LIKE ? OR email LIKE ?)
+                        LIMIT 20
+                    `).bind(payload.userId, `%${query}%`, `%${query}%`).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { users: users.results || [] }
+                    });
+                } catch (error: any) {
+                    console.error("Error searching users:", error);
+                    return jsonResponse({ success: false, error: "Failed to search users" }, 500);
+                }
+            }
+
+            // =====================================================
+            // Admin - User Detail View with History
+            // =====================================================
+
+            // GET /api/admin/users/:id - Get user detail with history (admin/superadmin only)
+            const adminUserDetailMatch = url.pathname.match(/^\/api\/admin\/users\/([^\/]+)$/);
+            if (adminUserDetailMatch && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const role = (payload.role || "").toUpperCase();
+                if (!["ADMIN", "SUPERADMIN"].includes(role)) {
+                    return jsonResponse({ success: false, error: "Access denied" }, 403);
+                }
+
+                const userId = adminUserDetailMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    // Get user profile (public data only, no private messages)
+                    const user = await env.proveloce_db.prepare(`
+                        SELECT id, name, email, phone, role, status, profile_photo_url, created_at, updated_at
+                        FROM users WHERE id = ?
+                    `).bind(userId).first();
+
+                    if (!user) {
+                        return jsonResponse({ success: false, error: "User not found" }, 404);
+                    }
+
+                    // Get user profile details
+                    const profile = await env.proveloce_db.prepare(
+                        "SELECT * FROM user_profiles WHERE user_id = ?"
+                    ).bind(userId).first();
+
+                    // Get connect requests (bookings)
+                    const connectRequests = await env.proveloce_db.prepare(`
+                        SELECT cr.*, 
+                               e.name as expert_name,
+                               c.name as customer_name
+                        FROM connect_requests cr
+                        LEFT JOIN users e ON e.id = cr.expert_id
+                        LEFT JOIN users c ON c.id = cr.customer_id
+                        WHERE cr.customer_id = ? OR cr.expert_id = ?
+                        ORDER BY cr.created_at DESC
+                        LIMIT 50
+                    `).bind(userId, userId).all();
+
+                    // Get session history (meetings)
+                    const sessions = await env.proveloce_db.prepare(`
+                        SELECT s.*,
+                               e.name as expert_name,
+                               c.name as customer_name
+                        FROM sessions s
+                        LEFT JOIN users e ON e.id = s.expert_id
+                        LEFT JOIN users c ON c.id = s.customer_id
+                        WHERE s.expert_id = ? OR s.customer_id = ?
+                        ORDER BY s.scheduled_date DESC
+                        LIMIT 50
+                    `).bind(userId, userId).all();
+
+                    // Get expert application (if exists)
+                    const expertApplication = await env.proveloce_db.prepare(
+                        "SELECT * FROM expert_applications WHERE user_id = ?"
+                    ).bind(userId).first();
+
+                    // NOTE: Private messages are intentionally excluded for privacy
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            user,
+                            profile: profile || null,
+                            bookings: connectRequests.results || [],
+                            sessions: sessions.results || [],
+                            expertApplication: expertApplication || null
+                        }
+                    });
+                } catch (error: any) {
+                    console.error("Error fetching user detail:", error);
+                    return jsonResponse({ success: false, error: "Failed to fetch user detail" }, 500);
+                }
+            }
+
+            // =====================================================
             // Default Route
             // =====================================================
 

@@ -19,6 +19,7 @@ import {
     Shield,
     ChevronLeft,
     ChevronRight,
+    MessageSquare,
     LogOut,
 } from 'lucide-react';
 import AppLogo from '../common/AppLogo';
@@ -47,6 +48,7 @@ const menuItems: MenuItem[] = [
     { label: 'Application Status', icon: <CheckCircle size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['CUSTOMER'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['CUSTOMER'] },
+    { label: 'Messages', icon: <MessageSquare size={20} />, path: '/messages', roles: ['CUSTOMER'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['CUSTOMER'] },
 
     // Expert Portal - Complete Navigation
@@ -58,6 +60,7 @@ const menuItems: MenuItem[] = [
     { label: 'Earnings', icon: <Wallet size={20} />, path: '/expert/earnings', roles: ['EXPERT'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['EXPERT'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['EXPERT'] },
+    { label: 'Messages', icon: <MessageSquare size={20} />, path: '/messages', roles: ['EXPERT'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['EXPERT'] },
 
     // Analyst
@@ -65,6 +68,7 @@ const menuItems: MenuItem[] = [
     { label: 'Verification', icon: <CheckCircle size={20} />, path: '/analyst/verification', roles: ['ANALYST'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['ANALYST'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['ANALYST'] },
+    { label: 'Messages', icon: <MessageSquare size={20} />, path: '/messages', roles: ['ANALYST'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['ANALYST'] },
 
     // Admin
@@ -75,6 +79,7 @@ const menuItems: MenuItem[] = [
     { label: 'Reports', icon: <BarChart3 size={20} />, path: '/admin/reports', roles: ['ADMIN'] },
     { label: 'User Management', icon: <Users size={20} />, path: '/admin/users', roles: ['ADMIN'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['ADMIN'] },
+    { label: 'Messages', icon: <MessageSquare size={20} />, path: '/messages', roles: ['ADMIN'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['ADMIN'] },
 
     // SuperAdmin
@@ -87,6 +92,7 @@ const menuItems: MenuItem[] = [
     { label: 'Configuration', icon: <Settings size={20} />, path: '/superadmin/config', roles: ['SUPERADMIN'] },
     { label: 'System Logs', icon: <FileText size={20} />, path: '/superadmin/logs', roles: ['SUPERADMIN'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['SUPERADMIN'] },
+    { label: 'Messages', icon: <MessageSquare size={20} />, path: '/messages', roles: ['SUPERADMIN'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['SUPERADMIN'] },
 ];
 

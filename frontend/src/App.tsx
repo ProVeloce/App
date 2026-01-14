@@ -35,6 +35,7 @@ const Profile = lazy(() => import('./pages/common/Profile'));
 const Notifications = lazy(() => import('./pages/common/Notifications'));
 const HelpDesk = lazy(() => import('./pages/common/HelpDesk'));
 const ChangePassword = lazy(() => import('./pages/common/ChangePassword'));
+const Messages = lazy(() => import('./pages/common/Messages'));
 
 // Customer Portal
 const ExpertApplication = lazy(() => import('./pages/customer/ExpertApplication'));
@@ -104,6 +105,7 @@ function App() {
                     <Route path="/notifications" element={<Notifications />} />
                     <Route path="/help-desk" element={<HelpDesk />} />
                     <Route path="/change-password" element={<ChangePassword />} />
+                    <Route path="/messages" element={<Messages />} />
                     <Route path="/session/:sessionId" element={<SessionRoom />} />
 
                     {/* Customer Routes */}
