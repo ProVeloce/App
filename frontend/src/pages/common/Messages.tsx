@@ -51,10 +51,25 @@ const Messages: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserResult[]>([]);
     const [searching, setSearching] = useState(false);
+    const [isSessionActive, setIsSessionActive] = useState<boolean>(false);
 
     useEffect(() => {
         fetchConversations();
+        const convInterval = setInterval(fetchConversations, 5000);
+        return () => clearInterval(convInterval);
     }, []);
+
+    useEffect(() => {
+        if (selectedUser) {
+            fetchMessages(selectedUser.id);
+            checkSessionStatus(selectedUser.id);
+            const msgInterval = setInterval(() => {
+                fetchMessages(selectedUser.id);
+                checkSessionStatus(selectedUser.id);
+            }, 1000); // 1s polling for real-time feel
+            return () => clearInterval(msgInterval);
+        }
+    }, [selectedUser?.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,7 +99,7 @@ const Messages: React.FC = () => {
             const data = await response.json();
             if (data.success) {
                 setMessages(data.data?.messages || []);
-                if (data.data?.otherUser) {
+                if (data.data?.otherUser && !selectedUser) {
                     setSelectedUser({
                         id: userId,
                         name: data.data.otherUser.name,
@@ -93,7 +108,27 @@ const Messages: React.FC = () => {
                 }
             }
         } catch (err) {
-            error('Failed to load messages');
+            console.error('Failed to load messages');
+        }
+    };
+
+    const checkSessionStatus = async (otherUserId: string) => {
+        try {
+            const response = await fetch(`${API_BASE}/api/sessions`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                const sessions = data.data?.sessions || [];
+                const active = sessions.some((s: any) =>
+                    s.status === 'live' &&
+                    ((s.expert_id === user?.id && s.customer_id === otherUserId) ||
+                        (s.customer_id === user?.id && s.expert_id === otherUserId))
+                );
+                setIsSessionActive(active);
+            }
+        } catch (err) {
+            console.error('Failed to check session status:', err);
         }
     };
 
@@ -261,7 +296,12 @@ const Messages: React.FC = () => {
                                 <div className="user-avatar">
                                     <Avatar src={selectedUser.avatar} name={selectedUser.name} />
                                 </div>
-                                <span>{selectedUser.name}</span>
+                                <div className="user-meta">
+                                    <span className="user-name">{selectedUser.name}</span>
+                                    <span className={`session-status ${isSessionActive ? 'active' : 'inactive'}`}>
+                                        {isSessionActive ? '● Active Session' : 'Offline'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -281,12 +321,12 @@ const Messages: React.FC = () => {
                         <form className="message-input-form" onSubmit={handleSendMessage}>
                             <input
                                 type="text"
-                                placeholder="Type a message..."
+                                placeholder={isSessionActive ? "Type a message..." : "Messaging is only available during active session"}
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
-                                disabled={sending}
+                                disabled={sending || !isSessionActive}
                             />
-                            <button type="submit" disabled={!newMessage.trim() || sending}>
+                            <button type="submit" disabled={!newMessage.trim() || sending || !isSessionActive}>
                                 <Send size={18} />
                             </button>
                         </form>

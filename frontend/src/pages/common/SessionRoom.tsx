@@ -45,7 +45,8 @@ const SessionRoom: React.FC = () => {
 
     useEffect(() => {
         fetchSession();
-        const interval = setInterval(fetchMessages, 3000); // Poll every 3 seconds
+        // WhatsApp-like live updates: Poll every 1 second when in active session
+        const interval = setInterval(fetchMessages, 1000);
         return () => clearInterval(interval);
     }, [sessionId]);
 
@@ -244,10 +245,14 @@ const SessionRoom: React.FC = () => {
                             type="text"
                             value={messageText}
                             onChange={(e) => setMessageText(e.target.value)}
-                            placeholder="Type a message..."
-                            disabled={sending}
+                            placeholder={session.status === 'live' ? "Type a message..." : "Messaging is only available when session is live"}
+                            disabled={sending || session.status !== 'live'}
                         />
-                        <button type="submit" className="send-btn" disabled={sending || !messageText.trim()}>
+                        <button
+                            type="submit"
+                            className="send-btn"
+                            disabled={sending || !messageText.trim() || session.status !== 'live'}
+                        >
                             <Send size={18} />
                         </button>
                     </form>

@@ -233,9 +233,30 @@
     height: 40px;
 }
 
-.selected-user-info span {
+.user-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.selected-user-info .user-name {
     font-weight: 600;
     color: var(--text-primary, #1f2937);
+    line-height: 1.2;
+}
+
+.session-status {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.session-status.active {
+    color: #10b981;
+    /* Success Green */
+}
+
+.session-status.inactive {
+    color: var(--text-tertiary, #9ca3af);
 }
 
 /* Message Thread */

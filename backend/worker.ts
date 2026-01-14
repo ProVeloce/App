@@ -5141,6 +5141,23 @@ export default {
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
                 try {
+                    // Restriction: Only allow messaging if session is 'live' and user is a participant
+                    const session = await env.proveloce_db.prepare(
+                        "SELECT status, expert_id, customer_id FROM sessions WHERE id = ?"
+                    ).bind(sessionId).first() as any;
+
+                    if (!session) {
+                        return jsonResponse({ success: false, error: "Session not found" }, 404);
+                    }
+
+                    if (session.status !== 'live') {
+                        return jsonResponse({ success: false, error: "Messaging is only allowed during active (live) sessions" }, 403);
+                    }
+
+                    if (payload.userId !== session.expert_id && payload.userId !== session.customer_id) {
+                        return jsonResponse({ success: false, error: "Unauthorized: You are not a participant in this session" }, 403);
+                    }
+
                     const body = await request.json() as { content: string; attachmentUrl?: string };
 
                     if (!body.content && !body.attachmentUrl) {
@@ -5277,6 +5294,20 @@ export default {
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
                 try {
+                    // Restriction: Only allow messaging if there is an active (live) session between these users
+                    const activeSession = await env.proveloce_db.prepare(`
+                        SELECT id FROM sessions 
+                        WHERE status = 'live' 
+                        AND ((expert_id = ? AND customer_id = ?) OR (expert_id = ? AND customer_id = ?))
+                    `).bind(payload.userId, receiverId, receiverId, payload.userId).first();
+
+                    if (!activeSession) {
+                        return jsonResponse({
+                            success: false,
+                            error: "Messaging is restricted: You can only message during an active session with this user."
+                        }, 403);
+                    }
+
                     const body = await request.json() as { content: string };
 
                     if (!body.content || body.content.trim() === "") {
