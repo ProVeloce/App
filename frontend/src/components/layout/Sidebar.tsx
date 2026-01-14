@@ -39,16 +39,22 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-    // Customer
-    { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
+    // Customer Portal - Complete Navigation
+    { label: 'Home', icon: <LayoutDashboard size={20} />, path: '/dashboard', roles: ['CUSTOMER'] },
+    { label: 'Search Expert', icon: <Users size={20} />, path: '/customer/experts', roles: ['CUSTOMER'] },
+    { label: 'Book Service', icon: <Briefcase size={20} />, path: '/customer/book-service', roles: ['CUSTOMER'] },
+    { label: 'My Bookings', icon: <ClipboardList size={20} />, path: '/customer/my-requests', roles: ['CUSTOMER'] },
     { label: 'Apply as Expert', icon: <FileText size={20} />, path: '/customer/apply-expert', roles: ['CUSTOMER'] },
-    { label: 'Application Status', icon: <ClipboardList size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
+    { label: 'Application Status', icon: <CheckCircle size={20} />, path: '/customer/application-status', roles: ['CUSTOMER'] },
     { label: 'Help Desk', icon: <HelpCircle size={20} />, path: '/help-desk', roles: ['CUSTOMER'] },
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['CUSTOMER'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['CUSTOMER'] },
 
-    // Expert
+    // Expert Portal - Complete Navigation
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/expert/dashboard', roles: ['EXPERT'] },
+    { label: 'View Requests', icon: <ClipboardList size={20} />, path: '/expert/connect-requests', roles: ['EXPERT'] },
+    { label: 'Appointments', icon: <Briefcase size={20} />, path: '/expert/appointments', roles: ['EXPERT'] },
+    { label: 'Messages', icon: <Bell size={20} />, path: '/expert/messages', roles: ['EXPERT'] },
     { label: 'Portfolio', icon: <FolderOpen size={20} />, path: '/expert/portfolio', roles: ['EXPERT'] },
     { label: 'Certifications', icon: <Award size={20} />, path: '/expert/certifications', roles: ['EXPERT'] },
     { label: 'Tasks', icon: <Briefcase size={20} />, path: '/expert/tasks', roles: ['EXPERT'] },
@@ -74,7 +80,7 @@ const menuItems: MenuItem[] = [
     { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications', roles: ['ADMIN'] },
     { label: 'Profile', icon: <UserIcon size={20} />, path: '/profile', roles: ['ADMIN'] },
 
-    // SuperAdmin - Ordered as requested: Dashboard > Expert Review > Task Assignment > Help Desk > Reports > User Management > Configuration > System Logs > Notifications > Profile
+    // SuperAdmin
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/superadmin/dashboard', roles: ['SUPERADMIN'] },
     { label: 'Expert Review', icon: <CheckCircle size={20} />, path: '/admin/expert-review', roles: ['SUPERADMIN'] },
     { label: 'Task Assignment', icon: <Briefcase size={20} />, path: '/admin/task-assignment', roles: ['SUPERADMIN'] },
