@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { User } from '../../services/api';
 import { notificationApi } from '../../services/api';
 import { Bell, Moon, Sun, LogOut, Search } from 'lucide-react';
+import Avatar from '../common/Avatar';
 import AppLogo from '../common/AppLogo';
 import './Header.css';
 
@@ -64,20 +65,7 @@ const Header: React.FC<HeaderProps> = ({ user, theme, onToggleTheme, onLogout })
                         onClick={() => setShowUserMenu(!showUserMenu)}
                     >
                         <div className="header-avatar">
-                            {user?.profile?.avatarUrl ? (
-                                <img
-                                    src={user.profile.avatarUrl}
-                                    alt={user.name}
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                        const fallback = document.createElement('span');
-                                        fallback.textContent = user?.name?.charAt(0).toUpperCase() || '?';
-                                        (e.target as HTMLImageElement).parentElement?.appendChild(fallback);
-                                    }}
-                                />
-                            ) : (
-                                <span>{user?.name?.charAt(0).toUpperCase()}</span>
-                            )}
+                            <Avatar src={user?.profile?.avatarUrl} name={user?.name || ''} />
                         </div>
                     </button>
 

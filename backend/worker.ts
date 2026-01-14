@@ -832,7 +832,7 @@ export default {
                 }
 
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, phone, role, profile_photo_url, created_at FROM users WHERE id = ?"
+                    "SELECT id, name, email, phone, role, profile_photo_url, profile_image, created_at FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const profile = await env.proveloce_db.prepare(
@@ -852,7 +852,7 @@ export default {
                             created_at: user?.created_at,
                             profile: {
                                 ...profile,
-                                avatarUrl: user?.profile_photo_url || null
+                                avatarUrl: user?.profile_image || user?.profile_photo_url || null
                             }
                         },
                         profileCompletion: profile ? 80 : 20
@@ -1016,10 +1016,11 @@ export default {
                     // Construct public URL
                     const avatarUrl = `https://pub-others.r2.dev/${r2Key}`;
 
-                    // Update user's profile_photo_url in database
+                    // Update user's profile_image and profile_photo_url in database
+                    // Append timestamp for cache busting if needed, but unique filename per upload is better
                     await env.proveloce_db.prepare(
-                        "UPDATE users SET profile_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-                    ).bind(avatarUrl, payload.userId).run();
+                        "UPDATE users SET profile_image = ?, profile_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).bind(avatarUrl, avatarUrl, payload.userId).run();
 
                     // Also update user_profiles.avatar_url if the table has that column
                     try {
@@ -1256,7 +1257,7 @@ export default {
                 const limit = parseInt(url.searchParams.get("limit") || "20");
                 const offset = (page - 1) * limit;
 
-                let query = "SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at FROM users WHERE 1=1";
+                let query = "SELECT id, name, email, phone, role, status, profile_image, profile_photo_url, email_verified, last_login_at, created_at FROM users WHERE 1=1";
                 const params: any[] = [];
 
                 // Role-based visibility restrictions
@@ -1283,7 +1284,7 @@ export default {
                 }
 
                 // Get total count
-                const countQuery = query.replace("SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at", "SELECT COUNT(*) as total");
+                const countQuery = query.replace("SELECT id, name, email, phone, role, status, profile_image, profile_photo_url, email_verified, last_login_at, created_at", "SELECT COUNT(*) as total");
                 const countResult = await env.proveloce_db.prepare(countQuery).bind(...params).first() as any;
                 const total = countResult?.total || 0;
 

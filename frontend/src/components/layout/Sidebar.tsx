@@ -22,6 +22,7 @@ import {
     MessageSquare,
     LogOut,
 } from 'lucide-react';
+import Avatar from '../common/Avatar';
 import AppLogo from '../common/AppLogo';
 import './Sidebar.css';
 
@@ -136,20 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }
             {!collapsed && user && (
                 <div className="sidebar-user">
                     <div className="user-avatar">
-                        {user.profile?.avatarUrl ? (
-                            <img
-                                src={user.profile.avatarUrl}
-                                alt={user.name}
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const fallback = document.createElement('span');
-                                    fallback.textContent = user.name.charAt(0).toUpperCase();
-                                    (e.target as HTMLImageElement).parentElement?.appendChild(fallback);
-                                }}
-                            />
-                        ) : (
-                            <span>{user.name.charAt(0).toUpperCase()}</span>
-                        )}
+                        <Avatar src={user.profile?.avatarUrl} name={user.name} />
                     </div>
                     <div className="user-info">
                         <span className="user-name">{user.name}</span>

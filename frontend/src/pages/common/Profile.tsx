@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Camera, Mail, Phone, MapPin, Calendar, User as UserIcon, Shield, CheckCircle, Save, Clock, Lock, Eye, EyeOff } from 'lucide-react';
+import Avatar from '../../components/common/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { profileApi, authApi } from '../../services/api';
-import { User, Mail, Phone, MapPin, Calendar, Camera, Save, Clock, Lock, Eye, EyeOff } from 'lucide-react';
 import './Profile.css';
 
 const profileSchema = z.object({
@@ -161,7 +163,8 @@ const Profile: React.FC = () => {
         try {
             await profileApi.updateAvatar(file);
             success('Avatar updated successfully');
-            await fetchProfile();
+            await refreshUser(); // Refresh global auth state (sidebar/header)
+            await fetchProfile(); // Refresh local profile data
         } catch (err) {
             error('Failed to update avatar');
         }
@@ -189,16 +192,9 @@ const Profile: React.FC = () => {
                         <div className="avatar-section">
                             <div className="avatar-wrapper">
                                 {profileData?.profile?.avatarUrl ? (
-                                    <img
+                                    <Avatar
                                         src={profileData.profile.avatarUrl}
-                                        alt={profileData.name}
-                                        onError={(e) => {
-                                            // Hide the broken image and show fallback
-                                            (e.target as HTMLImageElement).style.display = 'none';
-                                            const fallback = document.createElement('span');
-                                            fallback.textContent = profileData?.name?.charAt(0).toUpperCase() || '?';
-                                            (e.target as HTMLImageElement).parentElement?.appendChild(fallback);
-                                        }}
+                                        name={profileData.name}
                                     />
                                 ) : (
                                     <span>{profileData?.name?.charAt(0).toUpperCase()}</span>

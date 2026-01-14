@@ -16,6 +16,7 @@ import {
     X
 } from 'lucide-react';
 import { adminUserApi } from '../../services/api';
+import Avatar from '../../components/common/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { showGlobalError, showGlobalSuccess } from '../../context/ErrorContext';
 import './UserManagement.css';
@@ -27,6 +28,7 @@ interface UserData {
     phone: string;
     role: string;
     status: string;
+    profile_image?: string;
     profile_photo_url?: string;
     created_at: string;
     last_login_at?: string;
@@ -264,7 +266,10 @@ const UserManagement: React.FC = () => {
                                     <td>
                                         <div className="user-info-cell">
                                             <div className="user-avatar">
-                                                {u.name.charAt(0).toUpperCase()}
+                                                <Avatar
+                                                    src={u.profile_image || u.profile_photo_url}
+                                                    name={u.name}
+                                                />
                                             </div>
                                             <div className="user-details">
                                                 <span className="user-name">{u.name}</span>

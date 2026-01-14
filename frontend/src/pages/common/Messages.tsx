@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Search, Send, User, Plus, ArrowLeft } from 'lucide-react';
+import Avatar from '../../components/common/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
@@ -205,11 +205,7 @@ const Messages: React.FC = () => {
                             {searchResults.map(u => (
                                 <div key={u.id} className="search-result-item" onClick={() => handleStartConversation(u)}>
                                     <div className="user-avatar">
-                                        {u.profile_photo_url ? (
-                                            <img src={u.profile_photo_url} alt={u.name} />
-                                        ) : (
-                                            <span>{u.name.charAt(0).toUpperCase()}</span>
-                                        )}
+                                        <Avatar src={u.profile_photo_url} name={u.name} />
                                     </div>
                                     <div className="user-info">
                                         <span className="user-name">{u.name}</span>
@@ -238,11 +234,7 @@ const Messages: React.FC = () => {
                                 onClick={() => handleSelectConversation(conv)}
                             >
                                 <div className="conv-avatar">
-                                    {conv.other_user_avatar ? (
-                                        <img src={conv.other_user_avatar} alt={conv.other_user_name} />
-                                    ) : (
-                                        <span>{conv.other_user_name.charAt(0).toUpperCase()}</span>
-                                    )}
+                                    <Avatar src={conv.other_user_avatar} name={conv.other_user_name} />
                                 </div>
                                 <div className="conv-details">
                                     <div className="conv-header">
@@ -266,11 +258,7 @@ const Messages: React.FC = () => {
                         <div className="messages-header">
                             <div className="selected-user-info">
                                 <div className="user-avatar">
-                                    {selectedUser.avatar ? (
-                                        <img src={selectedUser.avatar} alt={selectedUser.name} />
-                                    ) : (
-                                        <span>{selectedUser.name.charAt(0).toUpperCase()}</span>
-                                    )}
+                                    <Avatar src={selectedUser.avatar} name={selectedUser.name} />
                                 </div>
                                 <span>{selectedUser.name}</span>
                             </div>
