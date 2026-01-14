@@ -320,8 +320,8 @@ export default {
                     }
 
                     const user = await env.proveloce_db.prepare(
-                        "SELECT id, name, email, role, org_id, suspended, password_hash FROM users WHERE email = ?"
-                    ).bind(body.email).first();
+                        "SELECT id, name, email, role, org_id, suspended, password_hash, status FROM users WHERE email = ?"
+                    ).bind(body.email).first() as any;
 
                     if (!user) {
                         return jsonResponse({ success: false, error: "Invalid email or password" }, 401);
@@ -356,6 +356,88 @@ export default {
                     });
                 } catch (e: any) {
                     return jsonResponse({ success: false, error: e.message || "Login failed" }, 400);
+                }
+            }
+
+            // =====================================================
+            // Email/Password Signup (POML v1.0)
+            // =====================================================
+
+            if (url.pathname === "/api/auth/signup" && request.method === "POST") {
+                try {
+                    const body = await request.json() as {
+                        email?: string;
+                        password?: string;
+                        name?: string;
+                        profile_photo_url?: string;
+                        bio?: string;
+                        dob?: string;
+                        phone?: string;
+                    };
+
+                    if (!body.email || !body.password || !body.name) {
+                        return jsonResponse({ success: false, error: "Email, password, and name are required" }, 400);
+                    }
+
+                    if (!env.proveloce_db) {
+                        return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                    }
+
+                    // Check if user already exists
+                    const existingUser = await env.proveloce_db.prepare(
+                        "SELECT id FROM users WHERE email = ?"
+                    ).bind(body.email).first();
+
+                    if (existingUser) {
+                        return jsonResponse({ success: false, error: "User already exists with this email" }, 409);
+                    }
+
+                    // Hash password
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(body.password);
+                    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    const passwordHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+                    const userId = crypto.randomUUID();
+                    const role = "customer"; // Default role as per POML
+                    const status = "active";
+
+                    await env.proveloce_db.prepare(
+                        "INSERT INTO users (id, name, email, password_hash, role, status, profile_photo_url, bio, dob, phone, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+                    ).bind(
+                        userId,
+                        body.name,
+                        body.email,
+                        passwordHash,
+                        role,
+                        status,
+                        body.profile_photo_url || null,
+                        body.bio || null,
+                        body.dob || null,
+                        body.phone || null
+                    ).run();
+
+                    // Log activity
+                    await env.proveloce_db.prepare(
+                        "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+                    ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "email", role, status })).run();
+
+                    const token = await createJWT(
+                        { userId: userId, email: body.email, name: body.name, role: role, org_id: 'ORG-DEFAULT' },
+                        env.JWT_ACCESS_SECRET || "default-secret"
+                    );
+
+                    return jsonResponse({
+                        success: true,
+                        message: "Signup successful",
+                        token,
+                        user: { id: userId, name: body.name, email: body.email, role: role, status: status }
+                    }, 201);
+
+                } catch (e: any) {
+                    console.error("Signup error:", e);
+                    return jsonResponse({ success: false, error: e.message || "Signup failed" }, 400);
                 }
             }
 
@@ -612,7 +694,7 @@ export default {
                             userId,
                             googleUser.name,
                             googleUser.email,
-                            "viewer",
+                            "customer",
                             "active",
                             1,
                             googleUser.picture || null
@@ -621,13 +703,13 @@ export default {
                         // Log activity
                         await env.proveloce_db.prepare(
                             "INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?, ?)"
-                        ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "google", role: "viewer", status: "active" })).run();
+                        ).bind(crypto.randomUUID(), userId, "USER_REGISTRATION", "user", userId, JSON.stringify({ method: "google", role: "customer", status: "active" })).run();
 
                         user = {
                             id: userId,
                             name: googleUser.name,
                             email: googleUser.email,
-                            role: "viewer",
+                            role: "customer",
                             status: "active"
                         };
                     } else {

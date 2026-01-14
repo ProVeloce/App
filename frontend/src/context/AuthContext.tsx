@@ -6,7 +6,15 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean }>;
-    signup: (name: string, email: string, phone: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    signup: (
+        name: string,
+        email: string,
+        phone: string,
+        password: string,
+        profile_photo_url?: string,
+        bio?: string,
+        dob?: string
+    ) => Promise<{ success: boolean; error?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
     checkAuth: () => Promise<User | null>;
@@ -215,9 +223,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const signup = async (name: string, email: string, phone: string, password: string) => {
+    const signup = async (
+        name: string,
+        email: string,
+        phone: string,
+        password: string,
+        profile_photo_url?: string,
+        bio?: string,
+        dob?: string
+    ) => {
         try {
-            const response = await authApi.signup({ name, email, phone, password });
+            const response = await authApi.signup({
+                name,
+                email,
+                phone,
+                password,
+                profile_photo_url,
+                bio,
+                dob
+            });
 
             if (response.data.success) {
                 return { success: true };

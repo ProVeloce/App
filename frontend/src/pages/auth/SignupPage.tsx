@@ -21,6 +21,9 @@ const signupSchema = z.object({
         .regex(/[0-9]/, 'Must contain at least one number')
         .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Must contain at least one special character'),
     confirmPassword: z.string(),
+    profile_photo_url: z.string().url('Invalid URL version').optional().or(z.literal('')),
+    bio: z.string().max(500, 'Bio must be less than 500 characters').optional().or(z.literal('')),
+    dob: z.string().optional().or(z.literal('')),
     acceptTerms: z.boolean().refine((val) => val === true, 'You must accept the terms'),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -61,11 +64,19 @@ const SignupPage: React.FC = () => {
     const onSubmit = async (data: SignupForm) => {
         setIsLoading(true);
         try {
-            const result = await signup(data.name, data.email, data.phone || '', data.password);
+            const result = await signup(
+                data.name,
+                data.email,
+                data.phone || '',
+                data.password,
+                data.profile_photo_url,
+                data.bio,
+                data.dob
+            );
 
             if (result.success) {
-                success('Account created! Please verify your email.');
-                navigate('/verify-otp', { state: { email: data.email, type: 'email_verification' } });
+                success('Account created! Welcome to ProVeloce.');
+                navigate('/dashboard');
             } else {
                 error(result.error || 'Signup failed');
             }
@@ -141,6 +152,50 @@ const SignupPage: React.FC = () => {
                                     />
                                 </div>
                                 {errors.phone && <span className="error-message">{errors.phone.message}</span>}
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="profile_photo_url">Profile Photo URL</label>
+                                <div className="input-wrapper">
+                                    <User size={18} className="input-icon" />
+                                    <input
+                                        id="profile_photo_url"
+                                        type="text"
+                                        placeholder="https://example.com/photo.jpg"
+                                        {...register('profile_photo_url')}
+                                        className={errors.profile_photo_url ? 'error' : ''}
+                                    />
+                                </div>
+                                {errors.profile_photo_url && <span className="error-message">{errors.profile_photo_url.message}</span>}
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="dob">Date of Birth</label>
+                                <div className="input-wrapper">
+                                    <Check size={18} className="input-icon" />
+                                    <input
+                                        id="dob"
+                                        type="date"
+                                        {...register('dob')}
+                                        className={errors.dob ? 'error' : ''}
+                                    />
+                                </div>
+                                {errors.dob && <span className="error-message">{errors.dob.message}</span>}
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="bio">Bio</label>
+                                <div className="input-wrapper">
+                                    <textarea
+                                        id="bio"
+                                        placeholder="Tell us a bit about yourself"
+                                        {...register('bio')}
+                                        className={errors.bio ? 'error' : ''}
+                                        rows={3}
+                                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                                    />
+                                </div>
+                                {errors.bio && <span className="error-message">{errors.bio.message}</span>}
                             </div>
 
                             <div className="form-group">

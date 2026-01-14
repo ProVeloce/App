@@ -198,8 +198,15 @@ api.interceptors.response.use(
 
 // Auth API
 export const authApi = {
-    signup: (data: { name: string; email: string; phone?: string; password: string }) =>
-        api.post<ApiResponse>('/auth/signup', data),
+    signup: (data: {
+        name: string;
+        email: string;
+        phone?: string;
+        password: string;
+        profile_photo_url?: string;
+        bio?: string;
+        dob?: string;
+    }) => api.post<ApiResponse>('/auth/signup', data),
 
     login: (data: { email: string; password: string }) =>
         api.post<ApiResponse<{ user: User; tokens: AuthTokens }>>('/auth/login', data),
