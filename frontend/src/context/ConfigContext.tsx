@@ -182,7 +182,8 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return DEFAULT_CONFIG;
         }
 
-        const getValue = (category: string, key: string, defaultValue: any): any => {
+        // Helper to get value from system_config table
+        const getSystemValue = (category: string, key: string, defaultValue: any): any => {
             const cfg = rawConfigs.find(c => c.category === category && c.key === key);
             if (!cfg) return defaultValue;
             
@@ -192,38 +193,47 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return cfg.value || defaultValue;
         };
 
-        // Helper to get live config value with fallback
-        const getLiveValue = (key: string, defaultValue: any): any => {
-            const value = liveConfig[key];
+        // Helper to parse live config values with type coercion
+        const parseLiveValue = (value: string | undefined, defaultValue: any): any => {
             if (value === undefined) return defaultValue;
             // Auto-parse boolean strings
             if (value === 'true') return true;
             if (value === 'false') return false;
-            // Auto-parse numbers
+            // Auto-parse numbers (only if purely numeric)
             const num = parseInt(value, 10);
             if (!isNaN(num) && String(num) === value) return num;
             return value;
         };
 
-        // Check for maintenance mode in multiple sources:
-        // 1. Live config (configuration table) - highest priority for real-time updates
-        // 2. System category in system_config
-        // 3. Features category (legacy)
-        const maintenanceFromLive = liveConfig['maintenance_mode'];
-        const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
-        const maintenanceFromFeatures = rawConfigs.find(c => c.category === 'features' && c.key === 'maintenance_mode');
-        const maintenanceModeValue = maintenanceFromLive ?? maintenanceFromSystem?.value ?? maintenanceFromFeatures?.value ?? 'false';
+        // Universal getValue that checks liveConfig first (real-time), then system_config (database)
+        // This gives Superadmin real-time control over ALL settings
+        const getValue = (category: string, key: string, defaultValue: any): any => {
+            // Check live config with category.key format first (highest priority)
+            const fullKey = `${category}.${key}`;
+            if (liveConfig[fullKey] !== undefined) {
+                return parseLiveValue(liveConfig[fullKey], defaultValue);
+            }
+            // Check live config with just key (for backward compatibility)
+            if (liveConfig[key] !== undefined) {
+                return parseLiveValue(liveConfig[key], defaultValue);
+            }
+            // Fall back to system_config table
+            return getSystemValue(category, key, defaultValue);
+        };
 
-        // Get maintenance message and end time from live config or system_config
-        const maintenanceMessage = liveConfig['maintenance_message'] || getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage);
-        const maintenanceEndTime = liveConfig['maintenance_end_time'] || getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null;
+        // Check for maintenance mode in multiple sources
+        const maintenanceFromLive = liveConfig['maintenance_mode'] ?? liveConfig['system.maintenance_mode'];
+        const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
+        const maintenanceModeValue = maintenanceFromLive ?? maintenanceFromSystem?.value ?? 'false';
 
         return {
+            // System & Maintenance
             system: {
                 maintenanceMode: String(maintenanceModeValue) === 'true',
-                maintenanceMessage: maintenanceMessage,
-                maintenanceEndTime: maintenanceEndTime,
+                maintenanceMessage: getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage),
+                maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null,
             },
+            // Authentication & Security
             auth: {
                 sessionTimeout: getValue('auth', 'session_timeout', DEFAULT_CONFIG.auth.sessionTimeout),
                 maxLoginAttempts: getValue('auth', 'max_login_attempts', DEFAULT_CONFIG.auth.maxLoginAttempts),
@@ -231,38 +241,44 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 passwordMinLength: getValue('auth', 'password_min_length', DEFAULT_CONFIG.auth.passwordMinLength),
                 requireMfa: getValue('auth', 'require_mfa', DEFAULT_CONFIG.auth.requireMfa),
             },
+            // User Management
             users: {
                 defaultRole: getValue('users', 'default_user_role', DEFAULT_CONFIG.users.defaultRole),
                 requireEmailVerification: getValue('users', 'require_email_verification', DEFAULT_CONFIG.users.requireEmailVerification),
                 allowSelfRegistration: getValue('users', 'allow_self_registration', DEFAULT_CONFIG.users.allowSelfRegistration),
             },
+            // Notifications
             notifications: {
                 emailEnabled: getValue('notifications', 'email_enabled', DEFAULT_CONFIG.notifications.emailEnabled),
                 smsEnabled: getValue('notifications', 'sms_enabled', DEFAULT_CONFIG.notifications.smsEnabled),
                 inAppEnabled: getValue('notifications', 'in_app_enabled', DEFAULT_CONFIG.notifications.inAppEnabled),
                 digestFrequency: getValue('notifications', 'digest_frequency', DEFAULT_CONFIG.notifications.digestFrequency),
             },
+            // Help Desk & Ticketing
             ticketing: {
                 autoAssign: getValue('ticketing', 'auto_assign', DEFAULT_CONFIG.ticketing.autoAssign),
                 defaultPriority: getValue('ticketing', 'default_priority', DEFAULT_CONFIG.ticketing.defaultPriority),
                 escalationHours: getValue('ticketing', 'escalation_hours', DEFAULT_CONFIG.ticketing.escalationHours),
                 autoCloseAfterDays: getValue('ticketing', 'auto_close_days', DEFAULT_CONFIG.ticketing.autoCloseAfterDays),
             },
+            // UI/UX Preferences
             ui: {
                 defaultTheme: getValue('ui', 'default_theme', DEFAULT_CONFIG.ui.defaultTheme) as 'light' | 'dark' | 'system',
                 defaultLanguage: getValue('ui', 'default_language', DEFAULT_CONFIG.ui.defaultLanguage),
                 dateFormat: getValue('ui', 'date_format', DEFAULT_CONFIG.ui.dateFormat),
                 timeFormat: getValue('ui', 'time_format', DEFAULT_CONFIG.ui.timeFormat),
             },
+            // Analytics & Reporting
             analytics: {
                 dataRetentionDays: getValue('analytics', 'data_retention_days', DEFAULT_CONFIG.analytics.dataRetentionDays),
                 defaultExportFormat: getValue('analytics', 'default_export_format', DEFAULT_CONFIG.analytics.defaultExportFormat),
             },
+            // Feature Toggles
             features: {
-                expertApplications: getLiveValue('expert_applications', getValue('features', 'expert_applications', DEFAULT_CONFIG.features.expertApplications)),
-                connectRequests: getLiveValue('connect_requests', getValue('features', 'connect_requests', DEFAULT_CONFIG.features.connectRequests)),
-                liveChat: getLiveValue('live_chat', getValue('features', 'live_chat', DEFAULT_CONFIG.features.liveChat)),
-                videoSessions: getLiveValue('video_sessions', getValue('features', 'video_sessions', DEFAULT_CONFIG.features.videoSessions)),
+                expertApplications: getValue('features', 'expert_applications', DEFAULT_CONFIG.features.expertApplications),
+                connectRequests: getValue('features', 'connect_requests', DEFAULT_CONFIG.features.connectRequests),
+                liveChat: getValue('features', 'live_chat', DEFAULT_CONFIG.features.liveChat),
+                videoSessions: getValue('features', 'video_sessions', DEFAULT_CONFIG.features.videoSessions),
             },
         };
     }, [rawConfigs, liveConfig]);

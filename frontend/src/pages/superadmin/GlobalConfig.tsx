@@ -148,33 +148,30 @@ const GlobalConfig: React.FC = () => {
             // Save to system_config table
             await configApi.bulkUpdateConfig(updates);
 
-            // Also save critical configs to configuration table for live polling
-            // Find the configs being updated and sync key ones to the live config table
+            // Sync ALL changed configs to configuration table for live polling
+            // This enables real-time updates across all portals for ALL configuration categories
             const liveConfigUpdates: Array<{ config_key: string; config_value: string }> = [];
             
             for (const [id, value] of pendingChanges.entries()) {
                 const cfg = configs.find(c => c.id === id);
                 if (cfg) {
-                    // Map system_config keys to configuration table keys for live updates
-                    const keyMappings: Record<string, string> = {
-                        'maintenance_mode': 'maintenance_mode',
-                        'maintenance_message': 'maintenance_message',
-                        'maintenance_end_time': 'maintenance_end_time',
-                        'time_format': 'time_format',
-                        'date_format': 'date_format',
-                        'default_theme': 'default_theme',
-                    };
+                    // Create a unique key combining category and key for the configuration table
+                    // This ensures all config values are stored and can be fetched live
+                    const configKey = `${cfg.category}.${cfg.key}`;
+                    liveConfigUpdates.push({
+                        config_key: configKey,
+                        config_value: value
+                    });
                     
-                    if (keyMappings[cfg.key]) {
-                        liveConfigUpdates.push({
-                            config_key: keyMappings[cfg.key],
-                            config_value: value
-                        });
-                    }
+                    // Also store with just the key for backward compatibility and easier access
+                    liveConfigUpdates.push({
+                        config_key: cfg.key,
+                        config_value: value
+                    });
                 }
             }
 
-            // Sync to live configuration table if there are updates
+            // Sync ALL configs to live configuration table for real-time updates
             if (liveConfigUpdates.length > 0) {
                 try {
                     await axios.put('/api/configuration/bulk', { configs: liveConfigUpdates });
@@ -183,7 +180,7 @@ const GlobalConfig: React.FC = () => {
                 }
             }
 
-            success(`${updates.length} configuration(s) saved successfully. Changes applied globally.`);
+            success(`${updates.length} configuration(s) saved successfully. Changes applied globally in real-time.`);
             setPendingChanges(new Map());
             
             // Refresh local configs
