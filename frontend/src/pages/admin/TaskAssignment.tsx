@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, X, Calendar, User, Clock, CheckCircle, Loader } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+    Briefcase, Plus, X, Calendar, User, Clock, CheckCircle, Loader, 
+    Search, ChevronDown, RefreshCw, Mail, Shield
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
@@ -19,10 +22,171 @@ interface Task {
 interface UserData {
     id: string;
     name: string;
+    email: string;
     role: string;
+    status?: string;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend.proveloce.com';
+
+// Searchable Expert Dropdown Component
+interface ExpertSelectorProps {
+    experts: UserData[];
+    selectedId: string;
+    onSelect: (id: string) => void;
+    placeholder?: string;
+    loading?: boolean;
+}
+
+const ExpertSelector: React.FC<ExpertSelectorProps> = ({ 
+    experts, 
+    selectedId, 
+    onSelect, 
+    placeholder = "Select Expert",
+    loading = false
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Filter experts based on search
+    const filteredExperts = useMemo(() => {
+        if (!searchQuery.trim()) return experts;
+        const query = searchQuery.toLowerCase();
+        return experts.filter(expert => 
+            expert.name?.toLowerCase().includes(query) ||
+            expert.email?.toLowerCase().includes(query) ||
+            expert.role?.toLowerCase().includes(query)
+        );
+    }, [experts, searchQuery]);
+
+    const selectedExpert = experts.find(e => e.id === selectedId);
+
+    const handleSelect = (id: string) => {
+        onSelect(id);
+        setIsOpen(false);
+        setSearchQuery('');
+    };
+
+    const handleClear = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onSelect('');
+        setSearchQuery('');
+    };
+
+    return (
+        <div className="expert-selector" ref={dropdownRef}>
+            <button 
+                type="button"
+                className={`expert-selector-trigger ${isOpen ? 'open' : ''} ${selectedId ? 'has-value' : ''}`}
+                onClick={() => {
+                    setIsOpen(!isOpen);
+                    if (!isOpen) {
+                        setTimeout(() => inputRef.current?.focus(), 100);
+                    }
+                }}
+            >
+                {loading ? (
+                    <span className="selector-placeholder">
+                        <Loader size={14} className="spin" /> Loading experts...
+                    </span>
+                ) : selectedExpert ? (
+                    <span className="selected-expert">
+                        <User size={14} />
+                        <span className="expert-name">{selectedExpert.name}</span>
+                        <span className="expert-role">{selectedExpert.role}</span>
+                    </span>
+                ) : (
+                    <span className="selector-placeholder">
+                        <User size={14} />
+                        {placeholder}
+                    </span>
+                )}
+                <div className="selector-actions">
+                    {selectedId && (
+                        <span className="clear-btn" onClick={handleClear} title="Clear selection">
+                            <X size={14} />
+                        </span>
+                    )}
+                    <ChevronDown size={16} className={`chevron ${isOpen ? 'rotated' : ''}`} />
+                </div>
+            </button>
+
+            {isOpen && (
+                <div className="expert-dropdown">
+                    <div className="dropdown-search">
+                        <Search size={16} />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="Search by name, email, or role..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                    
+                    <div className="dropdown-list">
+                        <button 
+                            type="button"
+                            className={`dropdown-item unassign ${!selectedId ? 'selected' : ''}`}
+                            onClick={() => handleSelect('')}
+                        >
+                            <User size={14} />
+                            <span>Unassigned</span>
+                        </button>
+                        
+                        {filteredExperts.length === 0 ? (
+                            <div className="dropdown-empty">
+                                <Search size={20} />
+                                <span>No experts found</span>
+                            </div>
+                        ) : (
+                            filteredExperts.map(expert => (
+                                <button
+                                    key={expert.id}
+                                    type="button"
+                                    className={`dropdown-item ${expert.id === selectedId ? 'selected' : ''}`}
+                                    onClick={() => handleSelect(expert.id)}
+                                >
+                                    <div className="expert-avatar">
+                                        {expert.name?.charAt(0)?.toUpperCase() || 'E'}
+                                    </div>
+                                    <div className="expert-info">
+                                        <span className="expert-name">{expert.name || 'Unnamed Expert'}</span>
+                                        <span className="expert-email">
+                                            <Mail size={10} /> {expert.email}
+                                        </span>
+                                    </div>
+                                    <span className={`expert-role-badge ${expert.role?.toLowerCase()}`}>
+                                        <Shield size={10} />
+                                        {expert.role}
+                                    </span>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                    
+                    <div className="dropdown-footer">
+                        Showing {filteredExperts.length} of {experts.length} experts
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const TaskAssignment: React.FC = () => {
     const { user } = useAuth();
@@ -34,6 +198,7 @@ const TaskAssignment: React.FC = () => {
     const [showModal, setShowModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [assignableUsers, setAssignableUsers] = useState<UserData[]>([]);
+    const [loadingExperts, setLoadingExperts] = useState(false);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -69,16 +234,41 @@ const TaskAssignment: React.FC = () => {
     };
 
     const fetchAssignableUsers = async () => {
+        setLoadingExperts(true);
         try {
+            // Fetch experts - the API returns users with role EXPERT
             const response = await fetch(`${API_BASE}/api/users?roles=EXPERT`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await response.json();
+            
             if (data.success) {
-                setAssignableUsers(data.data?.users || []);
+                // Handle different response structures
+                let users: UserData[] = [];
+                
+                if (data.data?.data && Array.isArray(data.data.data)) {
+                    // Structure: { success: true, data: { data: [...] } }
+                    users = data.data.data;
+                } else if (data.data?.users && Array.isArray(data.data.users)) {
+                    // Structure: { success: true, data: { users: [...] } }
+                    users = data.data.users;
+                } else if (Array.isArray(data.data)) {
+                    // Structure: { success: true, data: [...] }
+                    users = data.data;
+                }
+                
+                // Filter to only include active experts
+                const activeExperts = users.filter(u => 
+                    u.status !== 'inactive' && u.status !== 'suspended'
+                );
+                
+                setAssignableUsers(activeExperts);
             }
         } catch (err) {
             console.error('Failed to fetch users:', err);
+            error('Failed to load experts');
+        } finally {
+            setLoadingExperts(false);
         }
     };
 
@@ -157,7 +347,8 @@ const TaskAssignment: React.FC = () => {
 
             const data = await response.json();
             if (data.success) {
-                success('Task assigned successfully');
+                const expertName = assignableUsers.find(u => u.id === expertId)?.name;
+                success(expertId ? `Task assigned to ${expertName}` : 'Task unassigned');
                 fetchTasks();
             } else {
                 error(data.error || 'Failed to assign task');
@@ -201,12 +392,31 @@ const TaskAssignment: React.FC = () => {
                     <h1><Briefcase size={28} /> Task Assignment</h1>
                     <p>Create and assign tasks to experts</p>
                 </div>
-                {canCreateTask && (
-                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                        <Plus size={18} /> Create Task
+                <div className="header-actions">
+                    <button 
+                        className="btn btn-secondary" 
+                        onClick={() => { fetchTasks(); fetchAssignableUsers(); }}
+                        title="Refresh"
+                    >
+                        <RefreshCw size={16} />
                     </button>
-                )}
+                    {canCreateTask && (
+                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                            <Plus size={18} /> Create Task
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {/* Expert count indicator */}
+            {canCreateTask && (
+                <div className="experts-info">
+                    <User size={14} />
+                    <span>
+                        {loadingExperts ? 'Loading experts...' : `${assignableUsers.length} expert(s) available for assignment`}
+                    </span>
+                </div>
+            )}
 
             {loading ? (
                 <div className="loading-state">
@@ -253,16 +463,13 @@ const TaskAssignment: React.FC = () => {
                                     <td>{getStatusBadge(task.status)}</td>
                                     {canCreateTask && (
                                         <td className="actions-cell">
-                                            <select
-                                                className="assign-select"
-                                                value={task.assigned_to || ''}
-                                                onChange={(e) => handleAssignTask(task.id, e.target.value)}
-                                            >
-                                                <option value="">-- Assign To --</option>
-                                                {assignableUsers.map(u => (
-                                                    <option key={u.id} value={u.id}>{u.name}</option>
-                                                ))}
-                                            </select>
+                                            <ExpertSelector
+                                                experts={assignableUsers}
+                                                selectedId={task.assigned_to || ''}
+                                                onSelect={(id) => handleAssignTask(task.id, id)}
+                                                placeholder="Assign Expert"
+                                                loading={loadingExperts}
+                                            />
                                             <select
                                                 className="status-select"
                                                 value={task.status}
@@ -312,27 +519,23 @@ const TaskAssignment: React.FC = () => {
                                     required
                                 />
                             </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label>Assign To</label>
-                                    <select
-                                        value={assignedTo}
-                                        onChange={(e) => setAssignedTo(e.target.value)}
-                                    >
-                                        <option value="">-- Select Expert --</option>
-                                        {assignableUsers.map(u => (
-                                            <option key={u.id} value={u.id}>{u.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Due Date</label>
-                                    <input
-                                        type="date"
-                                        value={dueDate}
-                                        onChange={(e) => setDueDate(e.target.value)}
-                                    />
-                                </div>
+                            <div className="form-group">
+                                <label>Assign To Expert</label>
+                                <ExpertSelector
+                                    experts={assignableUsers}
+                                    selectedId={assignedTo}
+                                    onSelect={setAssignedTo}
+                                    placeholder="Select an expert..."
+                                    loading={loadingExperts}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Due Date</label>
+                                <input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                />
                             </div>
                             <div className="modal-actions">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
