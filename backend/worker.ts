@@ -1744,6 +1744,262 @@ export default {
                 return jsonResponse({ success: true, data: stats });
             }
 
+            // GET /api/admin/analytics - Comprehensive analytics for reports (Admin/SuperAdmin)
+            if (url.pathname === "/api/admin/analytics" && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                // Parse query params for filters
+                const startDate = url.searchParams.get("startDate");
+                const endDate = url.searchParams.get("endDate");
+                const roleFilter = url.searchParams.get("role");
+
+                // Build date filter clause
+                let dateClause = "";
+                const dateParams: string[] = [];
+                if (startDate) {
+                    dateClause += " AND created_at >= ?";
+                    dateParams.push(startDate);
+                }
+                if (endDate) {
+                    dateClause += " AND created_at <= ?";
+                    dateParams.push(endDate + "T23:59:59");
+                }
+
+                try {
+                    // 1. User Statistics
+                    const userStats = {
+                        total: 0,
+                        byRole: {} as Record<string, number>,
+                        byStatus: {} as Record<string, number>,
+                        growth: [] as { date: string; count: number }[]
+                    };
+
+                    // Total users with optional role filter
+                    let userQuery = "SELECT COUNT(*) as count FROM users WHERE 1=1" + dateClause;
+                    const userParams = [...dateParams];
+                    if (roleFilter) {
+                        userQuery += " AND LOWER(role) = LOWER(?)";
+                        userParams.push(roleFilter);
+                    }
+                    const totalUsers = await env.proveloce_db.prepare(userQuery).bind(...userParams).first() as any;
+                    userStats.total = totalUsers?.count || 0;
+
+                    // Users by role
+                    const roleQuery = await env.proveloce_db.prepare(
+                        "SELECT role, COUNT(*) as count FROM users GROUP BY role"
+                    ).all();
+                    for (const row of roleQuery.results as any[]) {
+                        userStats.byRole[row.role?.toLowerCase() || 'unknown'] = row.count;
+                    }
+
+                    // Users by status
+                    const statusQuery = await env.proveloce_db.prepare(
+                        "SELECT status, COUNT(*) as count FROM users GROUP BY status"
+                    ).all();
+                    for (const row of statusQuery.results as any[]) {
+                        userStats.byStatus[row.status?.toLowerCase() || 'unknown'] = row.count;
+                    }
+
+                    // User growth (last 30 days)
+                    const growthQuery = await env.proveloce_db.prepare(`
+                        SELECT DATE(created_at) as date, COUNT(*) as count 
+                        FROM users 
+                        WHERE created_at >= datetime('now', '-30 days')
+                        GROUP BY DATE(created_at) 
+                        ORDER BY date ASC
+                    `).all();
+                    userStats.growth = (growthQuery.results as any[]).map(r => ({
+                        date: r.date,
+                        count: r.count
+                    }));
+
+                    // 2. Ticket Statistics
+                    const ticketStats = {
+                        total: 0,
+                        byStatus: {} as Record<string, number>,
+                        byCategory: {} as Record<string, number>,
+                        byPriority: {} as Record<string, number>,
+                        trend: [] as { date: string; count: number }[]
+                    };
+
+                    // Total tickets
+                    const totalTickets = await env.proveloce_db.prepare(
+                        "SELECT COUNT(*) as count FROM tickets"
+                    ).first() as any;
+                    ticketStats.total = totalTickets?.count || 0;
+
+                    // Tickets by status
+                    const ticketStatusQuery = await env.proveloce_db.prepare(
+                        "SELECT status, COUNT(*) as count FROM tickets GROUP BY status"
+                    ).all();
+                    for (const row of ticketStatusQuery.results as any[]) {
+                        ticketStats.byStatus[row.status?.toLowerCase() || 'unknown'] = row.count;
+                    }
+
+                    // Tickets by category
+                    const ticketCategoryQuery = await env.proveloce_db.prepare(
+                        "SELECT category, COUNT(*) as count FROM tickets GROUP BY category"
+                    ).all();
+                    for (const row of ticketCategoryQuery.results as any[]) {
+                        ticketStats.byCategory[row.category || 'uncategorized'] = row.count;
+                    }
+
+                    // Tickets by priority
+                    const ticketPriorityQuery = await env.proveloce_db.prepare(
+                        "SELECT priority, COUNT(*) as count FROM tickets WHERE priority IS NOT NULL GROUP BY priority"
+                    ).all();
+                    for (const row of ticketPriorityQuery.results as any[]) {
+                        ticketStats.byPriority[row.priority?.toLowerCase() || 'normal'] = row.count;
+                    }
+
+                    // Ticket trend (last 14 days)
+                    const ticketTrendQuery = await env.proveloce_db.prepare(`
+                        SELECT DATE(created_at) as date, COUNT(*) as count 
+                        FROM tickets 
+                        WHERE created_at >= datetime('now', '-14 days')
+                        GROUP BY DATE(created_at) 
+                        ORDER BY date ASC
+                    `).all();
+                    ticketStats.trend = (ticketTrendQuery.results as any[]).map(r => ({
+                        date: r.date,
+                        count: r.count
+                    }));
+
+                    // 3. Session Statistics
+                    const sessionStats = {
+                        total: 0,
+                        byStatus: {} as Record<string, number>,
+                        trend: [] as { date: string; count: number }[]
+                    };
+
+                    try {
+                        const totalSessions = await env.proveloce_db.prepare(
+                            "SELECT COUNT(*) as count FROM sessions"
+                        ).first() as any;
+                        sessionStats.total = totalSessions?.count || 0;
+
+                        const sessionStatusQuery = await env.proveloce_db.prepare(
+                            "SELECT status, COUNT(*) as count FROM sessions GROUP BY status"
+                        ).all();
+                        for (const row of sessionStatusQuery.results as any[]) {
+                            sessionStats.byStatus[row.status?.toLowerCase() || 'unknown'] = row.count;
+                        }
+
+                        const sessionTrendQuery = await env.proveloce_db.prepare(`
+                            SELECT DATE(scheduled_date) as date, COUNT(*) as count 
+                            FROM sessions 
+                            WHERE scheduled_date >= datetime('now', '-30 days')
+                            GROUP BY DATE(scheduled_date) 
+                            ORDER BY date ASC
+                        `).all();
+                        sessionStats.trend = (sessionTrendQuery.results as any[]).map(r => ({
+                            date: r.date,
+                            count: r.count
+                        }));
+                    } catch (e) {
+                        console.error("Error fetching session stats:", e);
+                    }
+
+                    // 4. Activity Statistics
+                    const activityStats = {
+                        total: 0,
+                        byAction: {} as Record<string, number>,
+                        recent: [] as any[]
+                    };
+
+                    try {
+                        const totalActivity = await env.proveloce_db.prepare(
+                            "SELECT COUNT(*) as count FROM activity_logs"
+                        ).first() as any;
+                        activityStats.total = totalActivity?.count || 0;
+
+                        const activityByAction = await env.proveloce_db.prepare(
+                            "SELECT action, COUNT(*) as count FROM activity_logs GROUP BY action ORDER BY count DESC LIMIT 10"
+                        ).all();
+                        for (const row of activityByAction.results as any[]) {
+                            activityStats.byAction[row.action || 'unknown'] = row.count;
+                        }
+
+                        const recentActivity = await env.proveloce_db.prepare(`
+                            SELECT al.*, u.name as user_name 
+                            FROM activity_logs al 
+                            LEFT JOIN users u ON al.user_id = u.id 
+                            ORDER BY al.created_at DESC LIMIT 10
+                        `).all();
+                        activityStats.recent = recentActivity.results as any[];
+                    } catch (e) {
+                        console.error("Error fetching activity stats:", e);
+                    }
+
+                    // 5. Expert Application Statistics
+                    const applicationStats = {
+                        total: 0,
+                        byStatus: {} as Record<string, number>
+                    };
+
+                    try {
+                        const totalApps = await env.proveloce_db.prepare(
+                            "SELECT COUNT(*) as count FROM expert_applications"
+                        ).first() as any;
+                        applicationStats.total = totalApps?.count || 0;
+
+                        const appStatusQuery = await env.proveloce_db.prepare(
+                            "SELECT status, COUNT(*) as count FROM expert_applications GROUP BY status"
+                        ).all();
+                        for (const row of appStatusQuery.results as any[]) {
+                            applicationStats.byStatus[row.status?.toLowerCase() || 'unknown'] = row.count;
+                        }
+                    } catch (e) {
+                        console.error("Error fetching application stats:", e);
+                    }
+
+                    // 6. Connect Request Statistics
+                    const connectStats = {
+                        total: 0,
+                        byStatus: {} as Record<string, number>
+                    };
+
+                    try {
+                        const totalConnect = await env.proveloce_db.prepare(
+                            "SELECT COUNT(*) as count FROM connect_requests"
+                        ).first() as any;
+                        connectStats.total = totalConnect?.count || 0;
+
+                        const connectStatusQuery = await env.proveloce_db.prepare(
+                            "SELECT status, COUNT(*) as count FROM connect_requests GROUP BY status"
+                        ).all();
+                        for (const row of connectStatusQuery.results as any[]) {
+                            connectStats.byStatus[row.status?.toLowerCase() || 'unknown'] = row.count;
+                        }
+                    } catch (e) {
+                        console.error("Error fetching connect stats:", e);
+                    }
+
+                    return jsonResponse({
+                        success: true,
+                        data: {
+                            users: userStats,
+                            tickets: ticketStats,
+                            sessions: sessionStats,
+                            activities: activityStats,
+                            applications: applicationStats,
+                            connects: connectStats,
+                            generatedAt: new Date().toISOString()
+                        }
+                    });
+                } catch (err) {
+                    console.error("Analytics error:", err);
+                    return jsonResponse({ success: false, error: "Failed to fetch analytics data" }, 500);
+                }
+            }
+
             // GET /api/admin/logs - Activity logs (SUPERADMIN only)
             if (url.pathname === "/api/admin/logs" && request.method === "GET") {
                 const auth = await checkAdminRole(request);

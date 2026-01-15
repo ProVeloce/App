@@ -324,6 +324,42 @@ export const adminApi = {
 
     getDashboard: () =>
         api.get<ApiResponse<{ stats: any }>>('/admin/stats'),
+
+    getAnalytics: (params?: { startDate?: string; endDate?: string; role?: string }) =>
+        api.get<ApiResponse<{
+            users: {
+                total: number;
+                byRole: Record<string, number>;
+                byStatus: Record<string, number>;
+                growth: { date: string; count: number }[];
+            };
+            tickets: {
+                total: number;
+                byStatus: Record<string, number>;
+                byCategory: Record<string, number>;
+                byPriority: Record<string, number>;
+                trend: { date: string; count: number }[];
+            };
+            sessions: {
+                total: number;
+                byStatus: Record<string, number>;
+                trend: { date: string; count: number }[];
+            };
+            activities: {
+                total: number;
+                byAction: Record<string, number>;
+                recent: any[];
+            };
+            applications: {
+                total: number;
+                byStatus: Record<string, number>;
+            };
+            connects: {
+                total: number;
+                byStatus: Record<string, number>;
+            };
+            generatedAt: string;
+        }>>('/admin/analytics', { params }),
 };
 
 // Profile API
