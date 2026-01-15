@@ -430,23 +430,34 @@ const TaskAssignment: React.FC = () => {
 
             const data = await response.json();
             if (data.success) {
-                const expertName = expertId 
-                    ? (data.data?.task?.assigned_user_name || assignableUsers.find(u => u.id === expertId)?.name)
-                    : null;
-                success(expertId ? `Task assigned to ${expertName}` : 'Task unassigned');
+                // Get expert details from various sources
+                const serverExpert = data.data?.task?.assigned_user_name;
+                const localExpert = assignableUsers.find(u => u.id === expertId);
+                const expertName = serverExpert || localExpert?.name || null;
+                const expertEmail = data.data?.task?.assigned_user_email || localExpert?.email || null;
+                
+                success(expertId ? `Task assigned to ${expertName || 'expert'}` : 'Task unassigned');
                 
                 // Update local state with response data or fallback
                 setTasks(prev => prev.map(t => {
                     if (t.id === taskId) {
                         if (data.data?.task) {
-                            // Use server response if available
-                            return data.data.task;
+                            // Use server response if available - merge with existing data
+                            return {
+                                ...t,
+                                ...data.data.task,
+                                // Ensure these are set even if server response is incomplete
+                                assigned_to: data.data.task.assigned_to || expertId || null,
+                                assigned_user_name: data.data.task.assigned_user_name || expertName || null,
+                                assigned_user_email: data.data.task.assigned_user_email || expertEmail || null
+                            };
                         }
                         // Fallback to local update
                         return {
                             ...t,
                             assigned_to: expertId || null,
-                            assigned_user_name: expertName || null
+                            assigned_user_name: expertName || null,
+                            assigned_user_email: expertEmail || null
                         };
                     }
                     return t;

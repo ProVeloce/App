@@ -5371,33 +5371,32 @@ export default {
                     const taskId = crypto.randomUUID();
                     const orgId = payload.org_id || 'ORG-DEFAULT';
 
-                    // Try new schema first, fallback to old schema
+                    // Insert task using old schema columns (most reliable)
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO tasks (id, title, description, assigned_to_id, deadline, status, created_by_id, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 'Pending', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    `).bind(
+                        taskId,
+                        body.title.trim(),
+                        body.description.trim(),
+                        body.assignedTo || null,
+                        body.dueDate || null,
+                        payload.userId
+                    ).run();
+
+                    // Try to also update new columns if they exist
                     try {
                         await env.proveloce_db.prepare(`
-                            INSERT INTO tasks (id, title, description, assigned_to, due_date, status, org_id, created_by, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            UPDATE tasks SET assigned_to = ?, due_date = ?, created_by = ?, org_id = ? WHERE id = ?
                         `).bind(
-                            taskId,
-                            body.title.trim(),
-                            body.description.trim(),
                             body.assignedTo || null,
                             body.dueDate || null,
+                            payload.userId,
                             orgId,
-                            payload.userId
+                            taskId
                         ).run();
                     } catch {
-                        // Fallback: use old column names (assigned_to_id, deadline, created_by_id)
-                        await env.proveloce_db.prepare(`
-                            INSERT INTO tasks (id, title, description, assigned_to_id, deadline, status, created_by_id, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, 'Pending', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        `).bind(
-                            taskId,
-                            body.title.trim(),
-                            body.description.trim(),
-                            body.assignedTo || null,
-                            body.dueDate || null,
-                            payload.userId
-                        ).run();
+                        // New columns don't exist, that's fine
                     }
 
                     // Notify assigned user if any
@@ -5602,27 +5601,27 @@ export default {
 
                     // Handle assignedTo update (can be null to unassign)
                     if (body.assignedTo !== undefined) {
-                        // Get current assignee for logging
-                        const currentTask = await env.proveloce_db.prepare(
-                            `SELECT ${assignedToCol} as current_assignee FROM tasks WHERE id = ?`
-                        ).bind(taskId).first() as any;
+                        // Get current assignee for logging - try both column names
+                        let currentTask: any = null;
+                        try {
+                            currentTask = await env.proveloce_db.prepare(
+                                `SELECT COALESCE(assigned_to, assigned_to_id) as current_assignee FROM tasks WHERE id = ?`
+                            ).bind(taskId).first();
+                        } catch {
+                            try {
+                                currentTask = await env.proveloce_db.prepare(
+                                    `SELECT assigned_to_id as current_assignee FROM tasks WHERE id = ?`
+                                ).bind(taskId).first();
+                            } catch {
+                                // Ignore
+                            }
+                        }
                         previousAssignee = currentTask?.current_assignee || null;
                         newAssignee = body.assignedTo || null;
 
+                        // Add to SET clause
                         setClauses.push(`${assignedToCol} = ?`);
                         params.push(body.assignedTo || null);
-
-                        // Also update the other column if it exists for consistency
-                        if (useNewSchema) {
-                            try {
-                                // Try to also update assigned_to_id for backwards compat
-                                await env.proveloce_db.prepare(
-                                    "UPDATE tasks SET assigned_to_id = ? WHERE id = ?"
-                                ).bind(body.assignedTo || null, taskId).run();
-                            } catch {
-                                // Ignore if column doesn't exist
-                            }
-                        }
                     }
 
                     // Handle title update
@@ -5660,6 +5659,42 @@ export default {
                     const query = `UPDATE tasks SET ${setClauses.join(", ")} WHERE id = ?`;
                     
                     await env.proveloce_db.prepare(query).bind(...params).run();
+
+                    // Sync both column variants for assignment to ensure consistency
+                    if (body.assignedTo !== undefined) {
+                        try {
+                            // Try to update both columns
+                            await env.proveloce_db.prepare(
+                                "UPDATE tasks SET assigned_to = ?, assigned_to_id = ? WHERE id = ?"
+                            ).bind(body.assignedTo || null, body.assignedTo || null, taskId).run();
+                        } catch {
+                            // If that fails, try just the old column
+                            try {
+                                await env.proveloce_db.prepare(
+                                    "UPDATE tasks SET assigned_to_id = ? WHERE id = ?"
+                                ).bind(body.assignedTo || null, taskId).run();
+                            } catch {
+                                // Ignore - main update already succeeded
+                            }
+                        }
+                    }
+
+                    // Sync both column variants for due date
+                    if (body.dueDate !== undefined) {
+                        try {
+                            await env.proveloce_db.prepare(
+                                "UPDATE tasks SET due_date = ?, deadline = ? WHERE id = ?"
+                            ).bind(body.dueDate || null, body.dueDate || null, taskId).run();
+                        } catch {
+                            try {
+                                await env.proveloce_db.prepare(
+                                    "UPDATE tasks SET deadline = ? WHERE id = ?"
+                                ).bind(body.dueDate || null, taskId).run();
+                            } catch {
+                                // Ignore
+                            }
+                        }
+                    }
 
                     // Fetch updated task to return (using appropriate schema)
                     let updatedTask;
