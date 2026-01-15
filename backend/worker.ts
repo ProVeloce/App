@@ -5802,21 +5802,69 @@ export default {
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
                 try {
-                    // Check if task exists first
+                    // Check if task exists first and get full details for logging
                     const existingTask = await env.proveloce_db.prepare(
-                        "SELECT id, title FROM tasks WHERE id = ?"
+                        "SELECT id, title, status, COALESCE(assigned_to, assigned_to_id) as assigned_to FROM tasks WHERE id = ?"
                     ).bind(taskId).first() as any;
 
                     if (!existingTask) {
                         return jsonResponse({ success: false, error: "Task not found" }, 404);
                     }
 
-                    // Delete the task
-                    await env.proveloce_db.prepare(
+                    // Clean up related records as safeguard (in case foreign keys aren't enforced)
+                    // These tables should CASCADE or SET NULL automatically, but explicit cleanup ensures consistency
+                    try {
+                        // Delete task submissions related to this task
+                        await env.proveloce_db.prepare(
+                            "DELETE FROM task_submissions WHERE task_id = ?"
+                        ).bind(taskId).run();
+                    } catch {
+                        // Table might not exist or no records - continue
+                    }
+
+                    try {
+                        // Delete expert_tasks assignments related to this task
+                        await env.proveloce_db.prepare(
+                            "DELETE FROM expert_tasks WHERE task_id = ?"
+                        ).bind(taskId).run();
+                    } catch {
+                        // Table might not exist or no records - continue
+                    }
+
+                    try {
+                        // Set task_id to NULL in expert_earnings (preserve payment history)
+                        await env.proveloce_db.prepare(
+                            "UPDATE expert_earnings SET task_id = NULL WHERE task_id = ?"
+                        ).bind(taskId).run();
+                    } catch {
+                        // Table might not exist or no records - continue
+                    }
+
+                    try {
+                        // Set task_id to NULL in payments (preserve payment history)
+                        await env.proveloce_db.prepare(
+                            "UPDATE payments SET task_id = NULL WHERE task_id = ?"
+                        ).bind(taskId).run();
+                    } catch {
+                        // Table might not exist or no records - continue
+                    }
+
+                    // Permanently delete the task from the database
+                    const deleteResult = await env.proveloce_db.prepare(
                         "DELETE FROM tasks WHERE id = ?"
                     ).bind(taskId).run();
 
-                    // Log the deletion
+                    // Verify deletion actually occurred
+                    const rowsAffected = deleteResult.meta?.changes || 0;
+                    if (rowsAffected === 0) {
+                        // Task might have been deleted by another request
+                        return jsonResponse({ 
+                            success: false, 
+                            error: "Task could not be deleted or was already removed" 
+                        }, 404);
+                    }
+
+                    // Log the deletion for audit trail
                     try {
                         await env.proveloce_db.prepare(`
                             INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
@@ -5825,16 +5873,27 @@ export default {
                             crypto.randomUUID(),
                             payload.userId,
                             taskId,
-                            JSON.stringify({ title: existingTask.title, deleted_by: payload.userId })
+                            JSON.stringify({ 
+                                title: existingTask.title, 
+                                status: existingTask.status,
+                                assigned_to: existingTask.assigned_to,
+                                deleted_by: payload.userId,
+                                deleted_permanently: true
+                            })
                         ).run();
                     } catch {
-                        // Ignore logging errors
+                        // Ignore logging errors - deletion still succeeded
                     }
 
                     return jsonResponse({ 
                         success: true, 
-                        message: "Task deleted successfully",
-                        data: { deletedId: taskId }
+                        message: "Task permanently deleted from database",
+                        data: { 
+                            deletedId: taskId,
+                            deletedTitle: existingTask.title,
+                            rowsAffected: rowsAffected,
+                            permanent: true
+                        }
                     });
                 } catch (error: any) {
                     console.error("Error deleting task:", error?.message || error);

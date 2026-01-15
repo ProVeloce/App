@@ -634,9 +634,10 @@ const TaskAssignment: React.FC = () => {
                     error('Authentication failed. Please log in again.');
                 } else if (response.ok) {
                     // DELETE might return empty response on success
-                    success('Task deleted successfully');
-                    setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+                    success('Task permanently deleted');
                     closeDeleteModal();
+                    // Re-fetch tasks from database to ensure consistency
+                    await fetchTasks();
                 } else {
                     error('Server error. Please try again.');
                 }
@@ -645,10 +646,10 @@ const TaskAssignment: React.FC = () => {
 
             const data = await response.json();
             if (data.success) {
-                success('Task deleted successfully');
-                // Remove from local state
-                setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+                success(data.message || 'Task permanently deleted');
                 closeDeleteModal();
+                // Re-fetch tasks from database to ensure consistency across all portals
+                await fetchTasks();
             } else {
                 error(data.error || 'Failed to delete task');
             }
