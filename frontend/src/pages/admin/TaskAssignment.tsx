@@ -14,9 +14,14 @@ interface Task {
     description: string;
     assigned_to: string | null;
     assigned_user_name: string | null;
+    assigned_user_email?: string | null;
     due_date: string | null;
     status: 'Pending' | 'InProgress' | 'Completed';
+    org_id?: string;
+    created_by: string;
+    created_by_name?: string | null;
     created_at: string;
+    updated_at: string;
 }
 
 interface UserData {
@@ -330,7 +335,8 @@ const TaskAssignment: React.FC = () => {
 
             const data = await response.json();
             if (data.success) {
-                const expertName = assignableUsers.find(u => u.id === assignedTo)?.name;
+                const expertName = data.data?.task?.assigned_user_name || 
+                    assignableUsers.find(u => u.id === assignedTo)?.name;
                 success(
                     assignedTo 
                         ? `Task created and assigned to ${expertName}` 
@@ -338,13 +344,20 @@ const TaskAssignment: React.FC = () => {
                 );
                 setShowModal(false);
                 resetForm();
-                // Immediate refresh to show updated data
-                await fetchTasks();
+                
+                // Add the new task to state if returned by server
+                if (data.data?.task) {
+                    setTasks(prev => [data.data.task, ...prev]);
+                } else {
+                    // Fallback: fetch all tasks
+                    await fetchTasks();
+                }
             } else {
                 error(data.error || 'Failed to create task');
             }
-        } catch (err) {
-            error('Failed to create task');
+        } catch (err: any) {
+            console.error('Create task error:', err);
+            error('Failed to create task: ' + (err?.message || 'Unknown error'));
         } finally {
             setSubmitting(false);
         }
@@ -527,6 +540,23 @@ const TaskAssignment: React.FC = () => {
                 </div>
             ) : (
                 <div className="tasks-table-container">
+                    <div className="tasks-summary">
+                        <span className="summary-item">
+                            <strong>{tasks.length}</strong> task{tasks.length !== 1 ? 's' : ''} total
+                        </span>
+                        <span className="summary-item pending">
+                            <Clock size={12} />
+                            <strong>{tasks.filter(t => t.status === 'Pending').length}</strong> pending
+                        </span>
+                        <span className="summary-item progress">
+                            <Loader size={12} />
+                            <strong>{tasks.filter(t => t.status === 'InProgress').length}</strong> in progress
+                        </span>
+                        <span className="summary-item completed">
+                            <CheckCircle size={12} />
+                            <strong>{tasks.filter(t => t.status === 'Completed').length}</strong> completed
+                        </span>
+                    </div>
                     <table className="tasks-table">
                         <thead>
                             <tr>
@@ -534,6 +564,7 @@ const TaskAssignment: React.FC = () => {
                                 <th>Assigned To</th>
                                 <th>Due Date</th>
                                 <th>Status</th>
+                                <th>Created</th>
                                 {canCreateTask && <th>Actions</th>}
                             </tr>
                         </thead>
@@ -547,8 +578,14 @@ const TaskAssignment: React.FC = () => {
                                     <td>
                                         <div className={`assigned-user ${task.assigned_user_name ? 'has-assignment' : ''}`}>
                                             <User size={14} />
-                                            {task.assigned_user_name || 'Unassigned'}
+                                            <span className="user-name">{task.assigned_user_name || 'Unassigned'}</span>
                                         </div>
+                                        {task.assigned_user_email && (
+                                            <div className="assigned-email">
+                                                <Mail size={10} />
+                                                {task.assigned_user_email}
+                                            </div>
+                                        )}
                                     </td>
                                     <td>
                                         <div className={`due-date ${task.due_date ? 'has-date' : ''}`}>
@@ -557,6 +594,17 @@ const TaskAssignment: React.FC = () => {
                                         </div>
                                     </td>
                                     <td>{getStatusBadge(task.status)}</td>
+                                    <td>
+                                        <div className="created-info">
+                                            <span className="created-by">
+                                                {task.created_by_name || 'System'}
+                                            </span>
+                                            <span className="created-at">
+                                                <Clock size={10} />
+                                                {formatDate(task.created_at)}
+                                            </span>
+                                        </div>
+                                    </td>
                                     {canCreateTask && (
                                         <td className="actions-cell">
                                             <ExpertSelector

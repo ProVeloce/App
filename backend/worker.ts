@@ -5280,9 +5280,23 @@ export default {
 
                 try {
                     const result = await env.proveloce_db.prepare(`
-                        SELECT t.*, u.name as assigned_user_name
+                        SELECT 
+                            t.id,
+                            t.title,
+                            t.description,
+                            t.assigned_to,
+                            t.due_date,
+                            t.status,
+                            t.org_id,
+                            t.created_by,
+                            t.created_at,
+                            t.updated_at,
+                            u.name as assigned_user_name,
+                            u.email as assigned_user_email,
+                            c.name as created_by_name
                         FROM tasks t
                         LEFT JOIN users u ON t.assigned_to = u.id
+                        LEFT JOIN users c ON t.created_by = c.id
                         WHERE ${whereClause}
                         ORDER BY t.created_at DESC
                     `).bind(...params).all();
@@ -5335,8 +5349,8 @@ export default {
                         VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     `).bind(
                         taskId,
-                        body.title,
-                        body.description,
+                        body.title.trim(),
+                        body.description.trim(),
                         body.assignedTo || null,
                         body.dueDate || null,
                         orgId,
@@ -5353,7 +5367,33 @@ export default {
                         );
                     }
 
-                    return jsonResponse({ success: true, message: "Task created", id: taskId });
+                    // Fetch the created task with full details
+                    const createdTask = await env.proveloce_db.prepare(`
+                        SELECT 
+                            t.id,
+                            t.title,
+                            t.description,
+                            t.assigned_to,
+                            t.due_date,
+                            t.status,
+                            t.org_id,
+                            t.created_by,
+                            t.created_at,
+                            t.updated_at,
+                            u.name as assigned_user_name,
+                            u.email as assigned_user_email,
+                            c.name as created_by_name
+                        FROM tasks t
+                        LEFT JOIN users u ON t.assigned_to = u.id
+                        LEFT JOIN users c ON t.created_by = c.id
+                        WHERE t.id = ?
+                    `).bind(taskId).first();
+
+                    return jsonResponse({ 
+                        success: true, 
+                        message: "Task created successfully", 
+                        data: { task: createdTask }
+                    });
                 } catch (error: any) {
                     console.error("Error creating task:", error);
                     return jsonResponse({ success: false, error: "Failed to create task" }, 500);
