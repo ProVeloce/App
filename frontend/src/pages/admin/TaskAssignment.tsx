@@ -224,6 +224,33 @@ const ExpertSelector: React.FC<ExpertSelectorProps> = ({
     );
 };
 
+// Helper function to safely parse API responses
+const safeParseResponse = async (response: Response): Promise<{ ok: boolean; data: any; error?: string }> => {
+    const contentType = response.headers.get('content-type');
+    
+    // Check if response is JSON
+    if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        
+        if (response.status === 401 || response.status === 403) {
+            return { ok: false, data: null, error: 'Authentication failed. Please log in again.' };
+        }
+        if (response.ok) {
+            return { ok: true, data: { success: true } };
+        }
+        return { ok: false, data: null, error: 'Server returned an invalid response.' };
+    }
+    
+    try {
+        const data = await response.json();
+        return { ok: response.ok, data };
+    } catch (err) {
+        console.error('JSON parse error:', err);
+        return { ok: false, data: null, error: 'Failed to parse server response.' };
+    }
+};
+
 const TaskAssignment: React.FC = () => {
     const { user } = useAuth();
     const { success, error } = useToast();
@@ -391,8 +418,13 @@ const TaskAssignment: React.FC = () => {
                 body: JSON.stringify({ status: newStatus })
             });
 
-            const data = await response.json();
-            if (data.success) {
+            const { ok, data, error: parseError } = await safeParseResponse(response);
+            if (parseError) {
+                error(parseError);
+                return;
+            }
+            
+            if (data?.success) {
                 success('Task status updated');
                 // Update local state with response or fallback
                 setTasks(prev => prev.map(t => {
@@ -405,7 +437,7 @@ const TaskAssignment: React.FC = () => {
                     return t;
                 }));
             } else {
-                error(data.error || 'Failed to update task');
+                error(data?.error || 'Failed to update task');
             }
         } catch (err: any) {
             console.error('Status update error:', err);
@@ -428,8 +460,13 @@ const TaskAssignment: React.FC = () => {
                 body: JSON.stringify({ assignedTo: expertId || null })
             });
 
-            const data = await response.json();
-            if (data.success) {
+            const { ok, data, error: parseError } = await safeParseResponse(response);
+            if (parseError) {
+                error(parseError);
+                return;
+            }
+            
+            if (data?.success) {
                 // Get expert details from various sources
                 const serverExpert = data.data?.task?.assigned_user_name;
                 const localExpert = assignableUsers.find(u => u.id === expertId);
@@ -463,7 +500,7 @@ const TaskAssignment: React.FC = () => {
                     return t;
                 }));
             } else {
-                error(data.error || 'Failed to assign task');
+                error(data?.error || 'Failed to assign task');
             }
         } catch (err: any) {
             console.error('Assignment error:', err);
@@ -581,9 +618,30 @@ const TaskAssignment: React.FC = () => {
             const response = await fetch(`${API_BASE}/api/tasks/${deletingTask.id}`, {
                 method: 'DELETE',
                 headers: {
+                    'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`
                 }
             });
+
+            // Check if response is JSON before parsing
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                // Response is not JSON - might be Cloudflare Access page or other HTML
+                const text = await response.text();
+                console.error('Non-JSON response received:', text.substring(0, 200));
+                
+                if (response.status === 401 || response.status === 403) {
+                    error('Authentication failed. Please log in again.');
+                } else if (response.ok) {
+                    // DELETE might return empty response on success
+                    success('Task deleted successfully');
+                    setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+                    closeDeleteModal();
+                } else {
+                    error('Server error. Please try again.');
+                }
+                return;
+            }
 
             const data = await response.json();
             if (data.success) {
@@ -596,7 +654,12 @@ const TaskAssignment: React.FC = () => {
             }
         } catch (err: any) {
             console.error('Delete task error:', err);
-            error('Failed to delete task: ' + (err?.message || 'Unknown error'));
+            // Check if it's a JSON parsing error
+            if (err.message?.includes('JSON')) {
+                error('Server returned an invalid response. Please try again.');
+            } else {
+                error('Failed to delete task: ' + (err?.message || 'Unknown error'));
+            }
         } finally {
             setDeleting(false);
         }
