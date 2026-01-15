@@ -6,7 +6,27 @@ import { JWTPayload } from '../types/index';
 import { Role } from '@prisma/client';
 
 /**
+ * Get access token from request
+ * Priority: Cookie > Authorization header
+ */
+const getAccessTokenFromRequest = (req: Request): string | null => {
+    // First, try to get from cookie
+    if (req.cookies?.accessToken) {
+        return req.cookies.accessToken;
+    }
+    
+    // Fall back to Authorization header for backward compatibility
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.split(' ')[1];
+    }
+    
+    return null;
+};
+
+/**
  * Verify JWT access token
+ * Reads from cookies first, then Authorization header
  */
 export const authenticate = async (
     req: Request,
@@ -14,14 +34,16 @@ export const authenticate = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        const authHeader = req.headers.authorization;
+        const token = getAccessTokenFromRequest(req);
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            res.status(401).json({ success: false, error: 'No token provided' });
+        if (!token) {
+            res.status(401).json({ 
+                success: false, 
+                error: 'No token provided',
+                sessionExpired: true,
+            });
             return;
         }
-
-        const token = authHeader.split(' ')[1];
 
         try {
             const decoded = jwt.verify(token, config.jwt.accessSecret) as JWTPayload;
@@ -51,7 +73,11 @@ export const authenticate = async (
             next();
         } catch (jwtError) {
             if ((jwtError as jwt.JsonWebTokenError).name === 'TokenExpiredError') {
-                res.status(401).json({ success: false, error: 'Token expired' });
+                res.status(401).json({ 
+                    success: false, 
+                    error: 'Session expired. Please log in again.',
+                    sessionExpired: true,
+                });
                 return;
             }
             res.status(401).json({ success: false, error: 'Invalid token' });

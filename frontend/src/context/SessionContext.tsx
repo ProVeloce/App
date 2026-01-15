@@ -16,8 +16,8 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-// Session timeout: 30 minutes (in milliseconds)
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+// Session timeout: 15 minutes (in milliseconds) - matches JWT expiry
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 // Warning shown 2 minutes before timeout
 const WARNING_THRESHOLD_MS = 2 * 60 * 1000;
 // Check interval: every 10 seconds

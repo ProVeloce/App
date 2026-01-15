@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
@@ -11,28 +11,53 @@ import { ErrorProvider } from './context/ErrorContext';
 import { LoadingProvider } from './context/LoadingContext';
 import SessionManager from './components/common/SessionManager';
 import StatusPopup from './components/common/StatusPopup';
+import CookieConsent, { getCookieConsentStatus } from './components/common/CookieConsent';
 import './styles/index.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <BrowserRouter>
-            <ThemeProvider>
-                <ErrorProvider>
-                    <LoadingProvider>
-                        <AuthProvider>
-                            <SessionProvider>
-                                <ToastProvider>
-                                    <SessionManager>
-                                        <App />
-                                        <StatusPopup />
-                                        <Analytics />
-                                    </SessionManager>
-                                </ToastProvider>
-                            </SessionProvider>
-                        </AuthProvider>
-                    </LoadingProvider>
-                </ErrorProvider>
-            </ThemeProvider>
-        </BrowserRouter>
-    </React.StrictMode>
-);
+/**
+ * Root application wrapper that handles cookie consent
+ */
+const RootApp: React.FC = () => {
+    const [cookieConsent, setCookieConsent] = useState<'pending' | 'accepted' | 'rejected'>(
+        getCookieConsentStatus()
+    );
+
+    const handleCookieAccept = useCallback(() => {
+        setCookieConsent('accepted');
+    }, []);
+
+    const handleCookieReject = useCallback(() => {
+        setCookieConsent('rejected');
+    }, []);
+
+    return (
+        <React.StrictMode>
+            <BrowserRouter>
+                <ThemeProvider>
+                    <ErrorProvider>
+                        <LoadingProvider>
+                            <AuthProvider>
+                                <SessionProvider>
+                                    <ToastProvider>
+                                        <SessionManager>
+                                            <App />
+                                            <StatusPopup />
+                                            <Analytics />
+                                            {/* Cookie Consent Banner - shown on first visit */}
+                                            <CookieConsent 
+                                                onAccept={handleCookieAccept}
+                                                onReject={handleCookieReject}
+                                            />
+                                        </SessionManager>
+                                    </ToastProvider>
+                                </SessionProvider>
+                            </AuthProvider>
+                        </LoadingProvider>
+                    </ErrorProvider>
+                </ThemeProvider>
+            </BrowserRouter>
+        </React.StrictMode>
+    );
+};
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<RootApp />);

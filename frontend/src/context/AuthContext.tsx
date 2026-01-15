@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi, User, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { authApi, User, setAccessToken, setRefreshToken, getAccessToken, getRefreshToken, clearAuthState, SESSION_TIMEOUT_SECONDS } from '../services/api';
 
 interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
+    sessionExpiresAt: number | null; // Timestamp when session expires
     login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresVerification?: boolean }>;
     signup: (
         name: string,
@@ -49,6 +50,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isInitialized, setIsInitialized] = useState(false);
+    const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+
+    // Calculate session expiry based on current time
+    const updateSessionExpiry = useCallback(() => {
+        const expiryTime = Date.now() + (SESSION_TIMEOUT_SECONDS * 1000);
+        setSessionExpiresAt(expiryTime);
+        localStorage.setItem('sessionExpiresAt', expiryTime.toString());
+    }, []);
+
+    // Listen for session-expired events from API interceptor
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            setUser(null);
+            setSessionExpiresAt(null);
+            setIsInitialized(false);
+        };
+
+        window.addEventListener('session-expired', handleSessionExpired);
+        return () => window.removeEventListener('session-expired', handleSessionExpired);
+    }, []);
 
     // Restore session on mount - only run once
     useEffect(() => {
@@ -56,6 +77,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (isInitialized) return;
 
             const token = getAccessToken();
+            const storedExpiry = localStorage.getItem('sessionExpiresAt');
+            
+            // Check if session has expired
+            if (storedExpiry) {
+                const expiryTime = parseInt(storedExpiry, 10);
+                if (Date.now() > expiryTime) {
+                    // Session expired - clear everything
+                    clearAuthState();
+                    setSessionExpiresAt(null);
+                    setIsLoading(false);
+                    setIsInitialized(true);
+                    return;
+                }
+                setSessionExpiresAt(expiryTime);
+            }
+            
             if (!token) {
                 setIsLoading(false);
                 setIsInitialized(true);
@@ -64,8 +101,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Check if token is expired
             if (isJWTExpired(token)) {
-                setAccessToken(null);
-                setRefreshToken(null);
+                clearAuthState();
+                setSessionExpiresAt(null);
                 setIsLoading(false);
                 setIsInitialized(true);
                 return;
@@ -107,8 +144,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } else {
                 // Invalid token
-                setAccessToken(null);
-                setRefreshToken(null);
+                clearAuthState();
+                setSessionExpiresAt(null);
                 setIsLoading(false);
                 setIsInitialized(true);
             }
@@ -208,6 +245,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUser(userData);
                 setIsInitialized(true);
                 setIsLoading(false);
+                
+                // Set session expiry (15 minutes from now)
+                updateSessionExpiry();
+                
                 return { success: true };
             }
 
@@ -255,18 +296,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = async () => {
         try {
-            const refreshToken = getRefreshToken();
-            await authApi.logout(refreshToken || undefined);
+            await authApi.logout();
         } catch (error) {
             // Ignore logout errors
         } finally {
-            setAccessToken(null);
-            setRefreshToken(null);
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('userEmail');
-            localStorage.removeItem('userName');
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
+            clearAuthState();
+            localStorage.removeItem('sessionExpiresAt');
+            setSessionExpiresAt(null);
             setUser(null);
             setIsInitialized(false);
             setIsLoading(false);
@@ -306,6 +342,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 user,
                 isAuthenticated: !!user,
                 isLoading,
+                sessionExpiresAt,
                 login,
                 signup,
                 logout,

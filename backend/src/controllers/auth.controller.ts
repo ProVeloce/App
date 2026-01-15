@@ -1,12 +1,45 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, CookieOptions } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
+import { config } from '../config/index';
 import { generateTokenPair, revokeRefreshToken, revokeAllUserTokens, verifyRefreshToken } from '../utils/jwt';
 import { createOTP, verifyOTP, verifyOTPByEmail } from '../utils/otp';
 import { sendOTPEmail, sendWelcomeEmail } from '../utils/email';
 import { logActivity, logLoginAttempt, ACTIONS } from '../utils/activity';
 import { createNotification, NOTIFICATION_TEMPLATES } from '../utils/notifications';
 import { AppError } from '../middleware/errorHandler';
+
+/**
+ * Get cookie options for JWT tokens
+ */
+const getCookieOptions = (maxAge?: number): CookieOptions => ({
+    httpOnly: config.cookie.httpOnly,
+    secure: config.cookie.secure,
+    sameSite: config.cookie.sameSite,
+    maxAge: maxAge ?? config.cookie.maxAge,
+    path: '/',
+    ...(config.cookie.domain && { domain: config.cookie.domain }),
+});
+
+/**
+ * Set authentication cookies
+ */
+const setAuthCookies = (res: Response, accessToken: string, refreshToken: string): void => {
+    // Access token cookie - expires in 15 minutes
+    res.cookie('accessToken', accessToken, getCookieOptions());
+    
+    // Refresh token cookie - expires in 15 minutes (same as access token for strict session)
+    res.cookie('refreshToken', refreshToken, getCookieOptions());
+};
+
+/**
+ * Clear authentication cookies
+ */
+const clearAuthCookies = (res: Response): void => {
+    const clearOptions = getCookieOptions(0);
+    res.cookie('accessToken', '', clearOptions);
+    res.cookie('refreshToken', '', clearOptions);
+};
 
 /**
  * Register new user
@@ -210,6 +243,9 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
             role: user.role,
         });
 
+        // Set tokens in httpOnly cookies
+        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
         // Log successful login
         await logLoginAttempt(user.id, true, req);
         await logActivity({
@@ -229,7 +265,8 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
                     role: user.role,
                     status: user.status,
                 },
-                tokens,
+                tokens, // Also return tokens in response body for backward compatibility
+                sessionExpiresIn: config.sessionTimeoutMinutes * 60, // Session expiry in seconds
             },
         });
     } catch (error) {
@@ -239,19 +276,23 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
 /**
  * Refresh access token
+ * Reads refresh token from cookie or request body
  */
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const { refreshToken } = req.body;
+        // Try to get refresh token from cookie first, then from body
+        const refreshTokenValue = req.cookies?.refreshToken || req.body?.refreshToken;
 
-        if (!refreshToken) {
+        if (!refreshTokenValue) {
+            clearAuthCookies(res);
             throw new AppError('Refresh token is required', 400);
         }
 
-        const userId = await verifyRefreshToken(refreshToken);
+        const userId = await verifyRefreshToken(refreshTokenValue);
 
         if (!userId) {
-            throw new AppError('Invalid or expired refresh token', 401);
+            clearAuthCookies(res);
+            throw new AppError('Invalid or expired refresh token. Please log in again.', 401);
         }
 
         const user = await prisma.user.findUnique({
@@ -260,11 +301,12 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
         });
 
         if (!user || user.status !== 'ACTIVE') {
+            clearAuthCookies(res);
             throw new AppError('User not found or inactive', 401);
         }
 
         // Revoke old refresh token
-        await revokeRefreshToken(refreshToken);
+        await revokeRefreshToken(refreshTokenValue);
 
         // Generate new token pair
         const tokens = await generateTokenPair({
@@ -273,9 +315,15 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
             role: user.role,
         });
 
+        // Set new tokens in cookies
+        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
         res.json({
             success: true,
-            data: { tokens },
+            data: { 
+                tokens,
+                sessionExpiresIn: config.sessionTimeoutMinutes * 60,
+            },
         });
     } catch (error) {
         next(error);
@@ -409,12 +457,16 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
  */
 export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const { refreshToken } = req.body;
+        // Get refresh token from cookie or body
+        const refreshTokenValue = req.cookies?.refreshToken || req.body?.refreshToken;
         const userId = req.user!.userId;
 
-        if (refreshToken) {
-            await revokeRefreshToken(refreshToken);
+        if (refreshTokenValue) {
+            await revokeRefreshToken(refreshTokenValue);
         }
+
+        // Clear auth cookies
+        clearAuthCookies(res);
 
         // Log activity
         await logActivity({
@@ -440,6 +492,9 @@ export const logoutAll = async (req: Request, res: Response, next: NextFunction)
         const userId = req.user!.userId;
 
         await revokeAllUserTokens(userId);
+
+        // Clear auth cookies for current session
+        clearAuthCookies(res);
 
         // Log activity
         await logActivity({

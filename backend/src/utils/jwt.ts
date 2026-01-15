@@ -17,16 +17,37 @@ export const generateAccessToken = (payload: Omit<JWTPayload, 'iat' | 'exp'>): s
 };
 
 /**
- * Generate refresh token (long-lived)
+ * Parse duration string (e.g., '15m', '7d', '1h') to milliseconds
+ */
+const parseDurationToMs = (duration: string): number => {
+    const match = duration.match(/^(\d+)([smhd])$/);
+    if (!match) {
+        // Default to 15 minutes if parsing fails
+        return 15 * 60 * 1000;
+    }
+    
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    
+    switch (unit) {
+        case 's': return value * 1000;
+        case 'm': return value * 60 * 1000;
+        case 'h': return value * 60 * 60 * 1000;
+        case 'd': return value * 24 * 60 * 60 * 1000;
+        default: return 15 * 60 * 1000;
+    }
+};
+
+/**
+ * Generate refresh token (stored in database)
+ * Expiry matches session timeout (15 minutes by default)
  */
 export const generateRefreshToken = async (userId: string): Promise<string> => {
     const token = uuidv4();
 
-    // Calculate expiry
-    const expiresIn = config.jwt.refreshExpiresIn;
-    const days = parseInt(expiresIn.replace('d', ''));
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + days);
+    // Calculate expiry based on config
+    const expiresInMs = parseDurationToMs(config.jwt.refreshExpiresIn);
+    const expiresAt = new Date(Date.now() + expiresInMs);
 
     // Store in database
     await prisma.refreshToken.create({
