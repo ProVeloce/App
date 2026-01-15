@@ -1,71 +1,55 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ticketApi, notificationApi, adminApi } from '../../services/api';
+import { adminApi, notificationApi, ticketApi } from '../../services/api';
 import {
-    BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from '../../components/charts/RechartsWrapper';
-import {
-    Ticket,
     Users,
+    UserCheck,
+    UserPlus,
+    Shield,
+    Award,
     Clock,
     CheckCircle,
     AlertCircle,
     TrendingUp,
     Bell,
-    Plus,
-    UserPlus,
     RefreshCw,
-    Search,
-    Filter,
     ArrowRight,
     Activity,
-    Target,
-    XCircle,
-    AlertTriangle,
-    BarChart3,
     FileText,
     Settings,
-    ChevronDown,
-    Loader2
+    Loader2,
+    LayoutDashboard,
+    ClipboardList,
+    HelpCircle,
+    ChevronRight,
+    Eye,
+    UserX,
+    Briefcase,
+    BarChart3,
+    Star,
+    Zap,
+    MessageSquare,
+    Calendar
 } from 'lucide-react';
 import './AdminDashboard.css';
 
-interface TicketStats {
-    summary: {
-        total: number;
-        open: number;
-        inProgress: number;
-        resolved: number;
-        closed: number;
-        avgResolutionHours: number;
-    };
-    byPriority: {
-        low: number;
-        medium: number;
-        high: number;
-        urgent: number;
-    };
-    byCategory: Array<{ name: string; value: number }>;
-    trend: Array<{ date: string; count: number }>;
-    workload: Array<{ assignee_name: string; ticket_count: number; open_count: number; in_progress_count: number }>;
-    recentTickets: Array<{
-        id: number;
-        ticket_number: string;
-        subject: string;
-        status: string;
-        priority: string;
-        category: string;
-        created_at: string;
-        raised_by_name: string;
-    }>;
+interface PortalStats {
+    totalUsers: number;
+    admins: number;
+    analysts: number;
+    experts: number;
+    customers: number;
+    activeUsers: number;
+    pendingUsers: number;
+    recentUsers: any[];
 }
 
-interface AdminStats {
-    totalUsers?: number;
-    pendingApplications?: number;
-    activeUsers?: number;
+interface TicketSummary {
+    total: number;
+    open: number;
+    inProgress: number;
+    closed: number;
 }
 
 interface Notification {
@@ -77,29 +61,14 @@ interface Notification {
     is_read: boolean;
 }
 
-const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-const PRIORITY_COLORS: Record<string, string> = {
-    low: '#22c55e',
-    medium: '#f59e0b',
-    high: '#f97316',
-    urgent: '#ef4444'
-};
-
 const AdminDashboard: React.FC = () => {
     const { user } = useAuth();
-    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [ticketStats, setTicketStats] = useState<TicketStats | null>(null);
-    const [adminStats, setAdminStats] = useState<AdminStats>({});
+    const [portalStats, setPortalStats] = useState<PortalStats | null>(null);
+    const [ticketSummary, setTicketSummary] = useState<TicketSummary>({ total: 0, open: 0, inProgress: 0, closed: 0 });
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    
-    // Filter states
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [priorityFilter, setPriorityFilter] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showFilters, setShowFilters] = useState(false);
 
     const isSuperAdmin = user?.role === 'SUPERADMIN';
 
@@ -110,15 +79,25 @@ const AdminDashboard: React.FC = () => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-            const [statsRes, notifRes, notifCountRes, adminRes] = await Promise.all([
-                ticketApi.getStats(),
-                notificationApi.getNotifications({ limit: 5 }),
-                notificationApi.getUnreadCount(),
-                adminApi.getDashboard().catch(() => ({ data: { data: {} } }))
+            const [statsRes, ticketRes, notifRes, notifCountRes] = await Promise.all([
+                adminApi.getStats().catch(() => ({ data: { success: false, data: null } })),
+                ticketApi.getStats().catch(() => ({ data: { success: false, data: null } })),
+                notificationApi.getNotifications({ limit: 5 }).catch(() => ({ data: { success: false, data: null } })),
+                notificationApi.getUnreadCount().catch(() => ({ data: { success: false, data: null } }))
             ]);
 
-            if (statsRes.data.success) {
-                setTicketStats(statsRes.data.data);
+            if (statsRes.data.success && statsRes.data.data) {
+                setPortalStats(statsRes.data.data);
+            }
+
+            if (ticketRes.data.success && ticketRes.data.data?.summary) {
+                const summary = ticketRes.data.data.summary;
+                setTicketSummary({
+                    total: summary.total || 0,
+                    open: summary.open || 0,
+                    inProgress: summary.inProgress || 0,
+                    closed: summary.closed || 0
+                });
             }
 
             if (notifRes.data.success) {
@@ -127,10 +106,6 @@ const AdminDashboard: React.FC = () => {
 
             if (notifCountRes.data.success) {
                 setUnreadCount(notifCountRes.data.data?.unreadCount || 0);
-            }
-
-            if (adminRes.data?.data) {
-                setAdminStats(adminRes.data.data as AdminStats);
             }
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -154,64 +129,130 @@ const AdminDashboard: React.FC = () => {
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-    const formatResolutionTime = (hours: number) => {
-        if (hours < 1) return '< 1h';
-        if (hours < 24) return `${Math.round(hours)}h`;
-        const days = Math.round(hours / 24);
-        return `${days}d`;
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status.toLowerCase()) {
-            case 'open': return 'status-open';
-            case 'in progress': return 'status-progress';
-            case 'resolved': return 'status-resolved';
-            case 'closed': return 'status-closed';
-            default: return '';
+    const getRoleBadgeClass = (role: string) => {
+        switch (role?.toLowerCase()) {
+            case 'superadmin': return 'role-superadmin';
+            case 'admin': return 'role-admin';
+            case 'expert': return 'role-expert';
+            case 'analyst': return 'role-analyst';
+            default: return 'role-customer';
         }
     };
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority.toLowerCase()) {
-            case 'urgent': return 'priority-urgent';
-            case 'high': return 'priority-high';
-            case 'medium': return 'priority-medium';
-            case 'low': return 'priority-low';
-            default: return '';
+    const getStatusBadgeClass = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'active': return 'status-active';
+            case 'suspended': return 'status-suspended';
+            case 'inactive': return 'status-inactive';
+            default: return 'status-pending';
         }
     };
 
-    // Filter recent tickets
-    const filteredTickets = ticketStats?.recentTickets.filter(ticket => {
-        if (statusFilter !== 'all' && ticket.status.toLowerCase() !== statusFilter.toLowerCase()) return false;
-        if (priorityFilter !== 'all' && ticket.priority.toLowerCase() !== priorityFilter.toLowerCase()) return false;
-        if (searchQuery && !ticket.subject.toLowerCase().includes(searchQuery.toLowerCase()) && 
-            !ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-        return true;
-    }) || [];
+    // Navigation shortcuts for admin
+    const adminShortcuts = [
+        { 
+            title: 'User Management', 
+            description: 'Manage all platform users',
+            icon: Users, 
+            path: '/admin/users', 
+            color: 'primary',
+            stat: portalStats?.totalUsers || 0,
+            statLabel: 'Total Users'
+        },
+        { 
+            title: 'Expert Applications', 
+            description: 'Review pending applications',
+            icon: Award, 
+            path: '/admin/expert-review', 
+            color: 'warning',
+            stat: portalStats?.pendingUsers || 0,
+            statLabel: 'Pending'
+        },
+        { 
+            title: 'Task Assignment', 
+            description: 'Assign and track tasks',
+            icon: ClipboardList, 
+            path: '/admin/task-assignment', 
+            color: 'info',
+            stat: null,
+            statLabel: 'Manage'
+        },
+        { 
+            title: 'Help Desk', 
+            description: 'Support tickets & requests',
+            icon: HelpCircle, 
+            path: '/help-desk', 
+            color: 'success',
+            stat: ticketSummary.open,
+            statLabel: 'Open Tickets'
+        },
+        { 
+            title: 'Reports & Analytics', 
+            description: 'View platform insights',
+            icon: BarChart3, 
+            path: '/admin/reports', 
+            color: 'accent',
+            stat: null,
+            statLabel: 'View'
+        },
+        { 
+            title: 'Ticket Management', 
+            description: 'Manage support tickets',
+            icon: MessageSquare, 
+            path: '/admin/tickets', 
+            color: 'purple',
+            stat: ticketSummary.total,
+            statLabel: 'Total'
+        }
+    ];
 
-    // Prepare chart data
-    const statusChartData = ticketStats ? [
-        { name: 'Open', value: ticketStats.summary.open, color: '#6366f1' },
-        { name: 'In Progress', value: ticketStats.summary.inProgress, color: '#f59e0b' },
-        { name: 'Resolved', value: ticketStats.summary.resolved, color: '#22c55e' },
-        { name: 'Closed', value: ticketStats.summary.closed, color: '#64748b' }
-    ] : [];
+    // SuperAdmin extra shortcuts
+    const superAdminShortcuts = [
+        { 
+            title: 'Admin Management', 
+            description: 'Manage admin accounts',
+            icon: Shield, 
+            path: '/superadmin/admins', 
+            color: 'danger',
+            stat: portalStats?.admins || 0,
+            statLabel: 'Admins'
+        },
+        { 
+            title: 'System Logs', 
+            description: 'View activity logs',
+            icon: FileText, 
+            path: '/superadmin/logs', 
+            color: 'secondary',
+            stat: null,
+            statLabel: 'View'
+        },
+        { 
+            title: 'Global Config', 
+            description: 'Platform settings',
+            icon: Settings, 
+            path: '/superadmin/config', 
+            color: 'tertiary',
+            stat: null,
+            statLabel: 'Configure'
+        }
+    ];
 
-    const priorityChartData = ticketStats ? [
-        { name: 'Low', count: ticketStats.byPriority.low, fill: PRIORITY_COLORS.low },
-        { name: 'Medium', count: ticketStats.byPriority.medium, fill: PRIORITY_COLORS.medium },
-        { name: 'High', count: ticketStats.byPriority.high, fill: PRIORITY_COLORS.high },
-        { name: 'Urgent', count: ticketStats.byPriority.urgent, fill: PRIORITY_COLORS.urgent }
-    ] : [];
-
-    const trendChartData = ticketStats?.trend.map(t => ({
-        date: formatDate(t.date),
-        tickets: t.count
-    })) || [];
+    const shortcuts = isSuperAdmin 
+        ? [...adminShortcuts, ...superAdminShortcuts] 
+        : adminShortcuts;
 
     if (loading) {
         return (
@@ -223,15 +264,22 @@ const AdminDashboard: React.FC = () => {
     }
 
     return (
-        <div className="admin-dashboard">
+        <div className="admin-dashboard portal-overview">
             {/* Header */}
             <div className="dashboard-header">
                 <div className="header-content">
                     <div className="welcome-section">
-                        <h1>{getWelcomeMessage()}, {user?.name}!</h1>
-                        <p className="subtitle">
-                            {isSuperAdmin ? 'System-wide overview and management' : 'Your assigned tickets and performance'}
-                        </p>
+                        <div className="welcome-icon">
+                            <LayoutDashboard size={28} />
+                        </div>
+                        <div className="welcome-text">
+                            <h1>{getWelcomeMessage()}, {user?.name}!</h1>
+                            <p className="subtitle">
+                                {isSuperAdmin 
+                                    ? 'Complete system overview and management controls' 
+                                    : 'Manage users, applications, and support requests'}
+                            </p>
+                        </div>
                     </div>
                     <div className="header-actions">
                         <button 
@@ -250,330 +298,214 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Key Metrics */}
-            <div className="metrics-grid">
-                <div className="metric-card primary">
-                    <div className="metric-icon">
-                        <Ticket size={24} />
+            {/* Overview Stats */}
+            <div className="overview-stats">
+                <div className="stat-card highlight">
+                    <div className="stat-icon-wrapper primary">
+                        <Users size={24} />
                     </div>
-                    <div className="metric-content">
-                        <span className="metric-value">{ticketStats?.summary.total || 0}</span>
-                        <span className="metric-label">Total Tickets</span>
+                    <div className="stat-details">
+                        <span className="stat-number">{portalStats?.totalUsers || 0}</span>
+                        <span className="stat-title">Total Users</span>
                     </div>
-                    <div className="metric-trend up">
-                        <TrendingUp size={14} />
+                    <Link to="/admin/users" className="stat-link">
+                        <Eye size={16} />
+                    </Link>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon-wrapper success">
+                        <UserCheck size={24} />
+                    </div>
+                    <div className="stat-details">
+                        <span className="stat-number">{portalStats?.activeUsers || 0}</span>
+                        <span className="stat-title">Active Users</span>
                     </div>
                 </div>
 
-                <div className="metric-card warning">
-                    <div className="metric-icon">
-                        <AlertCircle size={24} />
+                <div className="stat-card">
+                    <div className="stat-icon-wrapper warning">
+                        <Award size={24} />
                     </div>
-                    <div className="metric-content">
-                        <span className="metric-value">{ticketStats?.summary.open || 0}</span>
-                        <span className="metric-label">Open Tickets</span>
-                    </div>
-                </div>
-
-                <div className="metric-card info">
-                    <div className="metric-icon">
-                        <Activity size={24} />
-                    </div>
-                    <div className="metric-content">
-                        <span className="metric-value">{ticketStats?.summary.inProgress || 0}</span>
-                        <span className="metric-label">In Progress</span>
+                    <div className="stat-details">
+                        <span className="stat-number">{portalStats?.experts || 0}</span>
+                        <span className="stat-title">Experts</span>
                     </div>
                 </div>
 
-                <div className="metric-card success">
-                    <div className="metric-icon">
-                        <CheckCircle size={24} />
+                <div className="stat-card">
+                    <div className="stat-icon-wrapper info">
+                        <Briefcase size={24} />
                     </div>
-                    <div className="metric-content">
-                        <span className="metric-value">{ticketStats?.summary.closed || 0}</span>
-                        <span className="metric-label">Closed</span>
+                    <div className="stat-details">
+                        <span className="stat-number">{portalStats?.customers || 0}</span>
+                        <span className="stat-title">Customers</span>
                     </div>
                 </div>
 
-                <div className="metric-card accent">
-                    <div className="metric-icon">
+                <div className="stat-card">
+                    <div className="stat-icon-wrapper accent">
                         <Clock size={24} />
                     </div>
-                    <div className="metric-content">
-                        <span className="metric-value">
-                            {formatResolutionTime(ticketStats?.summary.avgResolutionHours || 0)}
-                        </span>
-                        <span className="metric-label">Avg. Resolution</span>
+                    <div className="stat-details">
+                        <span className="stat-number">{portalStats?.pendingUsers || 0}</span>
+                        <span className="stat-title">Pending</span>
                     </div>
                 </div>
 
                 {isSuperAdmin && (
-                    <div className="metric-card purple">
-                        <div className="metric-icon">
-                            <Users size={24} />
+                    <div className="stat-card">
+                        <div className="stat-icon-wrapper danger">
+                            <Shield size={24} />
                         </div>
-                        <div className="metric-content">
-                            <span className="metric-value">{adminStats.totalUsers || 0}</span>
-                            <span className="metric-label">Total Users</span>
+                        <div className="stat-details">
+                            <span className="stat-number">{portalStats?.admins || 0}</span>
+                            <span className="stat-title">Admins</span>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Quick Actions */}
-            <div className="section">
-                <h2 className="section-title">
-                    <Target size={20} />
-                    Quick Actions
-                </h2>
-                <div className="quick-actions">
-                    <Link to="/help-desk" className="action-btn primary">
-                        <Plus size={18} />
-                        <span>Create Ticket</span>
-                    </Link>
-                    <Link to="/help-desk" className="action-btn secondary">
-                        <UserPlus size={18} />
-                        <span>Assign Ticket</span>
-                    </Link>
-                    <Link to="/admin/users" className="action-btn tertiary">
-                        <Users size={18} />
-                        <span>Manage Users</span>
-                    </Link>
-                    {isSuperAdmin && (
-                        <Link to="/superadmin/logs" className="action-btn quaternary">
-                            <FileText size={18} />
-                            <span>View Logs</span>
-                        </Link>
-                    )}
+            {/* Quick Navigation */}
+            <section className="section">
+                <div className="section-header">
+                    <h2>
+                        <Zap size={20} />
+                        Quick Navigation
+                    </h2>
+                    <p className="section-subtitle">Access all portal sections</p>
                 </div>
-            </div>
-
-            {/* Charts Section */}
-            <div className="charts-section">
-                {/* Ticket Trend */}
-                <div className="chart-card wide">
-                    <div className="chart-header">
-                        <h3>
-                            <TrendingUp size={18} />
-                            Ticket Trend (Last 30 Days)
-                        </h3>
-                    </div>
-                    <div className="chart-body">
-                        {trendChartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={250}>
-                                <LineChart data={trendChartData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        tick={{ fontSize: 12 }}
-                                        stroke="var(--text-muted)"
-                                    />
-                                    <YAxis 
-                                        tick={{ fontSize: 12 }}
-                                        stroke="var(--text-muted)"
-                                    />
-                                    <Tooltip 
-                                        contentStyle={{
-                                            background: 'var(--bg-primary)',
-                                            border: '1px solid var(--border-light)',
-                                            borderRadius: '8px'
-                                        }}
-                                    />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="tickets" 
-                                        stroke="#6366f1" 
-                                        strokeWidth={2}
-                                        dot={{ fill: '#6366f1', strokeWidth: 2 }}
-                                        activeDot={{ r: 6 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="empty-chart">
-                                <BarChart3 size={48} />
-                                <p>No trend data available</p>
-                            </div>
-                        )}
-                    </div>
+                <div className="shortcuts-grid">
+                    {shortcuts.map((shortcut, index) => {
+                        const IconComponent = shortcut.icon;
+                        return (
+                            <Link 
+                                key={index} 
+                                to={shortcut.path} 
+                                className={`shortcut-card ${shortcut.color}`}
+                            >
+                                <div className="shortcut-header">
+                                    <div className="shortcut-icon">
+                                        <IconComponent size={24} />
+                                    </div>
+                                    {shortcut.stat !== null && (
+                                        <div className="shortcut-stat">
+                                            <span className="stat-value">{shortcut.stat}</span>
+                                            <span className="stat-label">{shortcut.statLabel}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="shortcut-content">
+                                    <h3>{shortcut.title}</h3>
+                                    <p>{shortcut.description}</p>
+                                </div>
+                                <div className="shortcut-arrow">
+                                    <ChevronRight size={18} />
+                                </div>
+                            </Link>
+                        );
+                    })}
                 </div>
+            </section>
 
-                {/* Status Distribution */}
-                <div className="chart-card">
-                    <div className="chart-header">
-                        <h3>
-                            <Activity size={18} />
-                            Status Distribution
-                        </h3>
-                    </div>
-                    <div className="chart-body">
-                        {statusChartData.some(d => d.value > 0) ? (
-                            <ResponsiveContainer width="100%" height={220}>
-                                <PieChart>
-                                    <Pie
-                                        data={statusChartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={50}
-                                        outerRadius={80}
-                                        paddingAngle={2}
-                                        dataKey="value"
-                                    >
-                                        {statusChartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="empty-chart">
-                                <Activity size={48} />
-                                <p>No tickets yet</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Priority Distribution */}
-                <div className="chart-card">
-                    <div className="chart-header">
-                        <h3>
-                            <AlertTriangle size={18} />
-                            By Priority
-                        </h3>
-                    </div>
-                    <div className="chart-body">
-                        {priorityChartData.some(d => d.count > 0) ? (
-                            <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={priorityChartData} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                                    <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--text-muted)" />
-                                    <YAxis 
-                                        type="category" 
-                                        dataKey="name" 
-                                        tick={{ fontSize: 12 }}
-                                        stroke="var(--text-muted)"
-                                        width={60}
-                                    />
-                                    <Tooltip />
-                                    <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                                        {priorityChartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="empty-chart">
-                                <AlertTriangle size={48} />
-                                <p>No priority data</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Bottom Section: Recent Tickets & Notifications */}
-            <div className="bottom-section">
-                {/* Recent Tickets */}
-                <div className="panel tickets-panel">
+            {/* Bottom Grid: Recent Users & Notifications */}
+            <div className="bottom-grid">
+                {/* Recent Users */}
+                <div className="panel users-panel">
                     <div className="panel-header">
                         <h3>
-                            <Ticket size={18} />
-                            Recent Tickets
+                            <UserPlus size={18} />
+                            Recently Joined Users
                         </h3>
-                        <div className="panel-actions">
-                            <button 
-                                className="btn-filter"
-                                onClick={() => setShowFilters(!showFilters)}
-                            >
-                                <Filter size={16} />
-                                <ChevronDown size={14} className={showFilters ? 'rotated' : ''} />
-                            </button>
-                            <Link to="/help-desk" className="btn-view-all">
-                                View All <ArrowRight size={14} />
-                            </Link>
-                        </div>
+                        <Link to="/admin/users" className="btn-view-all">
+                            View All <ArrowRight size={14} />
+                        </Link>
                     </div>
-
-                    {showFilters && (
-                        <div className="filters-bar">
-                            <div className="search-box">
-                                <Search size={16} />
-                                <input
-                                    type="text"
-                                    placeholder="Search tickets..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="all">All Status</option>
-                                <option value="open">Open</option>
-                                <option value="in progress">In Progress</option>
-                                <option value="resolved">Resolved</option>
-                                <option value="closed">Closed</option>
-                            </select>
-                            <select
-                                value={priorityFilter}
-                                onChange={(e) => setPriorityFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="all">All Priority</option>
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                                <option value="urgent">Urgent</option>
-                            </select>
-                        </div>
-                    )}
-
-                    <div className="tickets-list">
-                        {filteredTickets.length > 0 ? (
-                            filteredTickets.map(ticket => (
-                                <div 
-                                    key={ticket.id} 
-                                    className="ticket-item"
-                                    onClick={() => navigate(`/help-desk?ticket=${ticket.ticket_number}`)}
-                                >
-                                    <div className="ticket-main">
-                                        <span className="ticket-number">#{ticket.ticket_number}</span>
-                                        <span className="ticket-subject">{ticket.subject}</span>
+                    <div className="users-list">
+                        {portalStats?.recentUsers && portalStats.recentUsers.length > 0 ? (
+                            portalStats.recentUsers.slice(0, 5).map((u) => (
+                                <div key={u.id} className="user-item">
+                                    <div className="user-avatar">
+                                        {u.name?.charAt(0)?.toUpperCase() || '?'}
                                     </div>
-                                    <div className="ticket-meta">
-                                        <span className={`status-badge ${getStatusColor(ticket.status)}`}>
-                                            {ticket.status}
+                                    <div className="user-info">
+                                        <span className="user-name">{u.name}</span>
+                                        <span className="user-email">{u.email}</span>
+                                    </div>
+                                    <div className="user-meta">
+                                        <span className={`role-badge ${getRoleBadgeClass(u.role)}`}>
+                                            {u.role}
                                         </span>
-                                        <span className={`priority-badge ${getPriorityColor(ticket.priority)}`}>
-                                            {ticket.priority}
-                                        </span>
-                                        <span className="ticket-date">
-                                            {formatDate(ticket.created_at)}
-                                        </span>
+                                        <span className="user-time">{formatDate(u.created_at)}</span>
                                     </div>
                                 </div>
                             ))
                         ) : (
                             <div className="empty-state">
-                                <Ticket size={32} />
-                                <p>No tickets found</p>
+                                <Users size={32} />
+                                <p>No recent users</p>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Notifications Panel */}
+                {/* Ticket Summary */}
+                <div className="panel summary-panel">
+                    <div className="panel-header">
+                        <h3>
+                            <HelpCircle size={18} />
+                            Support Overview
+                        </h3>
+                        <Link to="/help-desk" className="btn-view-all">
+                            Open Help Desk <ArrowRight size={14} />
+                        </Link>
+                    </div>
+                    <div className="summary-stats">
+                        <div className="summary-item">
+                            <div className="summary-icon total">
+                                <MessageSquare size={20} />
+                            </div>
+                            <div className="summary-details">
+                                <span className="summary-value">{ticketSummary.total}</span>
+                                <span className="summary-label">Total Tickets</span>
+                            </div>
+                        </div>
+                        <div className="summary-item">
+                            <div className="summary-icon open">
+                                <AlertCircle size={20} />
+                            </div>
+                            <div className="summary-details">
+                                <span className="summary-value">{ticketSummary.open}</span>
+                                <span className="summary-label">Open</span>
+                            </div>
+                        </div>
+                        <div className="summary-item">
+                            <div className="summary-icon progress">
+                                <Activity size={20} />
+                            </div>
+                            <div className="summary-details">
+                                <span className="summary-value">{ticketSummary.inProgress}</span>
+                                <span className="summary-label">In Progress</span>
+                            </div>
+                        </div>
+                        <div className="summary-item">
+                            <div className="summary-icon closed">
+                                <CheckCircle size={20} />
+                            </div>
+                            <div className="summary-details">
+                                <span className="summary-value">{ticketSummary.closed}</span>
+                                <span className="summary-label">Closed</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Notifications */}
                 <div className="panel notifications-panel">
                     <div className="panel-header">
                         <h3>
                             <Bell size={18} />
-                            Recent Notifications
+                            Notifications
                             {unreadCount > 0 && <span className="count-badge">{unreadCount}</span>}
                         </h3>
                         <Link to="/notifications" className="btn-view-all">
@@ -588,17 +520,16 @@ const AdminDashboard: React.FC = () => {
                                     className={`notification-item ${!notif.is_read ? 'unread' : ''}`}
                                 >
                                     <div className="notif-icon">
-                                        {notif.type === 'ticket' ? <Ticket size={16} /> : 
+                                        {notif.type === 'ticket' ? <MessageSquare size={16} /> : 
                                          notif.type === 'alert' ? <AlertCircle size={16} /> : 
+                                         notif.type === 'user' ? <UserPlus size={16} /> :
                                          <Bell size={16} />}
                                     </div>
                                     <div className="notif-content">
                                         <span className="notif-title">{notif.title}</span>
                                         <span className="notif-message">{notif.message}</span>
-                                        <span className="notif-time">
-                                            {formatDate(notif.created_at)}
-                                        </span>
                                     </div>
+                                    <span className="notif-time">{formatDate(notif.created_at)}</span>
                                 </div>
                             ))
                         ) : (
@@ -610,39 +541,68 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Workload Distribution (SuperAdmin only) */}
-                {isSuperAdmin && ticketStats?.workload && ticketStats.workload.length > 0 && (
-                    <div className="panel workload-panel">
+                {/* Role Distribution (SuperAdmin) */}
+                {isSuperAdmin && portalStats && (
+                    <div className="panel distribution-panel">
                         <div className="panel-header">
                             <h3>
-                                <Users size={18} />
-                                Team Workload
+                                <Star size={18} />
+                                User Distribution
                             </h3>
                         </div>
-                        <div className="workload-list">
-                            {ticketStats.workload.map((item, index) => (
-                                <div key={index} className="workload-item">
-                                    <div className="workload-user">
-                                        <div className="avatar">
-                                            {item.assignee_name?.charAt(0) || '?'}
-                                        </div>
-                                        <span className="user-name">{item.assignee_name || 'Unassigned'}</span>
-                                    </div>
-                                    <div className="workload-stats">
-                                        <span className="stat total">{item.ticket_count} total</span>
-                                        <span className="stat open">{item.open_count} open</span>
-                                        <span className="stat progress">{item.in_progress_count} in progress</span>
-                                    </div>
-                                    <div className="workload-bar">
-                                        <div 
-                                            className="bar-fill"
-                                            style={{ 
-                                                width: `${Math.min((item.ticket_count / Math.max(...ticketStats.workload.map(w => w.ticket_count))) * 100, 100)}%` 
-                                            }}
-                                        />
-                                    </div>
+                        <div className="distribution-list">
+                            <div className="distribution-item">
+                                <div className="dist-label">
+                                    <span className="dist-dot admin"></span>
+                                    Admins
                                 </div>
-                            ))}
+                                <div className="dist-bar-container">
+                                    <div 
+                                        className="dist-bar admin" 
+                                        style={{ width: `${portalStats.totalUsers ? (portalStats.admins / portalStats.totalUsers) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                                <span className="dist-count">{portalStats.admins}</span>
+                            </div>
+                            <div className="distribution-item">
+                                <div className="dist-label">
+                                    <span className="dist-dot analyst"></span>
+                                    Analysts
+                                </div>
+                                <div className="dist-bar-container">
+                                    <div 
+                                        className="dist-bar analyst" 
+                                        style={{ width: `${portalStats.totalUsers ? (portalStats.analysts / portalStats.totalUsers) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                                <span className="dist-count">{portalStats.analysts}</span>
+                            </div>
+                            <div className="distribution-item">
+                                <div className="dist-label">
+                                    <span className="dist-dot expert"></span>
+                                    Experts
+                                </div>
+                                <div className="dist-bar-container">
+                                    <div 
+                                        className="dist-bar expert" 
+                                        style={{ width: `${portalStats.totalUsers ? (portalStats.experts / portalStats.totalUsers) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                                <span className="dist-count">{portalStats.experts}</span>
+                            </div>
+                            <div className="distribution-item">
+                                <div className="dist-label">
+                                    <span className="dist-dot customer"></span>
+                                    Customers
+                                </div>
+                                <div className="dist-bar-container">
+                                    <div 
+                                        className="dist-bar customer" 
+                                        style={{ width: `${portalStats.totalUsers ? (portalStats.customers / portalStats.totalUsers) * 100 : 0}%` }}
+                                    ></div>
+                                </div>
+                                <span className="dist-count">{portalStats.customers}</span>
+                            </div>
                         </div>
                     </div>
                 )}
