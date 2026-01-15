@@ -9,6 +9,16 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
     },
+    // Pre-bundle recharts to avoid TDZ (Temporal Dead Zone) issues
+    optimizeDeps: {
+        include: [
+            'recharts',
+            'recharts/lib/component/ResponsiveContainer',
+            'recharts/lib/chart/LineChart',
+            'recharts/lib/chart/BarChart',
+            'recharts/lib/chart/PieChart',
+        ],
+    },
     server: {
         port: 5173,
         proxy: {
@@ -25,26 +35,27 @@ export default defineConfig({
     build: {
         outDir: 'dist',
         sourcemap: true,
-        chunkSizeWarningLimit: 300,
+        chunkSizeWarningLimit: 500,
         rollupOptions: {
             output: {
-                manualChunks(id) {
-                    // Core React
-                    if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
-                        return 'vendor-react';
-                    }
-                    // Router
-                    if (id.includes('node_modules/react-router')) {
-                        return 'vendor-router';
-                    }
-                    // Charts
-                    if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {
-                        return 'vendor-charts';
-                    }
-                    // UI libraries
-                    if (id.includes('node_modules/framer-motion') || id.includes('node_modules/lucide-react')) {
-                        return 'vendor-ui';
-                    }
+                manualChunks: {
+                    // Use object syntax instead of function to avoid chunking issues
+                    'vendor-react': ['react', 'react-dom'],
+                    'vendor-router': ['react-router-dom'],
+                    'vendor-ui': ['lucide-react'],
+                    // Keep recharts and d3 together as a single chunk
+                    'vendor-charts': [
+                        'recharts',
+                        'd3-scale',
+                        'd3-shape',
+                        'd3-path',
+                        'd3-interpolate',
+                        'd3-color',
+                        'd3-format',
+                        'd3-time',
+                        'd3-time-format',
+                        'd3-array',
+                    ],
                 },
             },
         },
