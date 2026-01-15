@@ -13,12 +13,11 @@ interface Task {
     id: string;
     title: string;
     description: string;
-    assigned_to: string | null;
+    assigned_to_id: string | null;
     assigned_user_name: string | null;
     assigned_user_email?: string | null;
     due_date: string | null;
     status: 'Pending' | 'InProgress' | 'Completed';
-    org_id?: string;
     created_by: string;
     created_by_name?: string | null;
     created_at: string;
@@ -484,7 +483,7 @@ const TaskAssignment: React.FC = () => {
                                 ...t,
                                 ...data.data.task,
                                 // Ensure these are set even if server response is incomplete
-                                assigned_to: data.data.task.assigned_to || expertId || null,
+                                assigned_to_id: data.data.task.assigned_to_id || expertId || null,
                                 assigned_user_name: data.data.task.assigned_user_name || expertName || null,
                                 assigned_user_email: data.data.task.assigned_user_email || expertEmail || null
                             };
@@ -492,7 +491,7 @@ const TaskAssignment: React.FC = () => {
                         // Fallback to local update
                         return {
                             ...t,
-                            assigned_to: expertId || null,
+                            assigned_to_id: expertId || null,
                             assigned_user_name: expertName || null,
                             assigned_user_email: expertEmail || null
                         };
@@ -522,7 +521,7 @@ const TaskAssignment: React.FC = () => {
         setEditingTask(task);
         setEditTitle(task.title);
         setEditDescription(task.description || '');
-        setEditAssignedTo(task.assigned_to || '');
+        setEditAssignedTo(task.assigned_to_id || '');
         setEditDueDate(task.due_date ? task.due_date.split('T')[0] : '');
         setEditStatus(task.status);
         setShowEditModal(true);
@@ -578,7 +577,7 @@ const TaskAssignment: React.FC = () => {
                             ...t,
                             title: editTitle.trim(),
                             description: editDescription.trim(),
-                            assigned_to: editAssignedTo || null,
+                            assigned_to_id: editAssignedTo || null,
                             due_date: editDueDate || null,
                             status: editStatus
                         };
@@ -822,7 +821,7 @@ const TaskAssignment: React.FC = () => {
                                             <div className="actions-row">
                                                 <ExpertSelector
                                                     experts={assignableUsers}
-                                                    selectedId={task.assigned_to || ''}
+                                                    selectedId={task.assigned_to_id || ''}
                                                     onSelect={(id) => handleAssignTask(task.id, id)}
                                                     placeholder="Assign"
                                                     loading={loadingExperts}
