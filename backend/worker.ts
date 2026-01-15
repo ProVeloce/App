@@ -5270,12 +5270,13 @@ export default {
                 if (role === "SUPERADMIN") {
                     whereClause = "1=1";
                 } else if (role === "ADMIN") {
-                    whereClause = "t.org_id = ?";
+                    whereClause = "(t.org_id = ? OR t.org_id IS NULL)";
                     params = [requesterOrgId];
                 } else {
                     // Experts and others see only tasks assigned to them
-                    whereClause = "t.assigned_to = ?";
-                    params = [payload.userId];
+                    // Check both column variants for backwards compatibility
+                    whereClause = "(t.assigned_to = ? OR t.assigned_to_id = ?)";
+                    params = [payload.userId, payload.userId];
                 }
 
                 try {
