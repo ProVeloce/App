@@ -41,6 +41,7 @@ interface UserDetail {
     bookings: any[];
     sessions: any[];
     expertApplication: any;
+    activityLogs: any[];
 }
 
 interface Stats {
@@ -239,23 +240,25 @@ const UserManagement: React.FC = () => {
                     <select
                         className="filter-select"
                         value={roleFilter}
-                        onChange={(e) => setRoleFilter(e.target.value)}
+                        onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
                     >
                         <option value="">All Roles</option>
                         <option value="superadmin">Superadmin</option>
                         <option value="admin">Admin</option>
-                        <option value="Expert">Expert</option>
-                        <option value="Customer">Customer</option>
+                        <option value="analyst">Analyst</option>
+                        <option value="expert">Expert</option>
+                        <option value="customer">Customer</option>
                     </select>
                     <select
                         className="filter-select"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                     >
                         <option value="">All Statuses</option>
                         <option value="active">Active</option>
                         <option value="suspended">Suspended</option>
                         <option value="inactive">Inactive</option>
+                        <option value="pending_verification">Pending Verification</option>
                     </select>
                 </div>
             </div>
@@ -381,17 +384,23 @@ const UserManagement: React.FC = () => {
             </div>
 
             {showDetailModal && selectedUser && (
-                <div className="modal-overlay">
+                <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowDetailModal(false)}>
                     <div className="modal-content user-detail-modal">
                         <div className="modal-header">
-                            <h3>User History & Details</h3>
+                            <div className="modal-header-content">
+                                <Avatar src={selectedUser.user.profile_image || selectedUser.user.profile_photo_url} name={selectedUser.user.name} />
+                                <div>
+                                    <h3>{selectedUser.user.name}</h3>
+                                    <span className="modal-subtitle">{selectedUser.user.email}</span>
+                                </div>
+                            </div>
                             <button className="close-btn" onClick={() => setShowDetailModal(false)}>
                                 <X size={20} />
                             </button>
                         </div>
                         <div className="modal-body">
                             <section className="detail-section">
-                                <h4>Profile Information</h4>
+                                <h4><UserIcon size={16} /> Profile Information</h4>
                                 <div className="detail-grid">
                                     <div className="detail-item">
                                         <label>Full Name</label>
@@ -407,70 +416,96 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div className="detail-item">
                                         <label>Role</label>
-                                        <span>{selectedUser.user.role}</span>
+                                        {getRoleBadge(selectedUser.user.role)}
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Status</label>
+                                        <span className={`status-tag ${selectedUser.user.status}`}>{selectedUser.user.status}</span>
                                     </div>
                                     <div className="detail-item">
                                         <label>Member Since</label>
                                         <span>{new Date(selectedUser.user.created_at).toLocaleDateString()}</span>
                                     </div>
+                                    <div className="detail-item">
+                                        <label>Last Login</label>
+                                        <span>{selectedUser.user.last_login_at ? new Date(selectedUser.user.last_login_at).toLocaleString() : 'Never'}</span>
+                                    </div>
                                 </div>
                             </section>
 
                             <section className="detail-section">
-                                <h4>Booking History (Connect Requests)</h4>
-                                {selectedUser.bookings.length > 0 ? (
-                                    <table className="mini-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Ref ID</th>
-                                                <th>{selectedUser.user.role === 'Expert' ? 'Customer' : 'Expert'}</th>
-                                                <th>Status</th>
-                                                <th>Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {selectedUser.bookings.map((b: any) => (
-                                                <tr key={b.id}>
-                                                    <td>{b.id.substring(0, 8)}...</td>
-                                                    <td>{selectedUser.user.role === 'Expert' ? b.customer_name : b.expert_name}</td>
-                                                    <td><span className={`status-tag ${b.status}`}>{b.status}</span></td>
-                                                    <td>{new Date(b.created_at).toLocaleDateString()}</td>
+                                <h4><Clock size={16} /> Booking History (Connect Requests)</h4>
+                                {selectedUser.bookings && selectedUser.bookings.length > 0 ? (
+                                    <div className="table-scroll">
+                                        <table className="mini-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Ref ID</th>
+                                                    <th>{selectedUser.user.role.toLowerCase() === 'expert' ? 'Customer' : 'Expert'}</th>
+                                                    <th>Status</th>
+                                                    <th>Date</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {selectedUser.bookings.map((b: any) => (
+                                                    <tr key={b.id}>
+                                                        <td>{b.id?.substring(0, 8) || 'N/A'}...</td>
+                                                        <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (b.customer_name || 'N/A') : (b.expert_name || 'N/A')}</td>
+                                                        <td><span className={`status-tag ${b.status?.toLowerCase()}`}>{b.status}</span></td>
+                                                        <td>{b.created_at ? new Date(b.created_at).toLocaleDateString() : 'N/A'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 ) : (
                                     <p className="no-data">No booking history available.</p>
                                 )}
                             </section>
 
                             <section className="detail-section">
-                                <h4>Session History (Meetings)</h4>
-                                {selectedUser.sessions.length > 0 ? (
-                                    <table className="mini-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Meeting Name</th>
-                                                <th>Expert</th>
-                                                <th>Date</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {selectedUser.sessions.map((s: any) => (
-                                                <tr key={s.id}>
-                                                    <td>{s.title}</td>
-                                                    <td>{s.expert_name}</td>
-                                                    <td>{new Date(s.scheduled_date).toLocaleDateString()}</td>
-                                                    <td><span className={`status-tag ${s.status}`}>{s.status}</span></td>
+                                <h4><CheckCircle size={16} /> Session History (Meetings)</h4>
+                                {selectedUser.sessions && selectedUser.sessions.length > 0 ? (
+                                    <div className="table-scroll">
+                                        <table className="mini-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Meeting</th>
+                                                    <th>With</th>
+                                                    <th>Date</th>
+                                                    <th>Status</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {selectedUser.sessions.map((s: any) => (
+                                                    <tr key={s.id}>
+                                                        <td>{s.title || 'Session'}</td>
+                                                        <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (s.customer_name || 'N/A') : (s.expert_name || 'N/A')}</td>
+                                                        <td>{s.scheduled_date ? new Date(s.scheduled_date).toLocaleDateString() : 'N/A'}</td>
+                                                        <td><span className={`status-tag ${s.status?.toLowerCase()}`}>{s.status}</span></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 ) : (
                                     <p className="no-data">No session history found.</p>
                                 )}
                             </section>
+
+                            {selectedUser.activityLogs && selectedUser.activityLogs.length > 0 && (
+                                <section className="detail-section">
+                                    <h4><AlertCircle size={16} /> Recent Activity</h4>
+                                    <div className="activity-list">
+                                        {selectedUser.activityLogs.slice(0, 10).map((log: any) => (
+                                            <div key={log.id} className="activity-item">
+                                                <span className="activity-action">{log.action?.replace(/_/g, ' ')}</span>
+                                                <span className="activity-time">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -483,26 +518,49 @@ const UserManagement: React.FC = () => {
                 .no-results-cell { padding: var(--space-12) !important; text-align: center; }
                 .empty-state { color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
                 
-                .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 2rem; }
-                .modal-content { background: white; border-radius: 12px; width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-                .modal-header { padding: 1.5rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-                .close-btn { background: none; border: none; cursor: pointer; color: #666; }
+                .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem; animation: fadeIn 0.2s ease-out; }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                .modal-content { background: var(--bg-primary, white); border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: slideUp 0.3s ease-out; }
+                @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border-light, #eee); display: flex; justify-content: space-between; align-items: center; }
+                .modal-header-content { display: flex; align-items: center; gap: 1rem; }
+                .modal-header-content h3 { margin: 0; font-size: 1.25rem; font-weight: 600; color: var(--text-primary, #333); }
+                .modal-subtitle { font-size: 0.875rem; color: var(--text-secondary, #666); }
+                .close-btn { background: var(--bg-tertiary, #f5f5f5); border: none; cursor: pointer; color: var(--text-secondary, #666); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+                .close-btn:hover { background: var(--bg-surface-secondary, #eee); color: var(--text-primary, #333); }
                 .modal-body { padding: 1.5rem; }
                 .detail-section { margin-bottom: 2rem; }
-                .detail-section h4 { margin-bottom: 1rem; color: var(--primary-color); border-bottom: 2px solid #f0f0f0; padding-bottom: 0.5rem; }
-                .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; }
-                .detail-item label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 0.25rem; text-transform: uppercase; }
-                .detail-item span { font-weight: 500; color: #333; }
+                .detail-section h4 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-600, #6366f1); border-bottom: 2px solid var(--border-light, #f0f0f0); padding-bottom: 0.75rem; font-size: 1rem; }
+                .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.25rem; }
+                .detail-item label { display: block; font-size: 0.7rem; color: var(--text-tertiary, #888); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
+                .detail-item span { font-weight: 500; color: var(--text-primary, #333); }
+                .table-scroll { overflow-x: auto; }
                 .mini-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-                .mini-table th { text-align: left; padding: 0.75rem; background: #f9fafb; border-bottom: 1px solid #eee; }
-                .mini-table td { padding: 0.75rem; border-bottom: 1px solid #eee; }
-                .status-tag { padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; text-transform: capitalize; }
-                .status-tag.accepted, .status-tag.completed { background: #e6fcf5; color: #087f5b; }
-                .status-tag.pending { background: #fff9db; color: #f08c00; }
-                .status-tag.rejected { background: #fff5f5; color: #fa5252; }
-                .no-data { text-align: center; color: #888; font-style: italic; padding: 1rem; }
-                .action-btn.view { color: var(--primary-color); }
-                .action-btn.view:hover { background: var(--primary-light); }
+                .mini-table th { text-align: left; padding: 0.75rem; background: var(--bg-surface-secondary, #f9fafb); border-bottom: 1px solid var(--border-light, #eee); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary, #666); }
+                .mini-table td { padding: 0.75rem; border-bottom: 1px solid var(--border-light, #eee); }
+                .status-tag { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; text-transform: capitalize; font-weight: 500; }
+                .status-tag.accepted, .status-tag.completed, .status-tag.active { background: #e6fcf5; color: #087f5b; }
+                .status-tag.pending, .status-tag.pending_verification { background: #fff9db; color: #f08c00; }
+                .status-tag.rejected, .status-tag.inactive, .status-tag.suspended { background: #fff5f5; color: #fa5252; }
+                .status-tag.scheduled, .status-tag.in_progress { background: #e7f5ff; color: #1971c2; }
+                .no-data { text-align: center; color: var(--text-muted, #888); font-style: italic; padding: 1.5rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; }
+                .activity-list { display: flex; flex-direction: column; gap: 0.5rem; }
+                .activity-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; }
+                .activity-action { font-size: 0.875rem; color: var(--text-primary, #333); text-transform: capitalize; }
+                .activity-time { font-size: 0.75rem; color: var(--text-tertiary, #888); }
+                
+                /* Action buttons visibility fix */
+                .action-btn { display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+                .action-btn svg { display: block !important; flex-shrink: 0; }
+                .action-btn.view { color: var(--primary-600, #6366f1); }
+                .action-btn.view:hover { background: var(--primary-50, #eef2ff); border-color: var(--primary-200, #c7d2fe); }
+                .action-btn.delete { color: var(--text-secondary, #666); }
+                .action-btn.delete:hover { background: var(--danger-50, #fef2f2); color: var(--danger-600, #dc2626); border-color: var(--danger-200, #fecaca); }
+                
+                /* Dark mode support */
+                [data-theme="dark"] .modal-content { background: var(--bg-secondary); }
+                [data-theme="dark"] .mini-table th { background: var(--bg-tertiary); }
+                [data-theme="dark"] .detail-item span { color: var(--text-primary); }
             `}</style>
         </div>
     );

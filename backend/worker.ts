@@ -1271,11 +1271,11 @@ export default {
                 }
 
                 if (filterRole) {
-                    query += " AND role = ?";
+                    query += " AND LOWER(role) = LOWER(?)";
                     params.push(filterRole);
                 }
                 if (status) {
-                    query += " AND status = ?";
+                    query += " AND LOWER(status) = LOWER(?)";
                     params.push(status);
                 }
                 if (search) {
@@ -1353,7 +1353,7 @@ export default {
                 });
             }
 
-            // GET /api/admin/users/:id - Get single user
+            // GET /api/admin/users/:id - Get single user with full details and history
             if (url.pathname.match(/^\/api\/admin\/users\/[^\/]+$/) && request.method === "GET") {
                 const auth = await checkAdminRole(request);
                 if (!auth.valid) {
@@ -1366,18 +1366,92 @@ export default {
 
                 const id = url.pathname.split("/").pop();
                 const user = await env.proveloce_db.prepare(
-                    "SELECT id, name, email, phone, role, status, email_verified, last_login_at, created_at FROM users WHERE id = ?"
-                ).bind(id).first();
+                    "SELECT id, name, email, phone, role, status, profile_image, profile_photo_url, email_verified, last_login_at, created_at, updated_at FROM users WHERE id = ?"
+                ).bind(id).first() as any;
 
                 if (!user) {
                     return jsonResponse({ success: false, error: "User not found" }, 404);
                 }
 
+                // Get user profile
                 const profile = await env.proveloce_db.prepare(
                     "SELECT * FROM user_profiles WHERE user_id = ?"
                 ).bind(id).first();
 
-                return jsonResponse({ success: true, data: { user: { ...user, profile } } });
+                // Get connect requests (bookings) history
+                let bookings: any[] = [];
+                try {
+                    const bookingsResult = await env.proveloce_db.prepare(`
+                        SELECT cr.*,
+                               e.name as expert_name,
+                               c.name as customer_name
+                        FROM connect_requests cr
+                        LEFT JOIN users e ON e.id = cr.expert_id
+                        LEFT JOIN users c ON c.id = cr.customer_id
+                        WHERE cr.customer_id = ? OR cr.expert_id = ?
+                        ORDER BY cr.created_at DESC
+                        LIMIT 50
+                    `).bind(id, id).all();
+                    bookings = bookingsResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching bookings:", e);
+                }
+
+                // Get session history (meetings)
+                let sessions: any[] = [];
+                try {
+                    const sessionsResult = await env.proveloce_db.prepare(`
+                        SELECT s.*,
+                               e.name as expert_name,
+                               c.name as customer_name
+                        FROM sessions s
+                        LEFT JOIN users e ON e.id = s.expert_id
+                        LEFT JOIN users c ON c.id = s.customer_id
+                        WHERE s.customer_id = ? OR s.expert_id = ?
+                        ORDER BY s.scheduled_date DESC
+                        LIMIT 50
+                    `).bind(id, id).all();
+                    sessions = sessionsResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching sessions:", e);
+                }
+
+                // Get expert application if user is an expert or has applied
+                let expertApplication = null;
+                try {
+                    const appResult = await env.proveloce_db.prepare(
+                        "SELECT * FROM expert_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1"
+                    ).bind(id).first();
+                    expertApplication = appResult;
+                } catch (e) {
+                    console.error("Error fetching expert application:", e);
+                }
+
+                // Get activity logs for this user
+                let activityLogs: any[] = [];
+                try {
+                    const logsResult = await env.proveloce_db.prepare(`
+                        SELECT * FROM activity_logs 
+                        WHERE user_id = ? OR entity_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 20
+                    `).bind(id, id).all();
+                    activityLogs = logsResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching activity logs:", e);
+                }
+
+                return jsonResponse({ 
+                    success: true, 
+                    data: { 
+                        user: { ...user, profile },
+                        profile,
+                        bookings,
+                        sessions,
+                        expertApplication,
+                        activityLogs
+                    } 
+                });
             }
 
             // POST /api/admin/users - Create new user
