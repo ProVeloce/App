@@ -2114,7 +2114,7 @@ export default {
                             // System & Maintenance Settings
                             { id: crypto.randomUUID(), category: 'system', key: 'maintenance_mode', value: 'false', type: 'boolean', label: 'Maintenance Mode', description: 'Enable to show maintenance page to customers and experts' },
                             { id: crypto.randomUUID(), category: 'system', key: 'maintenance_message', value: 'System is currently under maintenance. Please check back later.', type: 'string', label: 'Maintenance Message', description: 'Custom message displayed on maintenance page' },
-                            { id: crypto.randomUUID(), category: 'system', key: 'maintenance_end_time', value: '', type: 'string', label: 'Maintenance End Time', description: 'Estimated end time (ISO format, e.g., 2026-01-15T18:00:00Z)' },
+                            { id: crypto.randomUUID(), category: 'system', key: 'maintenance_end_time', value: '', type: 'datetime', label: 'Maintenance End Time', description: 'Estimated end time for maintenance (displayed in IST)' },
                             
                             // Authentication Settings
                             { id: crypto.randomUUID(), category: 'auth', key: 'session_timeout_minutes', value: '30', type: 'number', label: 'Session Timeout (minutes)', description: 'Auto logout after inactivity' },

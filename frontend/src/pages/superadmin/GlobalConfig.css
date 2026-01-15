@@ -364,6 +364,73 @@
     font-weight: 500;
 }
 
+/* Datetime Input */
+.datetime-input-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    position: relative;
+}
+
+.datetime-input {
+    min-width: 200px;
+    padding-right: var(--space-8);
+}
+
+.datetime-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.datetime-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+.datetime-display {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.datetime-display svg {
+    color: var(--primary-500);
+}
+
+.clear-datetime-btn {
+    position: absolute;
+    top: 50%;
+    right: var(--space-2);
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition: all 0.2s;
+}
+
+.clear-datetime-btn:hover {
+    background: var(--danger-100);
+    color: var(--danger);
+}
+
+.time-input {
+    min-width: 120px;
+}
+
 /* Footer */
 .config-footer {
     display: flex;

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     Settings, Save, RefreshCw, Shield, Bell, Ticket, Palette, BarChart3,
     Users, ToggleLeft, ToggleRight, ChevronDown, ChevronRight, Check,
-    AlertCircle, Lock, Mail, Clock, Globe, FileText, Loader2, Info, Wrench
+    AlertCircle, Lock, Mail, Clock, Globe, FileText, Loader2, Info, Wrench, Calendar
 } from 'lucide-react';
 import { configApi, SystemConfig } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useConfig, broadcastConfigUpdate } from '../../context/ConfigContext';
+import { formatForInput, formatDateTime, IST_TIMEZONE } from '../../utils/dateUtils';
 import './GlobalConfig.css';
 
 interface CategoryInfo {
@@ -243,7 +244,91 @@ const GlobalConfig: React.FC = () => {
                     </select>
                 );
 
+            case 'datetime':
+                // Convert ISO string to datetime-local format for input
+                const datetimeValue = currentValue ? formatForInput(currentValue) : '';
+                return (
+                    <div className="datetime-input-wrapper">
+                        <input
+                            type="datetime-local"
+                            className={`config-input datetime-input ${hasChange ? 'changed' : ''}`}
+                            value={datetimeValue}
+                            onChange={(e) => {
+                                // Store the datetime-local value - will be converted to IST on display
+                                const inputValue = e.target.value;
+                                if (inputValue) {
+                                    // Convert to ISO format with IST indication
+                                    const date = new Date(inputValue);
+                                    handleValueChange(config, date.toISOString());
+                                } else {
+                                    handleValueChange(config, '');
+                                }
+                            }}
+                        />
+                        {currentValue && (
+                            <span className="datetime-display">
+                                <Clock size={12} />
+                                {formatDateTime(currentValue)} IST
+                            </span>
+                        )}
+                        <button 
+                            className="clear-datetime-btn"
+                            onClick={() => handleValueChange(config, '')}
+                            title="Clear date/time"
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+
+            case 'time':
+                // Time only input in 24-hour format
+                const timeValue = currentValue || '';
+                return (
+                    <input
+                        type="time"
+                        className={`config-input time-input ${hasChange ? 'changed' : ''}`}
+                        value={timeValue}
+                        onChange={(e) => handleValueChange(config, e.target.value)}
+                    />
+                );
+
             default:
+                // Check if key contains 'time' or 'date' for automatic datetime handling
+                if (config.key.includes('_time') || config.key.includes('_date') || config.key.includes('end_time')) {
+                    const autoDatetimeValue = currentValue ? formatForInput(currentValue) : '';
+                    return (
+                        <div className="datetime-input-wrapper">
+                            <input
+                                type="datetime-local"
+                                className={`config-input datetime-input ${hasChange ? 'changed' : ''}`}
+                                value={autoDatetimeValue}
+                                onChange={(e) => {
+                                    const inputValue = e.target.value;
+                                    if (inputValue) {
+                                        const date = new Date(inputValue);
+                                        handleValueChange(config, date.toISOString());
+                                    } else {
+                                        handleValueChange(config, '');
+                                    }
+                                }}
+                            />
+                            {currentValue && (
+                                <span className="datetime-display">
+                                    <Clock size={12} />
+                                    {formatDateTime(currentValue)} IST
+                                </span>
+                            )}
+                            <button 
+                                className="clear-datetime-btn"
+                                onClick={() => handleValueChange(config, '')}
+                                title="Clear date/time"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    );
+                }
                 return (
                     <input
                         type="text"

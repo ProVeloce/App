@@ -522,7 +522,7 @@ export interface SystemConfig {
     category: string;
     key: string;
     value: string;
-    type: 'string' | 'number' | 'boolean' | 'select';
+    type: 'string' | 'number' | 'boolean' | 'select' | 'datetime' | 'time';
     label: string;
     description: string;
     updated_at?: string;
