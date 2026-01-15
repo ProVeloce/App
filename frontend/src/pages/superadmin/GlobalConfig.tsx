@@ -243,14 +243,20 @@ const GlobalConfig: React.FC = () => {
 
         switch (config.type) {
             case 'boolean':
-                const isEnabled = currentValue === 'true';
+                // Support both 'true'/'false' and 'ENABLED'/'DISABLED' values
+                const boolValue = currentValue?.toLowerCase();
+                const isEnabled = boolValue === 'true' || boolValue === 'enabled';
+                // For maintenance_mode, use ENABLED/DISABLED values for clarity
+                const useTextValues = config.key === 'maintenance_mode';
+                const enabledValue = useTextValues ? 'ENABLED' : 'true';
+                const disabledValue = useTextValues ? 'DISABLED' : 'false';
                 return (
                     <button
                         className={`toggle-btn ${isEnabled ? 'active' : ''} ${hasChange ? 'changed' : ''}`}
-                        onClick={() => handleValueChange(config, isEnabled ? 'false' : 'true')}
+                        onClick={() => handleValueChange(config, isEnabled ? disabledValue : enabledValue)}
                     >
                         {isEnabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-                        <span>{isEnabled ? 'Enabled' : 'Disabled'}</span>
+                        <span>{isEnabled ? 'ENABLED' : 'DISABLED'}</span>
                     </button>
                 );
 

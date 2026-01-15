@@ -222,14 +222,20 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         };
 
         // Check for maintenance mode in multiple sources
+        // Supports both 'true'/'false' and 'ENABLED'/'DISABLED' values
         const maintenanceFromLive = liveConfig['maintenance_mode'] ?? liveConfig['system.maintenance_mode'];
         const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
         const maintenanceModeValue = maintenanceFromLive ?? maintenanceFromSystem?.value ?? 'false';
+        
+        // Check if maintenance is enabled (supports multiple value formats)
+        const isMaintenanceEnabled = 
+            String(maintenanceModeValue).toLowerCase() === 'true' || 
+            String(maintenanceModeValue).toUpperCase() === 'ENABLED';
 
         return {
             // System & Maintenance
             system: {
-                maintenanceMode: String(maintenanceModeValue) === 'true',
+                maintenanceMode: isMaintenanceEnabled,
                 maintenanceMessage: getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage),
                 maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null,
             },

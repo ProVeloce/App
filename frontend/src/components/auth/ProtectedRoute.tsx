@@ -15,8 +15,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const { isAuthenticated, isLoading, user } = useAuth();
     const location = useLocation();
     const [hasToken, setHasToken] = useState<boolean | null>(null);
-    const { isMaintenanceMode } = useMaintenanceMode();
-    const { refreshConfig } = useConfig();
+    const { isMaintenanceMode, message, endTime } = useMaintenanceMode();
+    const { refreshConfig, liveConfig, configVersion } = useConfig();
 
     // Check for token synchronously to prevent redirect loops
     useEffect(() => {
@@ -24,12 +24,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         setHasToken(!!token);
     }, []);
 
-    // Refresh config when user logs in or on route change to get latest maintenance status
+    // Refresh config when user logs in to get latest maintenance status
     useEffect(() => {
         if (user) {
             refreshConfig();
         }
     }, [user?.id, refreshConfig]);
+    
+    // Log maintenance mode changes for debugging (can be removed in production)
+    useEffect(() => {
+        if (isMaintenanceMode) {
+            console.log('[Maintenance] Mode ENABLED - checking user role bypass');
+        }
+    }, [isMaintenanceMode, configVersion]);
 
     // Show loading only during initial auth check
     if (isLoading && hasToken === null) {
