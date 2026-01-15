@@ -95,6 +95,11 @@
     background: var(--bg-secondary);
 }
 
+.tasks-table tr.updating {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
 .task-title {
     font-weight: 600;
     color: var(--text-primary);
@@ -116,7 +121,25 @@
     align-items: center;
     gap: var(--space-2);
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
+}
+
+.assigned-user.has-assignment {
+    color: var(--success-600);
+    font-weight: 500;
+}
+
+.due-date.has-date {
+    color: var(--text-primary);
+}
+
+.warning-text {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--warning-600);
+    margin-left: var(--space-3);
+    font-size: 0.8125rem;
 }
 
 /* Status Badges */
@@ -186,7 +209,12 @@
 /* Expert Selector Component */
 .expert-selector {
     position: relative;
-    min-width: 180px;
+    min-width: 160px;
+}
+
+.expert-selector.disabled {
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 .expert-selector-trigger {
@@ -287,13 +315,13 @@
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
-    right: 0;
-    min-width: 280px;
+    min-width: 300px;
+    max-width: 350px;
     background: var(--bg-primary);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-lg);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
     animation: dropdownFadeIn 0.15s ease-out;
 }
 
