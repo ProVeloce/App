@@ -41,6 +41,12 @@
     object-fit: contain;
 }
 
+.cookie-popup-emoji {
+    font-size: 32px;
+    line-height: 1;
+    display: block;
+}
+
 /* Content */
 .cookie-popup-content {
     flex: 1;

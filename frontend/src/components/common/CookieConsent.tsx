@@ -28,9 +28,8 @@ export const hasCookieConsent = (): boolean => {
     return getCookieConsentStatus() === 'accepted';
 };
 
-// Cookie image - using local asset or fallback to CDN
-const COOKIE_IMAGE_URL = '/images/cookie.png';
-const COOKIE_FALLBACK_URL = 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png';
+// Cookie image from CDN
+const COOKIE_IMAGE_URL = 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png';
 
 /**
  * Modern Cookie Consent Popup Component
@@ -40,7 +39,7 @@ const COOKIE_FALLBACK_URL = 'https://cdn-icons-png.flaticon.com/512/1047/1047711
 const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
-    const [imgSrc, setImgSrc] = useState(COOKIE_IMAGE_URL);
+    const [imageError, setImageError] = useState(false);
 
     useEffect(() => {
         const consentStatus = getCookieConsentStatus();
@@ -73,21 +72,21 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         }, 350);
     };
 
-    const handleImageError = () => {
-        setImgSrc(COOKIE_FALLBACK_URL);
-    };
-
     if (!isVisible) return null;
 
     return (
         <div className={`cookie-popup ${isAnimating ? 'visible' : ''}`}>
             <div className="cookie-popup-image-wrapper">
-                <img 
-                    src={imgSrc} 
-                    alt="" 
-                    className="cookie-popup-image"
-                    onError={handleImageError}
-                />
+                {imageError ? (
+                    <span className="cookie-popup-emoji" role="img" aria-label="cookie">🍪</span>
+                ) : (
+                    <img 
+                        src={COOKIE_IMAGE_URL} 
+                        alt="" 
+                        className="cookie-popup-image"
+                        onError={() => setImageError(true)}
+                    />
+                )}
             </div>
             
             <div className="cookie-popup-content">
