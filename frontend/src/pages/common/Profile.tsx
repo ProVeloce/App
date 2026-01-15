@@ -191,14 +191,25 @@ const Profile: React.FC = () => {
                     <div className="profile-card">
                         <div className="avatar-section">
                             <div className="avatar-wrapper">
-                                {profileData?.profile?.avatarUrl ? (
-                                    <Avatar
-                                        src={profileData.profile.avatarUrl}
-                                        name={profileData.name}
+                                {profileData?.profile?.avatarUrl || profileData?.profile?.avatar_url || profileData?.profile_image ? (
+                                    <img 
+                                        src={profileData.profile?.avatarUrl || profileData.profile?.avatar_url || profileData.profile_image}
+                                        alt={profileData?.name || 'Profile'}
+                                        className="avatar-image"
+                                        onError={(e) => {
+                                            // On error, hide image and show fallback
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                                            if (fallback) fallback.style.display = 'flex';
+                                        }}
                                     />
-                                ) : (
-                                    <span>{profileData?.name?.charAt(0).toUpperCase()}</span>
-                                )}
+                                ) : null}
+                                <span 
+                                    className="avatar-fallback"
+                                    style={{ display: (profileData?.profile?.avatarUrl || profileData?.profile?.avatar_url || profileData?.profile_image) ? 'none' : 'flex' }}
+                                >
+                                    {profileData?.name?.charAt(0).toUpperCase()}
+                                </span>
                                 <label className="avatar-upload">
                                     <Camera size={16} />
                                     <input type="file" accept="image/*" onChange={handleAvatarChange} />

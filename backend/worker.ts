@@ -5279,27 +5279,54 @@ export default {
                 }
 
                 try {
-                    const result = await env.proveloce_db.prepare(`
-                        SELECT 
-                            t.id,
-                            t.title,
-                            t.description,
-                            t.assigned_to,
-                            t.due_date,
-                            t.status,
-                            t.org_id,
-                            t.created_by,
-                            t.created_at,
-                            t.updated_at,
-                            u.name as assigned_user_name,
-                            u.email as assigned_user_email,
-                            c.name as created_by_name
-                        FROM tasks t
-                        LEFT JOIN users u ON t.assigned_to = u.id
-                        LEFT JOIN users c ON t.created_by = c.id
-                        WHERE ${whereClause}
-                        ORDER BY t.created_at DESC
-                    `).bind(...params).all();
+                    // Try new column names first, fallback to old schema
+                    let result;
+                    try {
+                        result = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.org_id, 'ORG-DEFAULT') as org_id,
+                                COALESCE(t.created_by, t.created_by_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id) = c.id
+                            WHERE ${whereClause}
+                            ORDER BY t.created_at DESC
+                        `).bind(...params).all();
+                    } catch {
+                        // Fallback to old schema column names
+                        result = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                t.assigned_to_id as assigned_to,
+                                t.deadline as due_date,
+                                t.status,
+                                'ORG-DEFAULT' as org_id,
+                                t.created_by_id as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.assigned_to_id = u.id
+                            LEFT JOIN users c ON t.created_by_id = c.id
+                            WHERE ${whereClause}
+                            ORDER BY t.created_at DESC
+                        `).bind(...params).all();
+                    }
 
                     return jsonResponse({
                         success: true,
@@ -5307,7 +5334,7 @@ export default {
                     });
                 } catch (error: any) {
                     console.error("Error fetching tasks:", error);
-                    return jsonResponse({ success: false, error: "Failed to fetch tasks" }, 500);
+                    return jsonResponse({ success: false, error: "Failed to fetch tasks: " + error.message }, 500);
                 }
             }
 
@@ -5344,18 +5371,34 @@ export default {
                     const taskId = crypto.randomUUID();
                     const orgId = payload.org_id || 'ORG-DEFAULT';
 
-                    await env.proveloce_db.prepare(`
-                        INSERT INTO tasks (id, title, description, assigned_to, due_date, status, org_id, created_by, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    `).bind(
-                        taskId,
-                        body.title.trim(),
-                        body.description.trim(),
-                        body.assignedTo || null,
-                        body.dueDate || null,
-                        orgId,
-                        payload.userId
-                    ).run();
+                    // Try new schema first, fallback to old schema
+                    try {
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO tasks (id, title, description, assigned_to, due_date, status, org_id, created_by, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        `).bind(
+                            taskId,
+                            body.title.trim(),
+                            body.description.trim(),
+                            body.assignedTo || null,
+                            body.dueDate || null,
+                            orgId,
+                            payload.userId
+                        ).run();
+                    } catch {
+                        // Fallback: use old column names (assigned_to_id, deadline, created_by_id)
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO tasks (id, title, description, assigned_to_id, deadline, status, created_by_id, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, 'Pending', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        `).bind(
+                            taskId,
+                            body.title.trim(),
+                            body.description.trim(),
+                            body.assignedTo || null,
+                            body.dueDate || null,
+                            payload.userId
+                        ).run();
+                    }
 
                     // Notify assigned user if any
                     if (body.assignedTo) {
@@ -5367,27 +5410,52 @@ export default {
                         );
                     }
 
-                    // Fetch the created task with full details
-                    const createdTask = await env.proveloce_db.prepare(`
-                        SELECT 
-                            t.id,
-                            t.title,
-                            t.description,
-                            t.assigned_to,
-                            t.due_date,
-                            t.status,
-                            t.org_id,
-                            t.created_by,
-                            t.created_at,
-                            t.updated_at,
-                            u.name as assigned_user_name,
-                            u.email as assigned_user_email,
-                            c.name as created_by_name
-                        FROM tasks t
-                        LEFT JOIN users u ON t.assigned_to = u.id
-                        LEFT JOIN users c ON t.created_by = c.id
-                        WHERE t.id = ?
-                    `).bind(taskId).first();
+                    // Fetch the created task with full details (handle both old and new schema)
+                    let createdTask;
+                    try {
+                        createdTask = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.org_id, 'ORG-DEFAULT') as org_id,
+                                COALESCE(t.created_by, t.created_by_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id) = c.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    } catch {
+                        // Fallback to old schema
+                        createdTask = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                t.assigned_to_id as assigned_to,
+                                t.deadline as due_date,
+                                t.status,
+                                'ORG-DEFAULT' as org_id,
+                                t.created_by_id as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.assigned_to_id = u.id
+                            LEFT JOIN users c ON t.created_by_id = c.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    }
 
                     return jsonResponse({ 
                         success: true, 
@@ -5417,12 +5485,47 @@ export default {
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
                 try {
-                    const task = await env.proveloce_db.prepare(`
-                        SELECT t.*, u.name as assigned_user_name
-                        FROM tasks t
-                        LEFT JOIN users u ON t.assigned_to = u.id
-                        WHERE t.id = ?
-                    `).bind(taskId).first();
+                    let task;
+                    try {
+                        task = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.org_id, 'ORG-DEFAULT') as org_id,
+                                COALESCE(t.created_by, t.created_by_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id) = c.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    } catch {
+                        task = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                t.assigned_to_id as assigned_to,
+                                t.deadline as due_date,
+                                t.status,
+                                'ORG-DEFAULT' as org_id,
+                                t.created_by_id as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.assigned_to_id = u.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    }
 
                     if (!task) {
                         return jsonResponse({ success: false, error: "Task not found" }, 404);
@@ -5481,9 +5584,21 @@ export default {
                         params.push(body.status);
                     }
 
+                    // Determine which column names to use based on schema
+                    // Check if new columns exist by testing a simple query
+                    let useNewSchema = true;
+                    try {
+                        await env.proveloce_db.prepare("SELECT assigned_to FROM tasks LIMIT 1").first();
+                    } catch {
+                        useNewSchema = false;
+                    }
+
+                    const assignedToCol = useNewSchema ? "assigned_to" : "assigned_to_id";
+                    const dueDateCol = useNewSchema ? "due_date" : "deadline";
+
                     // Handle assignedTo update (can be null to unassign)
                     if (body.assignedTo !== undefined) {
-                        setClauses.push("assigned_to = ?");
+                        setClauses.push(`${assignedToCol} = ?`);
                         params.push(body.assignedTo || null);
                     }
 
@@ -5504,7 +5619,7 @@ export default {
 
                     // Handle dueDate update
                     if (body.dueDate !== undefined) {
-                        setClauses.push("due_date = ?");
+                        setClauses.push(`${dueDateCol} = ?`);
                         params.push(body.dueDate || null);
                     }
 
@@ -5523,13 +5638,42 @@ export default {
                     
                     await env.proveloce_db.prepare(query).bind(...params).run();
 
-                    // Fetch updated task to return
-                    const updatedTask = await env.proveloce_db.prepare(`
-                        SELECT t.*, u.name as assigned_user_name
-                        FROM tasks t
-                        LEFT JOIN users u ON t.assigned_to = u.id
-                        WHERE t.id = ?
-                    `).bind(taskId).first();
+                    // Fetch updated task to return (using appropriate schema)
+                    let updatedTask;
+                    if (useNewSchema) {
+                        updatedTask = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    } else {
+                        updatedTask = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                t.assigned_to_id as assigned_to,
+                                t.deadline as due_date,
+                                t.status,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.assigned_to_id = u.id
+                            WHERE t.id = ?
+                        `).bind(taskId).first();
+                    }
 
                     return jsonResponse({ 
                         success: true, 
