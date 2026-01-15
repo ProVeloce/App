@@ -5,7 +5,7 @@ import { ticketApi, notificationApi, adminApi } from '../../services/api';
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
+} from '../../components/charts/RechartsWrapper';
 import {
     Ticket,
     Users,
