@@ -36,6 +36,7 @@ const Notifications = lazy(() => import('./pages/common/Notifications'));
 const HelpDesk = lazy(() => import('./pages/common/HelpDesk'));
 const ChangePassword = lazy(() => import('./pages/common/ChangePassword'));
 const Messages = lazy(() => import('./pages/common/Messages'));
+const NotFound = lazy(() => import('./pages/common/NotFound'));
 
 // Customer Portal
 const ExpertApplication = lazy(() => import('./pages/customer/ExpertApplication'));
@@ -152,8 +153,8 @@ function App() {
                     </Route>
                 </Route>
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* 404 Not Found - Catch all unmatched routes */}
+                <Route path="*" element={<NotFound />} />
             </Routes>
         </Suspense>
     );
