@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import axios from 'axios';
 
-// System configuration interface
+// System configuration interface (from system_config table)
 export interface SystemConfig {
     id: string;
     category: string;
@@ -12,6 +12,15 @@ export interface SystemConfig {
     description: string;
     updated_at?: string;
     updated_by?: string;
+}
+
+// Live configuration interface (from configuration table)
+export interface LiveConfig {
+    config_id: number;
+    config_key: string;
+    config_value: string;
+    updated_by: number;
+    updated_at: string;
 }
 
 // Typed configuration values
@@ -121,8 +130,10 @@ const DEFAULT_CONFIG: AppConfig = {
 };
 
 interface ConfigContextType {
-    // Raw configs from database
+    // Raw configs from database (system_config table)
     rawConfigs: SystemConfig[];
+    // Live configs from configuration table (simple key-value)
+    liveConfig: Record<string, string>;
     // Typed config object
     config: AppConfig;
     // Loading state
@@ -133,12 +144,16 @@ interface ConfigContextType {
     refreshConfig: () => Promise<void>;
     // Get a specific config value
     getConfigValue: (category: string, key: string) => string | undefined;
+    // Get a live config value (from configuration table)
+    getLiveConfigValue: (key: string) => string | undefined;
     // Check if a feature is enabled
     isFeatureEnabled: (featureKey: string) => boolean;
     // Last updated timestamp
     lastUpdated: Date | null;
     // Version for cache invalidation
     configVersion: number;
+    // Live polling active status
+    isPolling: boolean;
 }
 
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
@@ -147,16 +162,23 @@ const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 const CONFIG_CACHE_KEY = 'system_config_cache';
 const CONFIG_VERSION_KEY = 'system_config_version';
 
+// Polling interval in milliseconds (1 second for live updates)
+const POLLING_INTERVAL = 1000;
+
 export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [rawConfigs, setRawConfigs] = useState<SystemConfig[]>([]);
+    const [liveConfig, setLiveConfig] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [configVersion, setConfigVersion] = useState(0);
+    const [isPolling, setIsPolling] = useState(false);
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const lastConfigHashRef = useRef<string>('');
 
     // Parse raw configs into typed AppConfig
     const config = useMemo((): AppConfig => {
-        if (rawConfigs.length === 0) {
+        if (rawConfigs.length === 0 && Object.keys(liveConfig).length === 0) {
             return DEFAULT_CONFIG;
         }
 
@@ -170,16 +192,37 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return cfg.value || defaultValue;
         };
 
-        // Check for maintenance mode in 'system' category first, fall back to legacy 'features' category
+        // Helper to get live config value with fallback
+        const getLiveValue = (key: string, defaultValue: any): any => {
+            const value = liveConfig[key];
+            if (value === undefined) return defaultValue;
+            // Auto-parse boolean strings
+            if (value === 'true') return true;
+            if (value === 'false') return false;
+            // Auto-parse numbers
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && String(num) === value) return num;
+            return value;
+        };
+
+        // Check for maintenance mode in multiple sources:
+        // 1. Live config (configuration table) - highest priority for real-time updates
+        // 2. System category in system_config
+        // 3. Features category (legacy)
+        const maintenanceFromLive = liveConfig['maintenance_mode'];
         const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
         const maintenanceFromFeatures = rawConfigs.find(c => c.category === 'features' && c.key === 'maintenance_mode');
-        const maintenanceModeValue = maintenanceFromSystem?.value || maintenanceFromFeatures?.value || 'false';
+        const maintenanceModeValue = maintenanceFromLive ?? maintenanceFromSystem?.value ?? maintenanceFromFeatures?.value ?? 'false';
+
+        // Get maintenance message and end time from live config or system_config
+        const maintenanceMessage = liveConfig['maintenance_message'] || getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage);
+        const maintenanceEndTime = liveConfig['maintenance_end_time'] || getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null;
 
         return {
             system: {
-                maintenanceMode: maintenanceModeValue === 'true',
-                maintenanceMessage: getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage),
-                maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null,
+                maintenanceMode: String(maintenanceModeValue) === 'true',
+                maintenanceMessage: maintenanceMessage,
+                maintenanceEndTime: maintenanceEndTime,
             },
             auth: {
                 sessionTimeout: getValue('auth', 'session_timeout', DEFAULT_CONFIG.auth.sessionTimeout),
@@ -216,80 +259,147 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 defaultExportFormat: getValue('analytics', 'default_export_format', DEFAULT_CONFIG.analytics.defaultExportFormat),
             },
             features: {
-                expertApplications: getValue('features', 'expert_applications', DEFAULT_CONFIG.features.expertApplications),
-                connectRequests: getValue('features', 'connect_requests', DEFAULT_CONFIG.features.connectRequests),
-                liveChat: getValue('features', 'live_chat', DEFAULT_CONFIG.features.liveChat),
-                videoSessions: getValue('features', 'video_sessions', DEFAULT_CONFIG.features.videoSessions),
+                expertApplications: getLiveValue('expert_applications', getValue('features', 'expert_applications', DEFAULT_CONFIG.features.expertApplications)),
+                connectRequests: getLiveValue('connect_requests', getValue('features', 'connect_requests', DEFAULT_CONFIG.features.connectRequests)),
+                liveChat: getLiveValue('live_chat', getValue('features', 'live_chat', DEFAULT_CONFIG.features.liveChat)),
+                videoSessions: getLiveValue('video_sessions', getValue('features', 'video_sessions', DEFAULT_CONFIG.features.videoSessions)),
             },
         };
-    }, [rawConfigs]);
+    }, [rawConfigs, liveConfig]);
 
-    // Fetch configs from server
-    const fetchConfigs = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
+    // Fetch configs from server (initial load)
+    const fetchConfigs = useCallback(async (isPollingRequest = false) => {
+        if (!isPollingRequest) {
+            setIsLoading(true);
+            setError(null);
+        }
 
         try {
-            // First, try to load from cache for immediate display
-            const cached = localStorage.getItem(CONFIG_CACHE_KEY);
-            if (cached) {
-                try {
-                    const parsedCache = JSON.parse(cached);
-                    if (parsedCache.configs && Array.isArray(parsedCache.configs)) {
-                        setRawConfigs(parsedCache.configs);
+            // First, try to load from cache for immediate display (only on initial load)
+            if (!isPollingRequest) {
+                const cached = localStorage.getItem(CONFIG_CACHE_KEY);
+                if (cached) {
+                    try {
+                        const parsedCache = JSON.parse(cached);
+                        if (parsedCache.configs && Array.isArray(parsedCache.configs)) {
+                            setRawConfigs(parsedCache.configs);
+                        }
+                        if (parsedCache.liveConfig) {
+                            setLiveConfig(parsedCache.liveConfig);
+                        }
+                    } catch (e) {
+                        // Invalid cache, ignore
                     }
-                } catch (e) {
-                    // Invalid cache, ignore
                 }
             }
 
             // Fetch fresh configs from server (public endpoint for basic UI configs)
             const response = await axios.get('/api/config/public');
             
-            if (response.data.success && response.data.data) {
-                const configs = response.data.data;
-                setRawConfigs(configs);
-                setLastUpdated(new Date());
-                setConfigVersion(prev => prev + 1);
+            if (response.data.success) {
+                const configs = response.data.data || [];
+                const newLiveConfig = response.data.liveConfig || {};
 
-                // Update cache
-                localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
-                    configs,
-                    timestamp: Date.now()
-                }));
-                localStorage.setItem(CONFIG_VERSION_KEY, String(Date.now()));
+                // Create a hash of the config to detect changes
+                const newHash = JSON.stringify({ configs, liveConfig: newLiveConfig });
+                
+                // Only update if there are actual changes (to prevent unnecessary re-renders)
+                if (newHash !== lastConfigHashRef.current) {
+                    lastConfigHashRef.current = newHash;
+                    setRawConfigs(configs);
+                    setLiveConfig(newLiveConfig);
+                    setLastUpdated(new Date());
+                    setConfigVersion(prev => prev + 1);
+
+                    // Update cache
+                    localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
+                        configs,
+                        liveConfig: newLiveConfig,
+                        timestamp: Date.now()
+                    }));
+                    localStorage.setItem(CONFIG_VERSION_KEY, String(Date.now()));
+                }
             }
         } catch (err: any) {
             // If fetch fails, continue with cached/default values
-            console.warn('Failed to fetch system config, using defaults:', err.message);
-            if (rawConfigs.length === 0) {
-                // No cache available, use defaults (don't set error for non-critical failure)
+            if (!isPollingRequest) {
+                console.warn('Failed to fetch system config, using defaults:', err.message);
             }
         } finally {
-            setIsLoading(false);
+            if (!isPollingRequest) {
+                setIsLoading(false);
+            }
         }
     }, []);
 
+    // Lightweight polling function for live config updates
+    const pollLiveConfig = useCallback(async () => {
+        try {
+            const response = await axios.get('/api/configuration', {
+                timeout: 5000 // 5 second timeout for polling requests
+            });
+            
+            if (response.data.success && response.data.config) {
+                const newLiveConfig = response.data.config;
+                
+                // Create hash to detect changes
+                const newHash = JSON.stringify(newLiveConfig);
+                const oldHash = JSON.stringify(liveConfig);
+                
+                if (newHash !== oldHash) {
+                    setLiveConfig(newLiveConfig);
+                    setLastUpdated(new Date());
+                    setConfigVersion(prev => prev + 1);
+                    
+                    // Update cache with new live config
+                    const cached = localStorage.getItem(CONFIG_CACHE_KEY);
+                    if (cached) {
+                        try {
+                            const parsedCache = JSON.parse(cached);
+                            parsedCache.liveConfig = newLiveConfig;
+                            parsedCache.timestamp = Date.now();
+                            localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(parsedCache));
+                        } catch (e) {
+                            // Ignore cache update errors
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            // Silently fail polling - don't disturb user experience
+        }
+    }, [liveConfig]);
+
     // Refresh configs (public method for force refresh)
     const refreshConfig = useCallback(async () => {
-        await fetchConfigs();
+        await fetchConfigs(false);
     }, [fetchConfigs]);
 
-    // Get a specific config value
+    // Get a specific config value from system_config
     const getConfigValue = useCallback((category: string, key: string): string | undefined => {
         const cfg = rawConfigs.find(c => c.category === category && c.key === key);
         return cfg?.value;
     }, [rawConfigs]);
 
-    // Check if a feature is enabled
+    // Get a live config value from configuration table
+    const getLiveConfigValue = useCallback((key: string): string | undefined => {
+        return liveConfig[key];
+    }, [liveConfig]);
+
+    // Check if a feature is enabled (checks both live config and system_config)
     const isFeatureEnabled = useCallback((featureKey: string): boolean => {
+        // First check live config
+        if (liveConfig[featureKey] !== undefined) {
+            return liveConfig[featureKey] === 'true';
+        }
+        // Fall back to system_config
         const cfg = rawConfigs.find(c => c.category === 'features' && c.key === featureKey);
         return cfg?.value === 'true';
-    }, [rawConfigs]);
+    }, [rawConfigs, liveConfig]);
 
     // Initial fetch
     useEffect(() => {
-        fetchConfigs();
+        fetchConfigs(false);
     }, [fetchConfigs]);
 
     // Listen for config update events (cross-tab communication)
@@ -297,7 +407,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === CONFIG_VERSION_KEY && e.newValue) {
                 // Config was updated in another tab, refresh
-                fetchConfigs();
+                fetchConfigs(false);
             }
         };
 
@@ -305,10 +415,28 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return () => window.removeEventListener('storage', handleStorageChange);
     }, [fetchConfigs]);
 
-    // Poll for updates periodically (every 5 minutes)
+    // Live polling for configuration updates (every 1 second)
+    useEffect(() => {
+        // Start polling
+        setIsPolling(true);
+        
+        pollingIntervalRef.current = setInterval(() => {
+            pollLiveConfig();
+        }, POLLING_INTERVAL);
+
+        return () => {
+            setIsPolling(false);
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [pollLiveConfig]);
+
+    // Also fetch full configs periodically (every 5 minutes) for system_config updates
     useEffect(() => {
         const interval = setInterval(() => {
-            fetchConfigs();
+            fetchConfigs(true);
         }, 5 * 60 * 1000);
 
         return () => clearInterval(interval);
@@ -316,14 +444,17 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const value: ConfigContextType = {
         rawConfigs,
+        liveConfig,
         config,
         isLoading,
         error,
         refreshConfig,
         getConfigValue,
+        getLiveConfigValue,
         isFeatureEnabled,
         lastUpdated,
         configVersion,
+        isPolling,
     };
 
     return (

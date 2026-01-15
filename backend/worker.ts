@@ -2044,6 +2044,200 @@ export default {
                 }
             }
 
+            // =====================================================
+            // CONFIGURATION TABLE API (Simple key-value live config)
+            // =====================================================
+
+            // GET /api/configuration - Get all configuration values (public, for live polling)
+            if (url.pathname === "/api/configuration" && request.method === "GET") {
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Ensure configuration table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS configuration (
+                            config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            config_key TEXT NOT NULL UNIQUE,
+                            config_value TEXT NOT NULL,
+                            updated_by INTEGER NOT NULL,
+                            updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                        )
+                    `).run();
+
+                    // Fetch all configurations
+                    const configs = await env.proveloce_db.prepare(`
+                        SELECT config_id, config_key, config_value, updated_by, updated_at
+                        FROM configuration
+                        ORDER BY config_key
+                    `).all();
+
+                    // Transform to key-value object for easy access
+                    const configMap: Record<string, string> = {};
+                    for (const cfg of (configs.results || []) as any[]) {
+                        configMap[cfg.config_key] = cfg.config_value;
+                    }
+
+                    return jsonResponse({ 
+                        success: true, 
+                        data: configs.results || [],
+                        config: configMap,
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (err) {
+                    console.error("Configuration fetch error:", err);
+                    return jsonResponse({ success: false, error: "Failed to fetch configurations" }, 500);
+                }
+            }
+
+            // POST /api/configuration - Insert or update configuration (SUPERADMIN only)
+            if (url.pathname === "/api/configuration" && request.method === "POST") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    const body = await request.json() as { config_key: string; config_value: string };
+                    
+                    if (!body.config_key || body.config_value === undefined) {
+                        return jsonResponse({ success: false, error: "config_key and config_value are required" }, 400);
+                    }
+
+                    // Ensure table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS configuration (
+                            config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            config_key TEXT NOT NULL UNIQUE,
+                            config_value TEXT NOT NULL,
+                            updated_by INTEGER NOT NULL,
+                            updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                        )
+                    `).run();
+
+                    // Insert or replace configuration
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                        VALUES (?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                        ON CONFLICT(config_key) DO UPDATE SET
+                            config_value = excluded.config_value,
+                            updated_by = excluded.updated_by,
+                            updated_at = datetime('now', '+5 hours', '+30 minutes')
+                    `).bind(body.config_key, body.config_value, auth.payload.userId).run();
+
+                    // Log the change
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
+                        VALUES (?, ?, 'UPDATE_CONFIG', 'CONFIGURATION', ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                    `).bind(crypto.randomUUID(), auth.payload.userId, body.config_key, JSON.stringify({ key: body.config_key, value: body.config_value })).run();
+
+                    return jsonResponse({ success: true, message: "Configuration updated successfully" });
+                } catch (err) {
+                    console.error("Configuration update error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update configuration" }, 500);
+                }
+            }
+
+            // PUT /api/configuration/bulk - Bulk update configurations (SUPERADMIN only)
+            if (url.pathname === "/api/configuration/bulk" && request.method === "PUT") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    const body = await request.json() as { configs: Array<{ config_key: string; config_value: string }> };
+                    
+                    if (!body.configs || !Array.isArray(body.configs)) {
+                        return jsonResponse({ success: false, error: "configs array is required" }, 400);
+                    }
+
+                    // Ensure table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS configuration (
+                            config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            config_key TEXT NOT NULL UNIQUE,
+                            config_value TEXT NOT NULL,
+                            updated_by INTEGER NOT NULL,
+                            updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                        )
+                    `).run();
+
+                    // Update each configuration
+                    for (const cfg of body.configs) {
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                            VALUES (?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                            ON CONFLICT(config_key) DO UPDATE SET
+                                config_value = excluded.config_value,
+                                updated_by = excluded.updated_by,
+                                updated_at = datetime('now', '+5 hours', '+30 minutes')
+                        `).bind(cfg.config_key, cfg.config_value, auth.payload.userId).run();
+                    }
+
+                    // Log the bulk change
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
+                        VALUES (?, ?, 'BULK_UPDATE_CONFIG', 'CONFIGURATION', 'bulk', ?, datetime('now', '+5 hours', '+30 minutes'))
+                    `).bind(crypto.randomUUID(), auth.payload.userId, JSON.stringify({ count: body.configs.length, keys: body.configs.map(c => c.config_key) })).run();
+
+                    return jsonResponse({ success: true, message: `${body.configs.length} configurations updated` });
+                } catch (err) {
+                    console.error("Bulk configuration update error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update configurations" }, 500);
+                }
+            }
+
+            // DELETE /api/configuration/:key - Delete a configuration (SUPERADMIN only)
+            if (url.pathname.match(/^\/api\/configuration\/[^\/]+$/) && request.method === "DELETE") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const configKey = decodeURIComponent(url.pathname.split("/").pop() || "");
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        DELETE FROM configuration WHERE config_key = ?
+                    `).bind(configKey).run();
+
+                    return jsonResponse({ success: true, message: "Configuration deleted" });
+                } catch (err) {
+                    console.error("Configuration delete error:", err);
+                    return jsonResponse({ success: false, error: "Failed to delete configuration" }, 500);
+                }
+            }
+
+            // =====================================================
+            // SYSTEM_CONFIG API (Legacy detailed config system)
+            // =====================================================
+
             // GET /api/config/public - Get public UI/feature configurations (no auth required)
             if (url.pathname === "/api/config/public" && request.method === "GET") {
                 if (!env.proveloce_db) {
@@ -2059,15 +2253,26 @@ export default {
                         ORDER BY category, key
                     `).all();
 
+                    // Also fetch from configuration table for simple key-value configs
+                    const simpleConfigs = await env.proveloce_db.prepare(`
+                        SELECT config_key, config_value FROM configuration
+                    `).all();
+
+                    const configMap: Record<string, string> = {};
+                    for (const cfg of (simpleConfigs.results || []) as any[]) {
+                        configMap[cfg.config_key] = cfg.config_value;
+                    }
+
                     return jsonResponse({ 
                         success: true, 
                         data: configs.results || [],
+                        liveConfig: configMap,
                         timestamp: new Date().toISOString()
                     });
                 } catch (err) {
                     console.error("Public config fetch error:", err);
                     // Return empty array on error (non-critical)
-                    return jsonResponse({ success: true, data: [], timestamp: new Date().toISOString() });
+                    return jsonResponse({ success: true, data: [], liveConfig: {}, timestamp: new Date().toISOString() });
                 }
             }
 

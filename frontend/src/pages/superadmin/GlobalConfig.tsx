@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import axios from 'axios';
 import {
     Settings, Save, RefreshCw, Shield, Bell, Ticket, Palette, BarChart3,
     Users, ToggleLeft, ToggleRight, ChevronDown, ChevronRight, Check,
@@ -144,7 +145,44 @@ const GlobalConfig: React.FC = () => {
                 value,
             }));
 
+            // Save to system_config table
             await configApi.bulkUpdateConfig(updates);
+
+            // Also save critical configs to configuration table for live polling
+            // Find the configs being updated and sync key ones to the live config table
+            const liveConfigUpdates: Array<{ config_key: string; config_value: string }> = [];
+            
+            for (const [id, value] of pendingChanges.entries()) {
+                const cfg = configs.find(c => c.id === id);
+                if (cfg) {
+                    // Map system_config keys to configuration table keys for live updates
+                    const keyMappings: Record<string, string> = {
+                        'maintenance_mode': 'maintenance_mode',
+                        'maintenance_message': 'maintenance_message',
+                        'maintenance_end_time': 'maintenance_end_time',
+                        'time_format': 'time_format',
+                        'date_format': 'date_format',
+                        'default_theme': 'default_theme',
+                    };
+                    
+                    if (keyMappings[cfg.key]) {
+                        liveConfigUpdates.push({
+                            config_key: keyMappings[cfg.key],
+                            config_value: value
+                        });
+                    }
+                }
+            }
+
+            // Sync to live configuration table if there are updates
+            if (liveConfigUpdates.length > 0) {
+                try {
+                    await axios.put('/api/configuration/bulk', { configs: liveConfigUpdates });
+                } catch (liveErr) {
+                    console.warn('Failed to sync live config, polling will catch up:', liveErr);
+                }
+            }
+
             success(`${updates.length} configuration(s) saved successfully. Changes applied globally.`);
             setPendingChanges(new Map());
             
