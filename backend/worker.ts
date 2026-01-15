@@ -5686,6 +5686,67 @@ export default {
                 }
             }
 
+            // DELETE /api/tasks/:id - Delete task
+            if (taskIdMatch && request.method === "DELETE") {
+                const authHeader = request.headers.get("Authorization");
+                if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const token = authHeader.substring(7);
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret");
+                if (!payload) return jsonResponse({ success: false, error: "Invalid token" }, 401);
+
+                const role = (payload.role || "").toUpperCase();
+                if (role !== "ADMIN" && role !== "SUPERADMIN") {
+                    return jsonResponse({ success: false, error: "Only admins can delete tasks" }, 403);
+                }
+
+                const taskId = taskIdMatch[1];
+
+                if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
+
+                try {
+                    // Check if task exists first
+                    const existingTask = await env.proveloce_db.prepare(
+                        "SELECT id, title FROM tasks WHERE id = ?"
+                    ).bind(taskId).first() as any;
+
+                    if (!existingTask) {
+                        return jsonResponse({ success: false, error: "Task not found" }, 404);
+                    }
+
+                    // Delete the task
+                    await env.proveloce_db.prepare(
+                        "DELETE FROM tasks WHERE id = ?"
+                    ).bind(taskId).run();
+
+                    // Log the deletion
+                    try {
+                        await env.proveloce_db.prepare(`
+                            INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
+                            VALUES (?, ?, 'task_deleted', 'task', ?, ?, CURRENT_TIMESTAMP)
+                        `).bind(
+                            crypto.randomUUID(),
+                            payload.userId,
+                            taskId,
+                            JSON.stringify({ title: existingTask.title, deleted_by: payload.userId })
+                        ).run();
+                    } catch {
+                        // Ignore logging errors
+                    }
+
+                    return jsonResponse({ 
+                        success: true, 
+                        message: "Task deleted successfully",
+                        data: { deletedId: taskId }
+                    });
+                } catch (error: any) {
+                    console.error("Error deleting task:", error?.message || error);
+                    return jsonResponse({ success: false, error: "Failed to delete task: " + (error?.message || "Unknown error") }, 500);
+                }
+            }
+
             // =====================================================
             // Expert Connect - Search & Discovery
             // =====================================================

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
     Briefcase, Plus, X, Calendar, User, Clock, CheckCircle, Loader, 
-    Search, ChevronDown, RefreshCw, Mail, Shield, AlertCircle
+    Search, ChevronDown, RefreshCw, Mail, Shield, AlertCircle, Edit2, Trash2, AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -236,11 +236,25 @@ const TaskAssignment: React.FC = () => {
     const [loadingExperts, setLoadingExperts] = useState(false);
     const [updatingTask, setUpdatingTask] = useState<string | null>(null);
 
-    // Form state
+    // Form state for Create
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [assignedTo, setAssignedTo] = useState('');
     const [dueDate, setDueDate] = useState('');
+
+    // Edit modal state
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editAssignedTo, setEditAssignedTo] = useState('');
+    const [editDueDate, setEditDueDate] = useState('');
+    const [editStatus, setEditStatus] = useState<'Pending' | 'InProgress' | 'Completed'>('Pending');
+
+    // Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const userRole = user?.role?.toUpperCase() || '';
     const canCreateTask = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
@@ -454,6 +468,128 @@ const TaskAssignment: React.FC = () => {
         setDueDate('');
     };
 
+    // Open Edit Modal
+    const openEditModal = (task: Task) => {
+        setEditingTask(task);
+        setEditTitle(task.title);
+        setEditDescription(task.description || '');
+        setEditAssignedTo(task.assigned_to || '');
+        setEditDueDate(task.due_date ? task.due_date.split('T')[0] : '');
+        setEditStatus(task.status);
+        setShowEditModal(true);
+    };
+
+    // Close Edit Modal
+    const closeEditModal = () => {
+        setShowEditModal(false);
+        setEditingTask(null);
+        setEditTitle('');
+        setEditDescription('');
+        setEditAssignedTo('');
+        setEditDueDate('');
+        setEditStatus('Pending');
+    };
+
+    // Handle Edit Submit
+    const handleEditTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingTask) return;
+        if (!editTitle.trim()) {
+            error('Title is required');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/tasks/${editingTask.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    title: editTitle.trim(),
+                    description: editDescription.trim(),
+                    assignedTo: editAssignedTo || null,
+                    dueDate: editDueDate || null,
+                    status: editStatus
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                success('Task updated successfully');
+                // Update local state with response data
+                setTasks(prev => prev.map(t => {
+                    if (t.id === editingTask.id) {
+                        if (data.data?.task) {
+                            return data.data.task;
+                        }
+                        return {
+                            ...t,
+                            title: editTitle.trim(),
+                            description: editDescription.trim(),
+                            assigned_to: editAssignedTo || null,
+                            due_date: editDueDate || null,
+                            status: editStatus
+                        };
+                    }
+                    return t;
+                }));
+                closeEditModal();
+            } else {
+                error(data.error || 'Failed to update task');
+            }
+        } catch (err: any) {
+            console.error('Edit task error:', err);
+            error('Failed to update task: ' + (err?.message || 'Unknown error'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Open Delete Confirmation
+    const openDeleteModal = (task: Task) => {
+        setDeletingTask(task);
+        setShowDeleteModal(true);
+    };
+
+    // Close Delete Modal
+    const closeDeleteModal = () => {
+        setShowDeleteModal(false);
+        setDeletingTask(null);
+    };
+
+    // Handle Delete
+    const handleDeleteTask = async () => {
+        if (!deletingTask) return;
+
+        setDeleting(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/tasks/${deletingTask.id}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                success('Task deleted successfully');
+                // Remove from local state
+                setTasks(prev => prev.filter(t => t.id !== deletingTask.id));
+                closeDeleteModal();
+            } else {
+                error(data.error || 'Failed to delete task');
+            }
+        } catch (err: any) {
+            console.error('Delete task error:', err);
+            error('Failed to delete task: ' + (err?.message || 'Unknown error'));
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const getStatusBadge = (status: string) => {
         const statusConfig: Record<string, { color: string; icon: React.ReactNode }> = {
             Pending: { color: 'status-pending', icon: <Clock size={14} /> },
@@ -607,24 +743,44 @@ const TaskAssignment: React.FC = () => {
                                     </td>
                                     {canCreateTask && (
                                         <td className="actions-cell">
-                                            <ExpertSelector
-                                                experts={assignableUsers}
-                                                selectedId={task.assigned_to || ''}
-                                                onSelect={(id) => handleAssignTask(task.id, id)}
-                                                placeholder="Assign"
-                                                loading={loadingExperts}
-                                                disabled={updatingTask === task.id}
-                                            />
-                                            <select
-                                                className="status-select"
-                                                value={task.status}
-                                                onChange={(e) => handleUpdateStatus(task.id, e.target.value)}
-                                                disabled={updatingTask === task.id}
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="InProgress">In Progress</option>
-                                                <option value="Completed">Completed</option>
-                                            </select>
+                                            <div className="actions-row">
+                                                <ExpertSelector
+                                                    experts={assignableUsers}
+                                                    selectedId={task.assigned_to || ''}
+                                                    onSelect={(id) => handleAssignTask(task.id, id)}
+                                                    placeholder="Assign"
+                                                    loading={loadingExperts}
+                                                    disabled={updatingTask === task.id}
+                                                />
+                                                <select
+                                                    className="status-select"
+                                                    value={task.status}
+                                                    onChange={(e) => handleUpdateStatus(task.id, e.target.value)}
+                                                    disabled={updatingTask === task.id}
+                                                >
+                                                    <option value="Pending">Pending</option>
+                                                    <option value="InProgress">In Progress</option>
+                                                    <option value="Completed">Completed</option>
+                                                </select>
+                                            </div>
+                                            <div className="actions-row actions-buttons">
+                                                <button
+                                                    className="btn btn-icon btn-edit"
+                                                    onClick={() => openEditModal(task)}
+                                                    disabled={updatingTask === task.id}
+                                                    title="Edit Task"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button
+                                                    className="btn btn-icon btn-delete"
+                                                    onClick={() => openDeleteModal(task)}
+                                                    disabled={updatingTask === task.id}
+                                                    title="Delete Task"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </td>
                                     )}
                                 </tr>
@@ -702,6 +858,141 @@ const TaskAssignment: React.FC = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Task Modal */}
+            {showEditModal && editingTask && (
+                <div className="modal-overlay" onClick={closeEditModal}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2><Edit2 size={20} /> Edit Task</h2>
+                            <button className="close-btn" onClick={closeEditModal}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleEditTask}>
+                            <div className="form-group">
+                                <label>Task Title *</label>
+                                <input
+                                    type="text"
+                                    value={editTitle}
+                                    onChange={(e) => setEditTitle(e.target.value)}
+                                    placeholder="Enter task title"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Description</label>
+                                <textarea
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                    placeholder="Enter task description"
+                                    rows={4}
+                                />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Assign To Expert</label>
+                                    <ExpertSelector
+                                        experts={assignableUsers}
+                                        selectedId={editAssignedTo}
+                                        onSelect={setEditAssignedTo}
+                                        placeholder="Select an expert..."
+                                        loading={loadingExperts}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Due Date</label>
+                                    <input
+                                        type="date"
+                                        value={editDueDate}
+                                        onChange={(e) => setEditDueDate(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Status</label>
+                                <select
+                                    value={editStatus}
+                                    onChange={(e) => setEditStatus(e.target.value as Task['status'])}
+                                    className="form-select"
+                                >
+                                    <option value="Pending">Pending</option>
+                                    <option value="InProgress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                </select>
+                            </div>
+                            <div className="modal-actions">
+                                <button type="button" className="btn btn-secondary" onClick={closeEditModal}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                    {submitting ? (
+                                        <>
+                                            <Loader size={16} className="spin" /> Saving...
+                                        </>
+                                    ) : (
+                                        'Save Changes'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && deletingTask && (
+                <div className="modal-overlay" onClick={closeDeleteModal}>
+                    <div className="modal-content modal-delete" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header delete-header">
+                            <h2><AlertTriangle size={20} /> Delete Task</h2>
+                            <button className="close-btn" onClick={closeDeleteModal}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="delete-body">
+                            <div className="delete-warning">
+                                <AlertTriangle size={48} />
+                                <p>Are you sure you want to delete this task?</p>
+                            </div>
+                            <div className="delete-task-info">
+                                <strong>{deletingTask.title}</strong>
+                                <span>{deletingTask.description}</span>
+                                {deletingTask.assigned_user_name && (
+                                    <span className="assigned-to">
+                                        <User size={12} /> Assigned to: {deletingTask.assigned_user_name}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="delete-warning-text">
+                                This action cannot be undone. The task will be permanently removed from the database.
+                            </p>
+                        </div>
+                        <div className="modal-actions">
+                            <button type="button" className="btn btn-secondary" onClick={closeDeleteModal}>
+                                Cancel
+                            </button>
+                            <button 
+                                type="button" 
+                                className="btn btn-danger" 
+                                onClick={handleDeleteTask}
+                                disabled={deleting}
+                            >
+                                {deleting ? (
+                                    <>
+                                        <Loader size={16} className="spin" /> Deleting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 size={16} /> Delete Task
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
