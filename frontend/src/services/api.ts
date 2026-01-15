@@ -448,6 +448,9 @@ export const ticketApi = {
 
     unassignTicket: (idOrNumber: string) =>
         api.post<ApiResponse>(`/helpdesk/tickets/${idOrNumber}/unassign`, {}),
+
+    getStats: () =>
+        api.get<ApiResponse>('/helpdesk/tickets/stats'),
 };
 
 // Notification API

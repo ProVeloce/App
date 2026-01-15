@@ -3929,6 +3929,185 @@ export default {
                 }
             }
 
+            // GET /api/helpdesk/tickets/stats - Dashboard statistics for tickets (Enterprise v3.0)
+            if (url.pathname === "/api/helpdesk/tickets/stats" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                // Get user role for role-based visibility
+                const user = await env.proveloce_db.prepare(
+                    "SELECT role, org_id FROM users WHERE id = ?"
+                ).bind(payload.userId).first() as any;
+                const role = user?.role?.toUpperCase() || '';
+                const orgId = user?.org_id || 'ORG-DEFAULT';
+
+                const isSuperAdmin = role === 'SUPERADMIN';
+                const isAdmin = role === 'ADMIN';
+
+                // Build where clause based on role
+                let whereClause = "";
+                let params: any[] = [];
+                
+                if (isSuperAdmin) {
+                    // Superadmin sees all tickets
+                    whereClause = "WHERE 1=1";
+                } else if (isAdmin) {
+                    // Admin sees tickets in their org or assigned to them
+                    whereClause = "WHERE (t.org_id = ? OR t.assigned_user_id = ?)";
+                    params = [orgId, payload.userId];
+                } else {
+                    // Regular users see only their own tickets
+                    whereClause = "WHERE t.raised_by_user_id = ?";
+                    params = [payload.userId];
+                }
+
+                // Get ticket counts by status
+                const statusCountsQuery = `
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) as open_count,
+                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_count,
+                        SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END) as resolved_count,
+                        SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) as closed_count
+                    FROM tickets t ${whereClause}
+                `;
+                const statusCounts = await env.proveloce_db.prepare(statusCountsQuery).bind(...params).first() as any;
+
+                // Get ticket counts by priority
+                const priorityCountsQuery = `
+                    SELECT 
+                        priority,
+                        COUNT(*) as count
+                    FROM tickets t ${whereClause}
+                    GROUP BY priority
+                `;
+                const priorityCounts = await env.proveloce_db.prepare(priorityCountsQuery).bind(...params).all();
+
+                // Get ticket counts by category
+                const categoryCountsQuery = `
+                    SELECT 
+                        category,
+                        COUNT(*) as count
+                    FROM tickets t ${whereClause}
+                    GROUP BY category
+                    ORDER BY count DESC
+                    LIMIT 10
+                `;
+                const categoryCounts = await env.proveloce_db.prepare(categoryCountsQuery).bind(...params).all();
+
+                // Get tickets created over time (last 30 days)
+                const trendQuery = `
+                    SELECT 
+                        DATE(created_at) as date,
+                        COUNT(*) as count
+                    FROM tickets t ${whereClause}
+                    AND created_at >= datetime('now', '-30 days')
+                    GROUP BY DATE(created_at)
+                    ORDER BY date ASC
+                `;
+                const ticketTrend = await env.proveloce_db.prepare(trendQuery).bind(...params).all();
+
+                // Get average resolution time (for closed tickets)
+                const resolutionQuery = `
+                    SELECT 
+                        AVG(
+                            CAST((julianday(updated_at) - julianday(created_at)) * 24 AS REAL)
+                        ) as avg_hours
+                    FROM tickets t ${whereClause}
+                    AND status IN ('Resolved', 'Closed')
+                `;
+                const resolutionTime = await env.proveloce_db.prepare(resolutionQuery).bind(...params).first() as any;
+
+                // Get recent tickets
+                const recentTicketsQuery = `
+                    SELECT 
+                        t.id,
+                        t.ticket_number,
+                        t.subject,
+                        t.status,
+                        t.priority,
+                        t.category,
+                        t.created_at,
+                        t.updated_at,
+                        u.name as raised_by_name
+                    FROM tickets t
+                    LEFT JOIN users u ON t.raised_by_user_id = u.id
+                    ${whereClause}
+                    ORDER BY t.created_at DESC
+                    LIMIT 5
+                `;
+                const recentTickets = await env.proveloce_db.prepare(recentTicketsQuery).bind(...params).all();
+
+                // Get workload distribution (tickets per assigned user)
+                let workloadDistribution: any[] = [];
+                if (isSuperAdmin || isAdmin) {
+                    const workloadQuery = `
+                        SELECT 
+                            u.name as assignee_name,
+                            COUNT(t.id) as ticket_count,
+                            SUM(CASE WHEN t.status = 'Open' THEN 1 ELSE 0 END) as open_count,
+                            SUM(CASE WHEN t.status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_count
+                        FROM tickets t
+                        LEFT JOIN users u ON t.assigned_user_id = u.id
+                        WHERE t.assigned_user_id IS NOT NULL
+                        ${isSuperAdmin ? '' : 'AND t.org_id = ?'}
+                        GROUP BY t.assigned_user_id, u.name
+                        ORDER BY ticket_count DESC
+                        LIMIT 10
+                    `;
+                    const workload = await env.proveloce_db.prepare(workloadQuery)
+                        .bind(...(isSuperAdmin ? [] : [orgId]))
+                        .all();
+                    workloadDistribution = workload.results || [];
+                }
+
+                // Format priority counts
+                const priorityData: Record<string, number> = {};
+                for (const p of (priorityCounts.results || []) as any[]) {
+                    priorityData[p.priority || 'medium'] = p.count;
+                }
+
+                // Format category counts
+                const categoryData = ((categoryCounts.results || []) as any[]).map(c => ({
+                    name: c.category || 'General',
+                    value: c.count
+                }));
+
+                // Format trend data
+                const trendData = ((ticketTrend.results || []) as any[]).map(t => ({
+                    date: t.date,
+                    count: t.count
+                }));
+
+                return jsonResponse({
+                    success: true,
+                    data: {
+                        summary: {
+                            total: statusCounts?.total || 0,
+                            open: statusCounts?.open_count || 0,
+                            inProgress: statusCounts?.in_progress_count || 0,
+                            resolved: statusCounts?.resolved_count || 0,
+                            closed: statusCounts?.closed_count || 0,
+                            avgResolutionHours: Math.round((resolutionTime?.avg_hours || 0) * 10) / 10
+                        },
+                        byPriority: {
+                            low: priorityData['low'] || 0,
+                            medium: priorityData['medium'] || 0,
+                            high: priorityData['high'] || 0,
+                            urgent: priorityData['urgent'] || 0
+                        },
+                        byCategory: categoryData,
+                        trend: trendData,
+                        workload: workloadDistribution,
+                        recentTickets: recentTickets.results || []
+                    }
+                });
+            }
+
             // GET /api/helpdesk/tickets - Unified Ticket Visibility (Enterprise v2.0)
             if (url.pathname === "/api/helpdesk/tickets" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
