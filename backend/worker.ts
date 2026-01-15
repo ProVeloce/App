@@ -2000,6 +2000,191 @@ export default {
                 }
             }
 
+            // GET /api/config - Get all system configurations (SUPERADMIN only)
+            if (url.pathname === "/api/config" && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Ensure system_config table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS system_config (
+                            id TEXT PRIMARY KEY,
+                            category TEXT NOT NULL,
+                            key TEXT NOT NULL,
+                            value TEXT,
+                            type TEXT DEFAULT 'string',
+                            label TEXT,
+                            description TEXT,
+                            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                            updated_by TEXT,
+                            UNIQUE(category, key)
+                        )
+                    `).run();
+
+                    // Get all configs
+                    const configs = await env.proveloce_db.prepare(
+                        "SELECT * FROM system_config ORDER BY category, key"
+                    ).all();
+
+                    // If empty, seed with defaults
+                    if (!configs.results || configs.results.length === 0) {
+                        const defaultConfigs = [
+                            // Authentication Settings
+                            { id: crypto.randomUUID(), category: 'auth', key: 'session_timeout_minutes', value: '30', type: 'number', label: 'Session Timeout (minutes)', description: 'Auto logout after inactivity' },
+                            { id: crypto.randomUUID(), category: 'auth', key: 'max_login_attempts', value: '5', type: 'number', label: 'Max Login Attempts', description: 'Lock account after failed attempts' },
+                            { id: crypto.randomUUID(), category: 'auth', key: 'password_min_length', value: '8', type: 'number', label: 'Min Password Length', description: 'Minimum characters required' },
+                            { id: crypto.randomUUID(), category: 'auth', key: 'require_2fa', value: 'false', type: 'boolean', label: 'Require 2FA', description: 'Force two-factor authentication' },
+                            { id: crypto.randomUUID(), category: 'auth', key: 'allow_social_login', value: 'true', type: 'boolean', label: 'Allow Social Login', description: 'Enable Google/OAuth login' },
+                            
+                            // Notification Settings
+                            { id: crypto.randomUUID(), category: 'notifications', key: 'email_notifications', value: 'true', type: 'boolean', label: 'Email Notifications', description: 'Send email alerts' },
+                            { id: crypto.randomUUID(), category: 'notifications', key: 'sms_notifications', value: 'false', type: 'boolean', label: 'SMS Notifications', description: 'Send SMS alerts' },
+                            { id: crypto.randomUUID(), category: 'notifications', key: 'in_app_notifications', value: 'true', type: 'boolean', label: 'In-App Notifications', description: 'Show in-app alerts' },
+                            { id: crypto.randomUUID(), category: 'notifications', key: 'digest_frequency', value: 'daily', type: 'select', label: 'Digest Frequency', description: 'Email digest schedule' },
+                            
+                            // Ticketing Settings
+                            { id: crypto.randomUUID(), category: 'ticketing', key: 'auto_assign_tickets', value: 'false', type: 'boolean', label: 'Auto-Assign Tickets', description: 'Automatically assign to available admin' },
+                            { id: crypto.randomUUID(), category: 'ticketing', key: 'escalation_hours', value: '24', type: 'number', label: 'Escalation Time (hours)', description: 'Escalate unresolved tickets' },
+                            { id: crypto.randomUUID(), category: 'ticketing', key: 'default_priority', value: 'medium', type: 'select', label: 'Default Priority', description: 'Default ticket priority' },
+                            { id: crypto.randomUUID(), category: 'ticketing', key: 'allow_attachments', value: 'true', type: 'boolean', label: 'Allow Attachments', description: 'Enable file uploads' },
+                            { id: crypto.randomUUID(), category: 'ticketing', key: 'max_attachment_size_mb', value: '10', type: 'number', label: 'Max Attachment Size (MB)', description: 'Maximum file size' },
+                            
+                            // UI/UX Settings
+                            { id: crypto.randomUUID(), category: 'ui', key: 'default_theme', value: 'light', type: 'select', label: 'Default Theme', description: 'Default color scheme' },
+                            { id: crypto.randomUUID(), category: 'ui', key: 'default_language', value: 'en', type: 'select', label: 'Default Language', description: 'System language' },
+                            { id: crypto.randomUUID(), category: 'ui', key: 'date_format', value: 'MM/DD/YYYY', type: 'select', label: 'Date Format', description: 'Display date format' },
+                            { id: crypto.randomUUID(), category: 'ui', key: 'time_format', value: '12h', type: 'select', label: 'Time Format', description: '12-hour or 24-hour' },
+                            { id: crypto.randomUUID(), category: 'ui', key: 'items_per_page', value: '25', type: 'number', label: 'Items Per Page', description: 'Default pagination size' },
+                            
+                            // Analytics Settings
+                            { id: crypto.randomUUID(), category: 'analytics', key: 'data_retention_days', value: '365', type: 'number', label: 'Data Retention (days)', description: 'Keep analytics data' },
+                            { id: crypto.randomUUID(), category: 'analytics', key: 'default_export_format', value: 'csv', type: 'select', label: 'Default Export Format', description: 'Default report format' },
+                            { id: crypto.randomUUID(), category: 'analytics', key: 'enable_realtime', value: 'true', type: 'boolean', label: 'Real-time Analytics', description: 'Live dashboard updates' },
+                            
+                            // User Management Settings
+                            { id: crypto.randomUUID(), category: 'users', key: 'allow_self_registration', value: 'true', type: 'boolean', label: 'Allow Self Registration', description: 'Users can sign up' },
+                            { id: crypto.randomUUID(), category: 'users', key: 'require_email_verification', value: 'true', type: 'boolean', label: 'Require Email Verification', description: 'Verify email before access' },
+                            { id: crypto.randomUUID(), category: 'users', key: 'default_user_role', value: 'customer', type: 'select', label: 'Default User Role', description: 'Role for new users' },
+                            { id: crypto.randomUUID(), category: 'users', key: 'allow_profile_edit', value: 'true', type: 'boolean', label: 'Allow Profile Edit', description: 'Users can update profile' },
+                            
+                            // Feature Toggles
+                            { id: crypto.randomUUID(), category: 'features', key: 'expert_connect_enabled', value: 'true', type: 'boolean', label: 'Expert Connect', description: 'Enable expert booking' },
+                            { id: crypto.randomUUID(), category: 'features', key: 'messaging_enabled', value: 'true', type: 'boolean', label: 'Messaging System', description: 'Enable direct messages' },
+                            { id: crypto.randomUUID(), category: 'features', key: 'portfolio_enabled', value: 'true', type: 'boolean', label: 'Portfolio Feature', description: 'Enable expert portfolios' },
+                            { id: crypto.randomUUID(), category: 'features', key: 'certifications_enabled', value: 'true', type: 'boolean', label: 'Certifications', description: 'Enable certification uploads' },
+                            { id: crypto.randomUUID(), category: 'features', key: 'maintenance_mode', value: 'false', type: 'boolean', label: 'Maintenance Mode', description: 'Show maintenance page' },
+                        ];
+
+                        for (const cfg of defaultConfigs) {
+                            await env.proveloce_db.prepare(`
+                                INSERT OR IGNORE INTO system_config (id, category, key, value, type, label, description)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            `).bind(cfg.id, cfg.category, cfg.key, cfg.value, cfg.type, cfg.label, cfg.description).run();
+                        }
+
+                        // Re-fetch after seeding
+                        const seededConfigs = await env.proveloce_db.prepare(
+                            "SELECT * FROM system_config ORDER BY category, key"
+                        ).all();
+                        
+                        return jsonResponse({ success: true, data: seededConfigs.results || [] });
+                    }
+
+                    return jsonResponse({ success: true, data: configs.results || [] });
+                } catch (err) {
+                    console.error("Config fetch error:", err);
+                    return jsonResponse({ success: false, error: "Failed to fetch configurations" }, 500);
+                }
+            }
+
+            // PUT /api/config/:key - Update a configuration (SUPERADMIN only)
+            if (url.pathname.match(/^\/api\/config\/[^\/]+$/) && request.method === "PUT") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const configId = url.pathname.split('/').pop();
+                const body = await request.json() as { value: string };
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        UPDATE system_config 
+                        SET value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                        WHERE id = ?
+                    `).bind(body.value, auth.payload.userId, configId).run();
+
+                    // Log the change
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).bind(crypto.randomUUID(), auth.payload.userId, 'UPDATE_CONFIG', 'CONFIG', configId, JSON.stringify({ value: body.value })).run();
+
+                    return jsonResponse({ success: true, message: "Configuration updated" });
+                } catch (err) {
+                    console.error("Config update error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update configuration" }, 500);
+                }
+            }
+
+            // POST /api/config/bulk - Bulk update configurations (SUPERADMIN only)
+            if (url.pathname === "/api/config/bulk" && request.method === "POST") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const body = await request.json() as { configs: { id: string; value: string }[] };
+
+                try {
+                    for (const cfg of body.configs) {
+                        await env.proveloce_db.prepare(`
+                            UPDATE system_config 
+                            SET value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                            WHERE id = ?
+                        `).bind(cfg.value, auth.payload.userId, cfg.id).run();
+                    }
+
+                    // Log bulk update
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    `).bind(crypto.randomUUID(), auth.payload.userId, 'BULK_UPDATE_CONFIG', 'CONFIG', 'bulk', JSON.stringify({ count: body.configs.length })).run();
+
+                    return jsonResponse({ success: true, message: `${body.configs.length} configurations updated` });
+                } catch (err) {
+                    console.error("Bulk config update error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update configurations" }, 500);
+                }
+            }
+
             // GET /api/admin/logs - Activity logs (SUPERADMIN only)
             if (url.pathname === "/api/admin/logs" && request.method === "GET") {
                 const auth = await checkAdminRole(request);

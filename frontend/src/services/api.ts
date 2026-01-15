@@ -517,12 +517,27 @@ export const activityApi = {
 };
 
 // Config API (SuperAdmin)
+export interface SystemConfig {
+    id: string;
+    category: string;
+    key: string;
+    value: string;
+    type: 'string' | 'number' | 'boolean' | 'select';
+    label: string;
+    description: string;
+    updated_at?: string;
+    updated_by?: string;
+}
+
 export const configApi = {
     getSystemConfig: () =>
-        api.get<ApiResponse>('/config'),
+        api.get<ApiResponse<SystemConfig[]>>('/config'),
 
-    updateConfig: (key: string, value: any) =>
-        api.put<ApiResponse>(`/config/${key}`, { value }),
+    updateConfig: (id: string, value: string) =>
+        api.put<ApiResponse>(`/config/${id}`, { value }),
+
+    bulkUpdateConfig: (configs: { id: string; value: string }[]) =>
+        api.post<ApiResponse>('/config/bulk', { configs }),
 
     getFeatures: () =>
         api.get<ApiResponse>('/config/features'),
