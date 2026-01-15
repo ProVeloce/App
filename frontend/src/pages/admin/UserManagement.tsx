@@ -19,6 +19,7 @@ import { adminUserApi } from '../../services/api';
 import Avatar from '../../components/common/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import { showGlobalError, showGlobalSuccess } from '../../context/ErrorContext';
+import { useAlert } from '../../context/AlertContext';
 import './UserManagement.css';
 
 interface UserData {
@@ -51,6 +52,7 @@ interface Stats {
 
 const UserManagement: React.FC = () => {
     const { user: currentUser } = useAuth();
+    const { confirm } = useAlert();
     const [users, setUsers] = useState<UserData[]>([]);
     const [stats, setStats] = useState<Stats>({ totalUsers: 0, admins: 0, experts: 0, pendingUsers: 0 });
     const [loading, setLoading] = useState(true);
@@ -126,7 +128,17 @@ const UserManagement: React.FC = () => {
     };
 
     const handleDeactivate = async (id: string) => {
-        if (!window.confirm('Are you sure you want to deactivate this user?')) return;
+        const confirmed = await confirm(
+            'Deactivate User',
+            'Are you sure you want to deactivate this user? They will no longer be able to access the platform.',
+            {
+                type: 'warning',
+                confirmText: 'Deactivate',
+                cancelText: 'Cancel'
+            }
+        );
+        
+        if (!confirmed) return;
 
         setIsUpdating(id);
         try {
