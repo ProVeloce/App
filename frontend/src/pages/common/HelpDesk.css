@@ -1536,3 +1536,32 @@
     color: var(--primary-600);
     flex-shrink: 0;
 }
+
+/* Closed ticket assignment disabled notice */
+.ticket-closed-assignment-notice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--warning-50);
+    border: 1px solid var(--warning-200);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-4);
+    color: var(--warning-700);
+    font-size: 0.813rem;
+}
+
+.ticket-closed-assignment-notice svg {
+    color: var(--warning-600);
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .ticket-closed-assignment-notice {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: var(--warning-400);
+}
+
+[data-theme="dark"] .ticket-closed-assignment-notice svg {
+    color: var(--warning-500);
+}

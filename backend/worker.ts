@@ -4576,9 +4576,14 @@ export default {
                     return jsonResponse({ success: false, error: "INVALID_ASSIGNEE", message: "Assignee must be in same tenant." }, 403);
                 }
 
-                const ticket = await env.proveloce_db.prepare("SELECT org_id, assigned_user_id FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
+                const ticket = await env.proveloce_db.prepare("SELECT org_id, status, assigned_user_id FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
                 if (!ticket || ticket.org_id !== requesterOrgId && requesterRole !== 'SUPERADMIN') {
                     return jsonResponse({ success: false, error: "TICKET_NOT_FOUND" }, 404);
+                }
+
+                // Prevent reassignment of closed/resolved tickets
+                if (['CLOSED', 'RESOLVED'].includes(ticket.status?.toUpperCase())) {
+                    return jsonResponse({ success: false, error: "TICKET_CLOSED", message: "Cannot reassign closed or resolved tickets." }, 400);
                 }
 
                 const prevAssigneeId = ticket.assigned_user_id;
@@ -4607,9 +4612,14 @@ export default {
                 const requester = await env.proveloce_db.prepare("SELECT role, org_id FROM users WHERE id = ?").bind(payload.userId).first() as any;
                 const requesterOrgId = requester?.org_id || 'ORG-DEFAULT';
 
-                const ticket = await env.proveloce_db.prepare("SELECT org_id FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
+                const ticket = await env.proveloce_db.prepare("SELECT org_id, status FROM tickets WHERE id = ? OR ticket_number = ?").bind(ticketId, ticketId).first() as any;
                 if (!ticket || ticket.org_id !== requesterOrgId && requester.role?.toUpperCase() !== 'SUPERADMIN') {
                     return jsonResponse({ success: false, error: "UNAUTHORIZED" }, 403);
+                }
+
+                // Prevent unassignment of closed/resolved tickets
+                if (['CLOSED', 'RESOLVED'].includes(ticket.status?.toUpperCase())) {
+                    return jsonResponse({ success: false, error: "TICKET_CLOSED", message: "Cannot unassign closed or resolved tickets." }, 400);
                 }
 
                 await env.proveloce_db.prepare(`

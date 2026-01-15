@@ -98,15 +98,16 @@ const HelpDesk: React.FC = () => {
     const ticketRaiserRole = selectedTicket?.user_role?.toUpperCase() || 'CUSTOMER';
     const isTicketRaisedByAdmin = ticketRaiserRole === 'ADMIN';
 
-    // Rule 1: Superadmin can only assign Expert/Customer tickets (not Admin tickets)
-    const canAssignTickets = isSuperAdmin && !isTicketRaisedByAdmin;
-
     // Rule 4: Both ticket raiser and assigned reviewer can communicate
     const isTicketRaiser = selectedTicket?.raised_by_user_id === user?.id;
     const isAssignedReviewer = selectedTicket?.assigned_user_id === user?.id;
 
     // Rule 5: Cannot communicate if ticket is closed
     const isTicketClosed = selectedTicket?.status === 'Closed';
+
+    // Rule 1: Superadmin can only assign Expert/Customer tickets (not Admin tickets)
+    // Additional rule: Cannot assign/reassign closed tickets
+    const canAssignTickets = isSuperAdmin && !isTicketRaisedByAdmin && !isTicketClosed;
 
     // Rule 1 & 2: Superadmin can only respond to Admin-raised tickets
     // Rule 4: Assigned reviewer can respond to assigned tickets
@@ -699,6 +700,14 @@ const HelpDesk: React.FC = () => {
                                     <div className="superadmin-direct-response-notice">
                                         <Shield size={16} />
                                         <span>Admin-raised ticket: You can respond directly without assignment.</span>
+                                    </div>
+                                )}
+
+                                {/* Notice for closed ticket - assignment disabled */}
+                                {isSuperAdmin && isTicketClosed && !isTicketRaisedByAdmin && (
+                                    <div className="ticket-closed-assignment-notice">
+                                        <Lock size={16} />
+                                        <span>This ticket is closed. Assignment and reassignment are disabled.</span>
                                     </div>
                                 )}
                             </div>
