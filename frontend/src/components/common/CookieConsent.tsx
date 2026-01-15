@@ -60,7 +60,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         setTimeout(() => {
             setIsVisible(false);
             onAccept();
-        }, 250);
+        }, 350);
     };
 
     const handleReject = () => {
@@ -70,7 +70,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         setTimeout(() => {
             setIsVisible(false);
             onReject();
-        }, 250);
+        }, 350);
     };
 
     if (!isVisible) return null;
@@ -114,7 +114,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
                 </button>
             </div>
             
-            <a href="/privacy-policy" className="cookie-popup-link">
+            <a href="/privacy" className="cookie-popup-link">
                 Privacy Policy
             </a>
         </div>
