@@ -78,6 +78,7 @@ const GlobalConfig: React.FC = () => {
     const [configs, setConfigs] = useState<SystemConfig[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['system', 'auth', 'features']));
     const [pendingChanges, setPendingChanges] = useState<Map<string, string>>(new Map());
     const [searchQuery, setSearchQuery] = useState('');
@@ -91,14 +92,27 @@ const GlobalConfig: React.FC = () => {
 
     const fetchConfigs = async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const response = await configApi.getSystemConfig();
-            if (response.data.success && response.data.data) {
+            if (response.data && response.data.success && response.data.data) {
                 setConfigs(response.data.data);
+            } else if (response.data && !response.data.success) {
+                setLoadError(response.data.error || 'Failed to load configurations');
+                error(response.data.error || 'Failed to load configurations');
+            } else {
+                // Handle unexpected response format
+                console.warn('Unexpected config response format:', response.data);
+                setConfigs([]);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to fetch configs:', err);
-            error('Failed to load configurations');
+            // Check for specific error types
+            const errorMessage = err.response?.data?.error 
+                || err.message 
+                || 'Failed to load configurations. Please try again.';
+            setLoadError(errorMessage);
+            error(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -246,6 +260,19 @@ const GlobalConfig: React.FC = () => {
             <div className="config-loading">
                 <Loader2 size={40} className="spin" />
                 <p>Loading configurations...</p>
+            </div>
+        );
+    }
+
+    if (loadError && configs.length === 0) {
+        return (
+            <div className="config-loading">
+                <AlertCircle size={40} className="error-icon" />
+                <p className="error-text">{loadError}</p>
+                <button className="btn btn-primary" onClick={fetchConfigs}>
+                    <RefreshCw size={16} />
+                    Retry
+                </button>
             </div>
         );
     }

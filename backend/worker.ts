@@ -2097,7 +2097,7 @@ export default {
                             type TEXT DEFAULT 'string',
                             label TEXT,
                             description TEXT,
-                            updated_at TEXT DEFAULT datetime('now', '+5 hours', '+30 minutes'),
+                            updated_at TEXT,
                             updated_by TEXT,
                             UNIQUE(category, key)
                         )
