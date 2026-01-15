@@ -4104,7 +4104,12 @@ export default {
                 });
             }
 
-            // PATCH /api/helpdesk/tickets/:ticket_id/status - Update ticket status and reply (Enterprise v2.0)
+            // PATCH /api/helpdesk/tickets/:ticket_id/status - Update ticket status only (Enterprise v3.0)
+            // Rules:
+            // - Status can be edited unlimited times
+            // - Only assigned user and superadmin can update status
+            // - Only status field is editable (not other ticket details)
+            // - Proper audit logging for each status change
             if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/status$/) && request.method === "PATCH") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -4115,7 +4120,7 @@ export default {
 
                 const ticketId = url.pathname.split('/')[4];
                 const body = await request.json() as any;
-                const { status, reply } = body;
+                const { status } = body;
 
                 // Status mapping to Spec v3.0: Open, In Progress, Resolved, Closed
                 let finalStatus = status;
@@ -4132,12 +4137,13 @@ export default {
                     }, 400);
                 }
 
-                // Get requester info
+                // Get requester info for role-based access control
                 const user = await env.proveloce_db.prepare(
                     "SELECT name, role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
 
                 const role = user?.role?.toUpperCase() || '';
+                const userName = user?.name || 'Unknown';
 
                 // Get ticket to check permission
                 const ticket = await env.proveloce_db.prepare(
@@ -4148,54 +4154,49 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check (Spec v3.0):
-                // Superadmin: full_access
-                // Assigned Admin: respond_ticket
+                // Store previous status for audit logging
+                const previousStatus = ticket.status;
+
+                // Role-based access control:
+                // Only SuperAdmin or Assigned User can update status (unlimited times)
                 const isSuperAdmin = role === 'SUPERADMIN';
                 const isAssigned = ticket.assigned_user_id === payload.userId;
 
                 if (!isSuperAdmin && !isAssigned) {
-                    return jsonResponse({ success: false, error: "Only SuperAdmin or the Assigned Responder can update the status of this ticket" }, 403);
+                    return jsonResponse({ 
+                        success: false, 
+                        error: "Only SuperAdmin or the Assigned Responder can update the status of this ticket" 
+                    }, 403);
                 }
 
-                // Response Workflow (Spec v4.0): Single Response Enforcement
-                let updateQuery = "UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP";
-                let updateParams: any[] = [finalStatus];
+                // Update only the status field (no edit limits)
+                const updateQuery = "UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?";
+                await env.proveloce_db.prepare(updateQuery).bind(finalStatus, ticketId, ticketId).run();
 
-                if (reply && reply.trim()) {
-                    if (ticket.responder_id && ticket.responder_id !== payload.userId) {
-                        return jsonResponse({ success: false, error: "TICKET_LOCKED", message: "This ticket already has a response from another responder." }, 403);
-                    }
-                    if (ticket.responder_id && ticket.edit_count >= 1) {
-                        return jsonResponse({ success: false, error: "EDIT_LIMIT_REACHED", message: "One-time edit limit already reached for this response." }, 400);
-                    }
-
-                    updateQuery += ", response_text = ?, responder_id = ?, updated_at = CURRENT_TIMESTAMP";
-                    if (ticket.responder_id) {
-                        updateQuery += ", is_edited = 1, edit_count = edit_count + 1";
-                    } else {
-                        updateQuery += ", is_edited = 0, edit_count = 0";
-                    }
-                    updateParams.push(reply.trim(), payload.userId);
-                }
-
-                updateQuery += " WHERE id = ? OR ticket_number = ?";
-                updateParams.push(ticketId, ticketId);
-
-                await env.proveloce_db.prepare(updateQuery).bind(...updateParams).run();
-
-                // AUDIT TRAIL
+                // AUDIT TRAIL - log every status change with full details
                 const logId = crypto.randomUUID();
-                const logMessage = `Ticket ${ticketId} status updated to ${finalStatus} by ${role.toLowerCase()}.`;
+                const auditMetadata = {
+                    previous_status: previousStatus,
+                    new_status: finalStatus,
+                    updated_by: userName,
+                    updated_by_role: role,
+                    ticket_number: ticket.ticket_number
+                };
                 await env.proveloce_db.prepare(`
                     INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
-                `).bind(logId, payload.userId, 'RESPOND_TICKET', 'TICKET', ticketId, JSON.stringify({ message: logMessage, status: finalStatus })).run();
+                `).bind(logId, payload.userId, 'UPDATE_TICKET_STATUS', 'TICKET', ticketId, JSON.stringify(auditMetadata)).run();
 
                 return jsonResponse({
                     success: true,
                     message: "Ticket status updated successfully",
-                    data: { ticketId, status: finalStatus }
+                    data: { 
+                        ticketId, 
+                        previousStatus,
+                        status: finalStatus,
+                        updatedBy: userName,
+                        updatedByRole: role
+                    }
                 });
             }
 
@@ -4365,7 +4366,12 @@ export default {
                 return jsonResponse({ success: true, message: "Ticket unassigned" });
             }
 
-            // POST /api/helpdesk/tickets/:ticket_id/messages - Add message to thread (Revised Spec v3.0)
+            // POST /api/helpdesk/tickets/:ticket_id/messages - Add message to thread (Enterprise v3.0)
+            // Rules:
+            // - Messages are NON-EDITABLE once submitted (stored in JSON array)
+            // - Both ticket raiser and assigned reviewer can send messages
+            // - SuperAdmin can always send messages
+            // - Messages blocked when ticket is Closed
             if (url.pathname.match(/^\/api\/helpdesk\/tickets\/[^\/]+\/messages$/) && request.method === "POST") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -4375,9 +4381,11 @@ export default {
                 }
 
                 const ticketId = url.pathname.split('/')[4];
-                const { message, edit_requested } = await request.json() as { message: string, edit_requested?: boolean };
+                const body = await request.json() as { message?: string, content?: string };
+                // Accept both 'message' and 'content' field names for compatibility
+                const messageText = body.message || body.content;
 
-                if (!message || !message.trim()) {
+                if (!messageText || !messageText.trim()) {
                     return jsonResponse({ success: false, error: "Message is required" }, 400);
                 }
 
@@ -4386,6 +4394,7 @@ export default {
                     "SELECT name, role FROM users WHERE id = ?"
                 ).bind(payload.userId).first() as any;
                 const role = user?.role?.toUpperCase() || 'CUSTOMER';
+                const userName = user?.name || 'Unknown';
 
                 // Get ticket to check permissions
                 const ticket = await env.proveloce_db.prepare(
@@ -4396,71 +4405,74 @@ export default {
                     return jsonResponse({ success: false, error: "Ticket not found" }, 404);
                 }
 
-                // Permission check (Spec v4.0):
+                // Block messages on closed tickets
+                if (ticket.status === 'Closed') {
+                    return jsonResponse({ 
+                        success: false, 
+                        error: "Cannot add messages to a closed ticket" 
+                    }, 400);
+                }
+
+                // Permission check:
+                // - SuperAdmin: can always message
+                // - Assigned user: can message
+                // - Ticket raiser: can message (two-way conversation)
                 const isSuperAdmin = role === 'SUPERADMIN';
                 const isAssigned = ticket.assigned_user_id === payload.userId;
                 const isRaiser = ticket.raised_by_user_id === payload.userId;
 
-                // Raising user cannot respond to their own ticket anymore in the simplified view (Spec v4.0 is one-way)
-                // However, we allow them to view. Responses are only from Admins/Responders.
-                if (isRaiser && !isSuperAdmin && !isAssigned) {
-                    return jsonResponse({ success: false, error: "Customers cannot add further messages to this ticket. Please wait for a responder." }, 403);
+                if (!isSuperAdmin && !isAssigned && !isRaiser) {
+                    return jsonResponse({ 
+                        success: false, 
+                        error: "Not authorized to send messages on this ticket" 
+                    }, 403);
                 }
 
-                if (!isSuperAdmin && !isAssigned) {
-                    return jsonResponse({ success: false, error: "Not authorized to respond to this ticket" }, 403);
+                // Create a new message (messages are immutable - no edit capability)
+                const messageId = crypto.randomUUID();
+                const now = new Date().toISOString();
+
+                const newMessage = {
+                    id: messageId,
+                    senderId: payload.userId,
+                    senderName: userName,
+                    senderRole: role,
+                    content: messageText.trim(),
+                    createdAt: now
+                };
+
+                // Parse existing messages and append new one
+                let existingMessages: any[] = [];
+                try {
+                    existingMessages = JSON.parse(ticket.messages || '[]');
+                } catch {
+                    existingMessages = [];
                 }
+                existingMessages.push(newMessage);
 
-                // Single Response Enforcement
-                if (ticket.responder_id && !edit_requested) {
-                    return jsonResponse({ success: false, error: "ALREADY_RESPONDED", message: "This ticket already has a response. Ongoing conversations are disabled." }, 400);
-                }
-
-                // One-time Edit Enforcement
-                if (edit_requested) {
-                    const canEdit = isSuperAdmin || (ticket.responder_id === payload.userId) || (ticket.assigned_user_id === payload.userId);
-                    if (!canEdit) {
-                        return jsonResponse({ success: false, error: "UNAUTHORIZED_EDIT", message: "Only the original responder or an assigned admin can edit this response." }, 403);
-                    }
-                    if (ticket.edit_count >= 1 && !isSuperAdmin) {
-                        return jsonResponse({ success: false, error: "EDIT_LIMIT_REACHED", message: "One-time edit limit already reached." }, 400);
-                    }
-                }
-
-                // Update Response
-                const updateQuery = `
-                    UPDATE tickets SET 
-                        response_text = ?, 
-                        responder_id = ?, 
-                        is_edited = ?, 
-                        edit_count = edit_count + ?,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? OR ticket_number = ?
-                `;
-
-                const isEdit = ticket.responder_id ? 1 : 0;
-                await env.proveloce_db.prepare(updateQuery).bind(
-                    message.trim(),
-                    payload.userId,
-                    isEdit,
-                    isEdit,
-                    ticketId,
-                    ticketId
-                ).run();
+                // Update ticket with new messages array (messages are immutable once added)
+                await env.proveloce_db.prepare(`
+                    UPDATE tickets SET messages = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                `).bind(JSON.stringify(existingMessages), ticketId, ticketId).run();
 
                 // AUDIT TRAIL
                 const logId = crypto.randomUUID();
-                const logAction = isEdit ? 'EDIT_TICKET_RESPONSE' : 'RESPOND_TICKET';
-                const logMessage = `${isEdit ? 'Response edited' : 'New response added'} for ticket ${ticketId} by ${role.toLowerCase()}.`;
-
+                const auditMetadata = {
+                    message_id: messageId,
+                    sender_name: userName,
+                    sender_role: role,
+                    ticket_number: ticket.ticket_number,
+                    message_count: existingMessages.length
+                };
                 await env.proveloce_db.prepare(`
                     INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
                     VALUES (?, ?, ?, ?, ?, ?)
-                `).bind(logId, payload.userId, logAction, 'TICKET', ticketId, JSON.stringify({ message: logMessage, is_override: isEdit && ticket.responder_id !== payload.userId })).run();
+                `).bind(logId, payload.userId, 'ADD_TICKET_MESSAGE', 'TICKET', ticketId, JSON.stringify(auditMetadata)).run();
 
                 return jsonResponse({
                     success: true,
-                    message: isEdit ? "Response updated successfully" : "Response added successfully"
+                    message: "Message added successfully",
+                    data: newMessage
                 });
             }
 
