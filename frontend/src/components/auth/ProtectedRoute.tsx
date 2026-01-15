@@ -1,7 +1,11 @@
-import React, { ReactNode, useEffect, useState } from 'react';
+import React, { ReactNode, useEffect, useState, lazy, Suspense } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAccessToken } from '../../services/api';
+import { useMaintenanceMode } from '../../context/ConfigContext';
+
+// Lazy load MaintenancePage to avoid circular dependencies
+const MaintenancePage = lazy(() => import('../../pages/common/MaintenancePage'));
 
 interface ProtectedRouteProps {
     children: ReactNode;
@@ -11,6 +15,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const { isAuthenticated, isLoading, user } = useAuth();
     const location = useLocation();
     const [hasToken, setHasToken] = useState<boolean | null>(null);
+    const { isMaintenanceMode } = useMaintenanceMode();
 
     // Check for token synchronously to prevent redirect loops
     useEffect(() => {
@@ -43,6 +48,27 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     // Having a token means we're authenticated, even if user object is temporarily null
     if (!isAuthenticated && !hasToken) {
         return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    // Check for maintenance mode - only affects CUSTOMER and EXPERT roles
+    // ADMIN, SUPERADMIN, and ANALYST can still access during maintenance
+    if (isMaintenanceMode && user) {
+        const role = user.role?.toUpperCase();
+        const exemptRoles = ['ADMIN', 'SUPERADMIN', 'ANALYST'];
+        
+        if (!exemptRoles.includes(role || '')) {
+            // Show maintenance page for customers and experts
+            return (
+                <Suspense fallback={
+                    <div className="loading-screen">
+                        <div className="loading-spinner" />
+                        <p>Loading...</p>
+                    </div>
+                }>
+                    <MaintenancePage />
+                </Suspense>
+            );
+        }
     }
 
     // If we have a token, allow navigation even if user is temporarily null

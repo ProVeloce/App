@@ -16,6 +16,12 @@ export interface SystemConfig {
 
 // Typed configuration values
 export interface AppConfig {
+    // System / Maintenance
+    system: {
+        maintenanceMode: boolean;
+        maintenanceMessage: string;
+        maintenanceEndTime: string | null;
+    };
     // Authentication & Security
     auth: {
         sessionTimeout: number;
@@ -67,6 +73,11 @@ export interface AppConfig {
 
 // Default configuration values (used as fallback)
 const DEFAULT_CONFIG: AppConfig = {
+    system: {
+        maintenanceMode: false,
+        maintenanceMessage: 'System is currently under maintenance. Please check back later.',
+        maintenanceEndTime: null,
+    },
     auth: {
         sessionTimeout: 30,
         maxLoginAttempts: 5,
@@ -160,6 +171,11 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         };
 
         return {
+            system: {
+                maintenanceMode: getValue('system', 'maintenance_mode', DEFAULT_CONFIG.system.maintenanceMode),
+                maintenanceMessage: getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage),
+                maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime),
+            },
             auth: {
                 sessionTimeout: getValue('auth', 'session_timeout', DEFAULT_CONFIG.auth.sessionTimeout),
                 maxLoginAttempts: getValue('auth', 'max_login_attempts', DEFAULT_CONFIG.auth.maxLoginAttempts),
@@ -331,6 +347,16 @@ export const useAppConfig = (): AppConfig => {
 export const useFeatureFlag = (featureKey: string): boolean => {
     const { isFeatureEnabled } = useConfig();
     return isFeatureEnabled(featureKey);
+};
+
+// Hook to check if maintenance mode is enabled
+export const useMaintenanceMode = (): { isMaintenanceMode: boolean; message: string; endTime: string | null } => {
+    const { config } = useConfig();
+    return {
+        isMaintenanceMode: config.system.maintenanceMode,
+        message: config.system.maintenanceMessage,
+        endTime: config.system.maintenanceEndTime,
+    };
 };
 
 // Utility to broadcast config update across tabs

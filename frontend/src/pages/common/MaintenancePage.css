@@ -1,0 +1,416 @@
+.maintenance-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.maintenance-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    z-index: 1;
+}
+
+/* Animated background elements */
+.maintenance-bg-elements {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.bg-circle {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.1;
+}
+
+.bg-circle-1 {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(45deg, #6366f1, #8b5cf6);
+    top: -100px;
+    right: -100px;
+    animation: float 20s ease-in-out infinite;
+}
+
+.bg-circle-2 {
+    width: 300px;
+    height: 300px;
+    background: linear-gradient(45deg, #06b6d4, #3b82f6);
+    bottom: -50px;
+    left: -50px;
+    animation: float 15s ease-in-out infinite reverse;
+}
+
+.bg-circle-3 {
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(45deg, #f59e0b, #ef4444);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse 10s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    25% {
+        transform: translate(20px, -20px) rotate(5deg);
+    }
+    50% {
+        transform: translate(-10px, 10px) rotate(-5deg);
+    }
+    75% {
+        transform: translate(15px, 15px) rotate(3deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.1;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0.05;
+    }
+}
+
+/* Main content */
+.maintenance-content {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Logo section */
+.maintenance-logo {
+    margin-bottom: 24px;
+}
+
+.logo-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
+    animation: iconPulse 3s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 15px 50px rgba(99, 102, 241, 0.4);
+    }
+}
+
+.wrench-icon {
+    color: white;
+    animation: wrenchWiggle 2s ease-in-out infinite;
+}
+
+@keyframes wrenchWiggle {
+    0%, 100% {
+        transform: rotate(-10deg);
+    }
+    50% {
+        transform: rotate(10deg);
+    }
+}
+
+.brand-name {
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    letter-spacing: -0.5px;
+}
+
+/* Status badge */
+.maintenance-status {
+    margin-bottom: 24px;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 20px;
+    color: #fbbf24;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status-badge svg {
+    animation: alertPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes alertPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Main message */
+.maintenance-message {
+    margin-bottom: 32px;
+}
+
+.maintenance-message h2 {
+    font-size: 32px;
+    font-weight: 700;
+    color: white;
+    margin: 0 0 16px;
+}
+
+.message-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* ETA section */
+.maintenance-eta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px;
+    margin-bottom: 32px;
+}
+
+.maintenance-eta svg {
+    color: #818cf8;
+    flex-shrink: 0;
+}
+
+.eta-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.eta-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.eta-time {
+    font-size: 15px;
+    color: white;
+    font-weight: 500;
+}
+
+/* Action buttons */
+.maintenance-actions {
+    margin-bottom: 24px;
+}
+
+.maintenance-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.maintenance-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+}
+
+.maintenance-actions .btn svg {
+    transition: transform 0.3s ease;
+}
+
+.maintenance-actions .btn:hover svg {
+    transform: rotate(180deg);
+}
+
+/* Additional info */
+.maintenance-info {
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.maintenance-info p {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Gear decorations */
+.maintenance-decoration {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.gear {
+    position: absolute;
+    opacity: 0.05;
+    color: white;
+}
+
+.gear-1 {
+    width: 120px;
+    height: 120px;
+    top: -30px;
+    right: -30px;
+    animation: spin 20s linear infinite;
+}
+
+.gear-2 {
+    width: 80px;
+    height: 80px;
+    bottom: -20px;
+    left: -20px;
+    animation: spin 15s linear infinite reverse;
+}
+
+.gear svg {
+    width: 100%;
+    height: 100%;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .maintenance-content {
+        padding: 32px 24px;
+    }
+
+    .logo-icon {
+        width: 64px;
+        height: 64px;
+    }
+
+    .wrench-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    .brand-name {
+        font-size: 24px;
+    }
+
+    .maintenance-message h2 {
+        font-size: 24px;
+    }
+
+    .message-text {
+        font-size: 14px;
+    }
+
+    .maintenance-eta {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .eta-content {
+        align-items: center;
+        text-align: center;
+    }
+}
+
+/* Light mode adjustments (optional) */
+@media (prefers-color-scheme: light) {
+    .maintenance-page {
+        background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 50%, #cbd5e1 100%);
+    }
+
+    .maintenance-content {
+        background: rgba(255, 255, 255, 0.9);
+        border-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .brand-name,
+    .maintenance-message h2 {
+        color: #1e293b;
+    }
+
+    .message-text {
+        color: #64748b;
+    }
+
+    .eta-time {
+        color: #1e293b;
+    }
+
+    .eta-label {
+        color: #94a3b8;
+    }
+
+    .maintenance-info p {
+        color: #94a3b8;
+    }
+
+    .bg-circle {
+        opacity: 0.3;
+    }
+
+    .gear {
+        color: #1e293b;
+        opacity: 0.03;
+    }
+}

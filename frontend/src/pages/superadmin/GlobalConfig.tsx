@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     Settings, Save, RefreshCw, Shield, Bell, Ticket, Palette, BarChart3,
     Users, ToggleLeft, ToggleRight, ChevronDown, ChevronRight, Check,
-    AlertCircle, Lock, Mail, Clock, Globe, FileText, Loader2, Info
+    AlertCircle, Lock, Mail, Clock, Globe, FileText, Loader2, Info, Wrench
 } from 'lucide-react';
 import { configApi, SystemConfig } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -17,6 +17,7 @@ interface CategoryInfo {
 }
 
 const CATEGORIES: CategoryInfo[] = [
+    { id: 'system', label: 'System & Maintenance', icon: <Wrench size={20} />, description: 'Maintenance mode and system settings' },
     { id: 'auth', label: 'Authentication & Security', icon: <Lock size={20} />, description: 'Login, sessions, and password policies' },
     { id: 'users', label: 'User Management', icon: <Users size={20} />, description: 'Registration and profile settings' },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={20} />, description: 'Email, SMS, and in-app alerts' },
@@ -77,7 +78,7 @@ const GlobalConfig: React.FC = () => {
     const [configs, setConfigs] = useState<SystemConfig[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['auth', 'features']));
+    const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['system', 'auth', 'features']));
     const [pendingChanges, setPendingChanges] = useState<Map<string, string>>(new Map());
     const [searchQuery, setSearchQuery] = useState('');
 
