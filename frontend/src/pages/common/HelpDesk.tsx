@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ticketApi, userApi, User as UserData } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
-import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText, Paperclip, Calendar } from 'lucide-react';
+import { HelpCircle, Plus, MessageCircle, CheckCircle, AlertCircle, X, Send, Download, Eye, User as UserIcon, Mail, Phone, Shield, FileText, Paperclip, Calendar, Lock } from 'lucide-react';
 import NewTicketModal from '../../components/common/NewTicketModal';
 import './HelpDesk.css';
 import '../../styles/AdvancedModalAnimations.css';
@@ -16,8 +16,8 @@ interface TicketAttachment {
 }
 
 interface Ticket {
-    id: string; // The database integer ID (returned as string)
-    ticket_id: string; // The primary ticket identifier (e.g., PV-TK-...)
+    id: string;
+    ticket_id: string;
     raised_by_user_id: string;
     user_full_name: string;
     user_email: string;
@@ -26,15 +26,15 @@ interface Ticket {
     subject: string;
     category: string;
     description: string;
-    attachment: string | null; // Legacy single attachment field
-    attachments?: TicketAttachment[]; // Spec v3.0 multiple attachments
+    attachment: string | null;
+    attachments?: TicketAttachment[];
     status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
     assigned_user_id: string | null;
     assigned_user_name: string | null;
     assigned_user_role: string | null;
     created_at: string;
     updated_at: string;
-    messages?: string; // Legacy field for old tickets
+    messages?: string;
     response_text?: string | null;
     responder_id?: string | null;
     edit_count?: number;
@@ -46,11 +46,14 @@ interface Ticket {
 }
 
 interface TicketMessage {
+    id?: string;
     sender_id: string;
     sender_name: string;
     sender_role: string;
     text: string;
+    content?: string;
     timestamp: string;
+    attachments?: string[];
 }
 
 const HelpDesk: React.FC = () => {
@@ -61,27 +64,26 @@ const HelpDesk: React.FC = () => {
     const [threadMessages, setThreadMessages] = useState<TicketMessage[]>([]);
     const [isClosingViewTicket, setIsClosingViewTicket] = useState(false);
 
-    // Admin response state
-    const [messageResponse, setMessageResponse] = useState('');
-    const [selectedStatus, setSelectedStatus] = useState<'Open' | 'In Progress' | 'Resolved' | 'Closed'>('Open');
-    const [submittingResponse, setSubmittingResponse] = useState(false);
+    // Message input state
+    const [messageInput, setMessageInput] = useState('');
+    const [submittingMessage, setSubmittingMessage] = useState(false);
 
-    // General thread reply state
-    const [threadReply, setThreadReply] = useState('');
-    const [submittingThreadReply, setSubmittingThreadReply] = useState(false);
-
-    // Response Editing state
-    const [isEditingResponse, setIsEditingResponse] = useState(false);
+    // Status update state (for reviewers)
+    const [selectedStatus, setSelectedStatus] = useState<'Open' | 'In Progress' | 'Resolved' | 'Closed'>('In Progress');
+    const [statusMessage, setStatusMessage] = useState('');
+    const [submittingStatus, setSubmittingStatus] = useState(false);
 
     // Attachment preview modal state
     const [attachmentPreview, setAttachmentPreview] = useState<{ show: boolean; url: string; filename: string }>({
         show: false, url: '', filename: ''
     });
 
-    // Assignable users for admins
+    // Assignable users for superadmin
     const [assignableUsers, setAssignableUsers] = useState<UserData[]>([]);
     const [isAssigning, setIsAssigning] = useState(false);
     const [adminSearchFilter, setAdminSearchFilter] = useState('');
+
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const { success, error } = useToast();
     const { user } = useAuth();
@@ -89,30 +91,55 @@ const HelpDesk: React.FC = () => {
     const userRole = user?.role?.toUpperCase() || 'CUSTOMER';
     const isSuperAdmin = userRole === 'SUPERADMIN';
     const isAdmin = userRole === 'ADMIN';
-    const isExpert = userRole === 'EXPERT';
     const isAdminOrSuperAdmin = isAdmin || isSuperAdmin;
     const canCreateTicket = userRole !== 'SUPERADMIN';
-    const isAssignedResponder = selectedTicket?.assigned_user_id === user?.id;
-    // POML v1.2: Admin cannot respond/assign to their own raised tickets
-    const isOwnRaisedTicket = selectedTicket?.raised_by_user_id === user?.id;
-    const canAssignTickets = isSuperAdmin;
-    const canRespond = isSuperAdmin || (isAdmin && isAssignedResponder && !isOwnRaisedTicket);
+
+    // Determine ticket raiser's role
+    const ticketRaiserRole = selectedTicket?.user_role?.toUpperCase() || 'CUSTOMER';
+    const isTicketRaisedByAdmin = ticketRaiserRole === 'ADMIN';
+
+    // Rule 1: Superadmin can only assign Expert/Customer tickets (not Admin tickets)
+    const canAssignTickets = isSuperAdmin && !isTicketRaisedByAdmin;
+
+    // Rule 4: Both ticket raiser and assigned reviewer can communicate
+    const isTicketRaiser = selectedTicket?.raised_by_user_id === user?.id;
+    const isAssignedReviewer = selectedTicket?.assigned_user_id === user?.id;
+
+    // Rule 5: Cannot communicate if ticket is closed
+    const isTicketClosed = selectedTicket?.status === 'Closed';
+
+    // Rule 1 & 2: Superadmin can only respond to Admin-raised tickets
+    // Rule 4: Assigned reviewer can respond to assigned tickets
+    const canSendMessage = !isTicketClosed && (
+        isTicketRaiser || 
+        isAssignedReviewer || 
+        (isSuperAdmin && isTicketRaisedByAdmin)
+    );
+
+    // Can update status: Superadmin for Admin tickets, or assigned Admin for any ticket
+    const canUpdateStatus = !isTicketClosed && (
+        (isSuperAdmin && isTicketRaisedByAdmin) || 
+        (isAdmin && isAssignedReviewer)
+    );
 
     useEffect(() => {
         fetchTickets();
-        if (isAdminOrSuperAdmin) fetchAssignableUsers();
+        if (isSuperAdmin) fetchAssignableUsers();
     }, []);
+
+    useEffect(() => {
+        // Scroll to bottom when messages change
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [threadMessages]);
 
     const fetchAssignableUsers = async () => {
         try {
             const response = await userApi.getUsers({ roles: 'ADMIN' });
             if (response.data.success && response.data.data) {
-                // Filter by role (Admin only) and org_id (if not superadmin)
                 const filtered = response.data.data.data.filter((u: UserData) => {
                     const isCorrectRole = u.role?.toUpperCase() === 'ADMIN';
-                    const isSameOrg = isSuperAdmin || u.org_id === user?.org_id;
                     const isActive = (u.status?.toUpperCase() === 'ACTIVE');
-                    return isCorrectRole && isSameOrg && isActive;
+                    return isCorrectRole && isActive;
                 });
                 setAssignableUsers(filtered);
             }
@@ -131,9 +158,10 @@ const HelpDesk: React.FC = () => {
         setTimeout(() => {
             setSelectedTicket(null);
             setIsClosingViewTicket(false);
-            setMessageResponse('');
-            setThreadReply('');
-            setSelectedStatus('Open');
+            setMessageInput('');
+            setStatusMessage('');
+            setSelectedStatus('In Progress');
+            setThreadMessages([]);
         }, 300);
     };
 
@@ -165,60 +193,56 @@ const HelpDesk: React.FC = () => {
                 fetchedTicket.ticket_id = fetchedTicket.id;
                 setSelectedTicket(fetchedTicket);
                 setThreadMessages(response.data.data.messages || []);
-                setMessageResponse('');
-                setThreadReply('');
-                setIsEditingResponse(false);
+                setMessageInput('');
+                setStatusMessage('');
             }
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to load ticket');
         }
     };
 
-    const handleSendResponse = async () => {
-        if (!selectedTicket || !messageResponse.trim()) {
-            error('Please enter a response message');
+    const handleSendMessage = async () => {
+        if (!selectedTicket || !messageInput.trim()) {
+            error('Please enter a message');
             return;
         }
 
-        setSubmittingResponse(true);
+        setSubmittingMessage(true);
         try {
-            await ticketApi.updateTicketStatus(selectedTicket.ticket_id, selectedStatus, messageResponse.trim());
+            await ticketApi.postTicketMessage(selectedTicket.ticket_id, messageInput.trim());
+            setMessageInput('');
+            // Refresh ticket details
+            handleViewTicket(selectedTicket);
+            success('Message sent');
+        } catch (err: any) {
+            error(err.response?.data?.message || 'Failed to send message');
+        } finally {
+            setSubmittingMessage(false);
+        }
+    };
+
+    const handleUpdateStatus = async () => {
+        if (!selectedTicket) return;
+
+        setSubmittingStatus(true);
+        try {
+            await ticketApi.updateTicketStatus(selectedTicket.ticket_id, selectedStatus, statusMessage.trim());
             success(`Ticket ${selectedStatus.toLowerCase()} successfully`);
             fetchTickets();
             closeViewTicket();
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to update ticket');
         } finally {
-            setSubmittingResponse(false);
-        }
-    };
-
-    const handlePostMessage = async () => {
-        if (!selectedTicket || !threadReply.trim()) return;
-        setSubmittingThreadReply(true);
-        try {
-            // Updated to support edit_requested flag (Spec v4.0)
-            await ticketApi.postTicketMessage(selectedTicket.ticket_id, threadReply.trim(), isEditingResponse);
-            setThreadReply('');
-            setIsEditingResponse(false);
-            // Refresh ticket details
-            handleViewTicket(selectedTicket);
-            success(isEditingResponse ? 'Response edited' : 'Response posted');
-        } catch (err: any) {
-            error(err.response?.data?.message || 'Failed to post message');
-        } finally {
-            setSubmittingThreadReply(false);
+            setSubmittingStatus(false);
         }
     };
 
     // Build full API URL for attachments
     const getAttachmentUrl = (path: string) => {
         const baseUrl = import.meta.env.VITE_API_URL || '';
-        // Path already includes /api/helpdesk/attachments/
         return `${baseUrl}${path}`;
     };
 
-    // Open attachment in inline modal (POML: redirect=false, mode=popup)
     const handleViewAttachment = async (urlOrPath: string) => {
         const filename = urlOrPath.split('/').pop() || 'attachment';
         try {
@@ -236,7 +260,6 @@ const HelpDesk: React.FC = () => {
         }
     };
 
-    // Direct download without redirect (POML: mode=direct, redirect=false)
     const handleDownloadAttachment = async (urlOrPath: string) => {
         try {
             const token = localStorage.getItem('accessToken');
@@ -271,7 +294,6 @@ const HelpDesk: React.FC = () => {
                 await ticketApi.assignTicket(selectedTicket.ticket_id, assignedToId);
                 success('Ticket assigned successfully');
             }
-            // Refresh ticket details
             handleViewTicket(selectedTicket);
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to assign ticket');
@@ -286,7 +308,6 @@ const HelpDesk: React.FC = () => {
         try {
             await ticketApi.unassignTicket(selectedTicket.ticket_id);
             success('Ticket unassigned successfully');
-            // Refresh ticket details
             handleViewTicket(selectedTicket);
         } catch (err: any) {
             error(err.response?.data?.message || 'Failed to unassign ticket');
@@ -296,7 +317,6 @@ const HelpDesk: React.FC = () => {
     };
 
     const closeAttachmentPreview = () => {
-        // Revoke blob URL to free memory
         if (attachmentPreview.url.startsWith('blob:')) {
             window.URL.revokeObjectURL(attachmentPreview.url);
         }
@@ -311,6 +331,14 @@ const HelpDesk: React.FC = () => {
             case 'Closed': return <CheckCircle size={16} className="status-closed" />;
             default: return <AlertCircle size={16} />;
         }
+    };
+
+    const formatRoleDisplay = (role: string) => {
+        return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    };
+
+    const formatSenderDisplay = (name: string, role: string) => {
+        return `${name} - ${formatRoleDisplay(role)}`;
     };
 
     return (
@@ -361,7 +389,11 @@ const HelpDesk: React.FC = () => {
                                     <div className="ticket-meta">
                                         <span className="ticket-category">{t.category}</span>
                                         <span className={`ticket-status-badge ${t.status.toLowerCase().replace(' ', '-')}`}>{t.status}</span>
-                                        {isAdminOrSuperAdmin && <span className="ticket-user-badge">{t.user_full_name || 'Unknown User'}</span>}
+                                        {isAdminOrSuperAdmin && (
+                                            <span className="ticket-user-badge">
+                                                {t.user_full_name || 'Unknown'} - {formatRoleDisplay(t.user_role || 'Customer')}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -385,10 +417,15 @@ const HelpDesk: React.FC = () => {
                                 <div className="ticket-top-meta">
                                     <span className="ticket-category-badge">{selectedTicket.category}</span>
                                     <div className="ticket-id-tag">{selectedTicket.ticket_id}</div>
+                                    {isTicketClosed && (
+                                        <span className="ticket-closed-badge">
+                                            <Lock size={12} /> Closed
+                                        </span>
+                                    )}
                                 </div>
                                 <h2 className="modal-title-advanced">{selectedTicket.subject}</h2>
                                 <div className="ticket-meta" style={{ marginTop: '12px' }}>
-                                    <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase()}`}>{selectedTicket.status}</span>
+                                    <span className={`ticket-status-badge ${selectedTicket.status.toLowerCase().replace(' ', '-')}`}>{selectedTicket.status}</span>
                                 </div>
                             </div>
                             <button className="close-btn modal-close-button-advanced" onClick={closeViewTicket}><X size={20} /></button>
@@ -402,7 +439,7 @@ const HelpDesk: React.FC = () => {
                                     <div className="identity-details">
                                         <div className="identity-row">
                                             <UserIcon size={16} />
-                                            <span>{selectedTicket.user_full_name || 'Unknown'}</span>
+                                            <span>{selectedTicket.user_full_name || 'Unknown'} - {formatRoleDisplay(selectedTicket.user_role || 'Customer')}</span>
                                         </div>
                                         <div className="identity-row">
                                             <Mail size={16} />
@@ -483,81 +520,86 @@ const HelpDesk: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Simplified Message View (Spec v4.0) */}
-                            <div className="ticket-simplified-messages">
-                                <div className="message-box raised-box">
-                                    <label><UserIcon size={14} /> Raised Message</label>
-                                    <p className="message-body">{selectedTicket.description}</p>
+                            {/* Message Thread Section */}
+                            <div className="ticket-message-thread">
+                                <label>
+                                    <MessageCircle size={14} /> Conversation
+                                    {isTicketClosed && <span className="closed-notice">(Ticket closed - read only)</span>}
+                                </label>
+                                
+                                <div className="message-thread-container">
+                                    {/* Initial ticket message */}
+                                    <div className="thread-message thread-message-user">
+                                        <div className="message-sender">
+                                            {formatSenderDisplay(selectedTicket.user_full_name, selectedTicket.user_role || 'Customer')}
+                                        </div>
+                                        <div className="message-content">{selectedTicket.description}</div>
+                                        <div className="message-time">{new Date(selectedTicket.created_at).toLocaleString()}</div>
+                                    </div>
+
+                                    {/* Thread messages */}
+                                    {threadMessages.map((msg, idx) => {
+                                        const isSelf = msg.sender_id === user?.id;
+                                        const isStaff = ['ADMIN', 'SUPERADMIN', 'ANALYST'].includes(msg.sender_role?.toUpperCase() || '');
+                                        
+                                        return (
+                                            <div 
+                                                key={msg.id || idx} 
+                                                className={`thread-message ${isSelf ? 'thread-message-self' : ''} ${isStaff ? 'thread-message-staff' : 'thread-message-user'}`}
+                                            >
+                                                <div className="message-sender">
+                                                    {formatSenderDisplay(msg.sender_name, msg.sender_role)}
+                                                </div>
+                                                <div className="message-content">{msg.text || msg.content}</div>
+                                                <div className="message-time">{new Date(msg.timestamp).toLocaleString()}</div>
+                                            </div>
+                                        );
+                                    })}
+                                    <div ref={messagesEndRef} />
                                 </div>
 
-                                {selectedTicket.response_text && (
-                                    <div className="message-box response-box">
-                                        <div className="response-header">
-                                            <label><MessageCircle size={14} /> Message</label>
-                                            {(isAdminOrSuperAdmin || selectedTicket.responder_id === user?.id) && (selectedTicket.edit_count || 0) < 1 && (
-                                                <button
-                                                    className="btn-edit-inline"
-                                                    onClick={() => {
-                                                        setIsEditingResponse(true);
-                                                        setThreadReply(selectedTicket.response_text || '');
-                                                    }}
-                                                >
-                                                    Edit
-                                                </button>
-                                            )}
-                                        </div>
-                                        <p className="message-body">{selectedTicket.response_text}</p>
-                                        {selectedTicket.is_edited === 1 && (
-                                            <span className="edited-indicator">edited</span>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Responder Input Form (Spec v4.0: Single Response / Final Edit) */}
-                            {((isAdminOrSuperAdmin && !selectedTicket.response_text) || isEditingResponse) && (
-                                <div className="thread-reply-form enterprise-reply-form">
-                                    <label>{isEditingResponse ? 'Edit Response (One-time only)' : 'Submit Official Response'}</label>
-                                    <textarea
-                                        className="thread-reply-textarea"
-                                        placeholder="Type the official response here..."
-                                        value={threadReply}
-                                        onChange={(e) => setThreadReply(e.target.value)}
-                                        rows={4}
-                                    />
-                                    <div className="reply-actions">
-                                        {isEditingResponse && (
-                                            <button className="btn btn-secondary btn-sm" onClick={() => setIsEditingResponse(false)}>Cancel</button>
-                                        )}
+                                {/* Message Input - Rule 4 & 5: Both can communicate until closed */}
+                                {canSendMessage ? (
+                                    <div className="message-input-container">
+                                        <textarea
+                                            className="message-input-textarea"
+                                            placeholder="Type your message..."
+                                            value={messageInput}
+                                            onChange={(e) => setMessageInput(e.target.value)}
+                                            rows={2}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSendMessage();
+                                                }
+                                            }}
+                                        />
                                         <button
-                                            className="btn btn-primary btn-sm"
-                                            onClick={handlePostMessage}
-                                            disabled={submittingThreadReply || !threadReply.trim()}
+                                            className="btn btn-primary btn-send"
+                                            onClick={handleSendMessage}
+                                            disabled={submittingMessage || !messageInput.trim()}
                                         >
-                                            {submittingThreadReply ? 'Submitting...' : isEditingResponse ? 'Save Edit' : 'Send Response'}
+                                            {submittingMessage ? 'Sending...' : <><Send size={16} /> Send</>}
                                         </button>
                                     </div>
-                                </div>
-                            )}
+                                ) : isTicketClosed ? (
+                                    <div className="ticket-closed-notice">
+                                        <Lock size={16} />
+                                        <span>This ticket is closed. No further messages can be sent.</span>
+                                    </div>
+                                ) : null}
+                            </div>
 
-                            {/* Notice for users (Optional, can be expanded) */}
-                            {!isAdminOrSuperAdmin && selectedTicket.status === 'Open' && (
-                                <div className="ticket-pending-notice">
-                                    <AlertCircle size={20} />
-                                    <span>Waiting for response from our support team...</span>
-                                </div>
-                            )}
-
-                            {/* Status Update / Responder Form (POML v1.2: Uses canRespond) */}
-                            {canRespond && selectedTicket.status !== 'Closed' && (
+                            {/* Status Update Form - Only for authorized responders */}
+                            {canUpdateStatus && (
                                 <div className="admin-response-form status-update-form">
                                     <label><CheckCircle size={16} /> Update Status</label>
                                     <textarea
                                         className="admin-reply-textarea"
-                                        placeholder="Optional final response message..."
-                                        value={messageResponse}
-                                        onChange={(e) => setMessageResponse(e.target.value)}
-                                        rows={3}
+                                        placeholder="Optional message with status update..."
+                                        value={statusMessage}
+                                        onChange={(e) => setStatusMessage(e.target.value)}
+                                        rows={2}
                                     />
                                     <div className="response-actions">
                                         <div className="status-selector">
@@ -566,7 +608,6 @@ const HelpDesk: React.FC = () => {
                                                 value={selectedStatus}
                                                 onChange={(e) => setSelectedStatus(e.target.value as any)}
                                             >
-                                                {/* POML v1.2: Removed 'Open' from status options */}
                                                 <option value="In Progress">In Progress</option>
                                                 <option value="Resolved">Resolved</option>
                                                 <option value="Closed">Closed</option>
@@ -574,16 +615,24 @@ const HelpDesk: React.FC = () => {
                                         </div>
                                         <button
                                             className="btn btn-primary"
-                                            onClick={handleSendResponse}
-                                            disabled={submittingResponse}
+                                            onClick={handleUpdateStatus}
+                                            disabled={submittingStatus}
                                         >
-                                            {submittingResponse ? 'Updating...' : <><CheckCircle size={16} /> Update Status</>}
+                                            {submittingStatus ? 'Updating...' : <><CheckCircle size={16} /> Update Status</>}
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Bottom Meta Section - POML: position="bottom" */}
+                            {/* Waiting notice for users */}
+                            {!isAdminOrSuperAdmin && selectedTicket.status === 'Open' && !selectedTicket.assigned_user_id && (
+                                <div className="ticket-pending-notice">
+                                    <AlertCircle size={20} />
+                                    <span>Waiting for assignment to a support agent...</span>
+                                </div>
+                            )}
+
+                            {/* Bottom Meta Section */}
                             <div className="ticket-bottom-meta-enterprise">
                                 <div className="meta-row-enterprise">
                                     <div className="meta-item">
@@ -591,7 +640,7 @@ const HelpDesk: React.FC = () => {
                                         {selectedTicket.assigned_user_name ? (
                                             <div className="meta-value">
                                                 <UserIcon size={14} />
-                                                <span>{selectedTicket.assigned_user_name} ({selectedTicket.assigned_user_role})</span>
+                                                <span>{selectedTicket.assigned_user_name} - {formatRoleDisplay(selectedTicket.assigned_user_role || 'Admin')}</span>
                                             </div>
                                         ) : (
                                             <div className="meta-value unassigned">Unassigned</div>
@@ -605,9 +654,10 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
 
+                                {/* Assignment Section - Rule 1: Only for Expert/Customer tickets */}
                                 {canAssignTickets && (
                                     <div className="assign-ticket-section">
-                                        <label>{selectedTicket.assigned_user_id ? 'Update Assignment' : 'Assign Ticket'}</label>
+                                        <label>{selectedTicket.assigned_user_id ? 'Reassign Ticket' : 'Assign to Admin'}</label>
                                         <div className="assign-controls assign-searchable">
                                             <input
                                                 type="text"
@@ -643,13 +693,21 @@ const HelpDesk: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Info for Superadmin on Admin-raised tickets */}
+                                {isSuperAdmin && isTicketRaisedByAdmin && (
+                                    <div className="superadmin-direct-response-notice">
+                                        <Shield size={16} />
+                                        <span>Admin-raised ticket: You can respond directly without assignment.</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Attachment Preview Modal (POML: popup mode, inline source) */}
+            {/* Attachment Preview Modal */}
             {attachmentPreview.show && (
                 <div className="modal-overlay attachment-preview-overlay" onClick={closeAttachmentPreview}>
                     <div className="attachment-preview-modal" onClick={(e) => e.stopPropagation()}>
@@ -663,39 +721,32 @@ const HelpDesk: React.FC = () => {
                             </button>
                         </div>
                         <div className="preview-content">
-                            {/* Image preview */}
                             {attachmentPreview.filename.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i) ? (
                                 <img src={attachmentPreview.url} alt="Attachment preview" className="preview-image" />
-                            ) : /* PDF preview */
-                                attachmentPreview.filename.match(/\.(pdf)$/i) ? (
-                                    <iframe src={attachmentPreview.url} title="PDF Preview" className="preview-iframe" />
-                                ) : /* Video preview */
-                                    attachmentPreview.filename.match(/\.(mp4|webm|ogg|mov|avi)$/i) ? (
-                                        <video src={attachmentPreview.url} controls className="preview-video">
-                                            Your browser does not support video playback
-                                        </video>
-                                    ) : /* Audio preview */
-                                        attachmentPreview.filename.match(/\.(mp3|wav|ogg|m4a|aac)$/i) ? (
-                                            <div className="preview-audio-container">
-                                                <FileText size={64} className="audio-icon" />
-                                                <p className="audio-filename">{attachmentPreview.filename}</p>
-                                                <audio src={attachmentPreview.url} controls className="preview-audio" />
-                                            </div>
-                                        ) : /* Text/Code preview attempt via iframe */
-                                            attachmentPreview.filename.match(/\.(txt|json|xml|csv|log|md|html|htm|css|js|ts|jsx|tsx)$/i) ? (
-                                                <iframe src={attachmentPreview.url} title="Text Preview" className="preview-iframe preview-text" />
-                                            ) : (
-                                                /* Generic fallback viewer for all other types */
-                                                <div className="preview-generic">
-                                                    <div className="generic-file-icon">
-                                                        <FileText size={64} />
-                                                    </div>
-                                                    <p className="generic-filename">{attachmentPreview.filename}</p>
-                                                    <p className="generic-message">File preview - close to return to ticket</p>
-                                                </div>
-                                            )}
+                            ) : attachmentPreview.filename.match(/\.(pdf)$/i) ? (
+                                <iframe src={attachmentPreview.url} title="PDF Preview" className="preview-iframe" />
+                            ) : attachmentPreview.filename.match(/\.(mp4|webm|ogg|mov|avi)$/i) ? (
+                                <video src={attachmentPreview.url} controls className="preview-video">
+                                    Your browser does not support video playback
+                                </video>
+                            ) : attachmentPreview.filename.match(/\.(mp3|wav|ogg|m4a|aac)$/i) ? (
+                                <div className="preview-audio-container">
+                                    <FileText size={64} className="audio-icon" />
+                                    <p className="audio-filename">{attachmentPreview.filename}</p>
+                                    <audio src={attachmentPreview.url} controls className="preview-audio" />
+                                </div>
+                            ) : attachmentPreview.filename.match(/\.(txt|json|xml|csv|log|md|html|htm|css|js|ts|jsx|tsx)$/i) ? (
+                                <iframe src={attachmentPreview.url} title="Text Preview" className="preview-iframe preview-text" />
+                            ) : (
+                                <div className="preview-generic">
+                                    <div className="generic-file-icon">
+                                        <FileText size={64} />
+                                    </div>
+                                    <p className="generic-filename">{attachmentPreview.filename}</p>
+                                    <p className="generic-message">File preview - close to return to ticket</p>
+                                </div>
+                            )}
                         </div>
-                        {/* Styled Download Button (POML: mode=direct, visible=true) */}
                         <div className="preview-footer">
                             <button
                                 className="preview-download-btn"
@@ -715,4 +766,3 @@ const HelpDesk: React.FC = () => {
 };
 
 export default HelpDesk;
-
