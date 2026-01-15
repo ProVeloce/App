@@ -421,7 +421,7 @@ export const ticketApi = {
         }),
 
     getMyTickets: (params?: Record<string, any>) =>
-        api.get<ApiResponse>('/helpdesk/tickets', { params }),
+        api.get<ApiResponse>('/helpdesk/tickets/my-tickets', { params }),
 
     getAllTickets: (params?: Record<string, any>) =>
         api.get<ApiResponse>('/helpdesk/tickets', { params }),

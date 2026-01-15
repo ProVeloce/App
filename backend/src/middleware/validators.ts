@@ -194,7 +194,7 @@ export const createTaskValidator: ValidationChain[] = [
         .isISO8601().withMessage('Invalid deadline format'),
     body('assignedToId')
         .notEmpty().withMessage('Assignee is required')
-        .isUUID().withMessage('Invalid assignee ID'),
+        .isMongoId().withMessage('Invalid assignee ID'),
     body('priority')
         .optional()
         .isIn(['LOW', 'MEDIUM', 'HIGH']).withMessage('Invalid priority'),
@@ -257,5 +257,5 @@ export const paginationValidator: ValidationChain[] = [
 
 export const uuidParamValidator = (paramName: string): ValidationChain[] => [
     param(paramName)
-        .isUUID().withMessage(`Invalid ${paramName} format`),
+        .isMongoId().withMessage(`Invalid ${paramName} format`),
 ];

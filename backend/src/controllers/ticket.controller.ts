@@ -303,9 +303,14 @@ export const getTicketById = async (req: Request, res: Response, next: NextFunct
 export const addMessage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { id } = req.params;
-        const { content } = req.body;
+        // Accept both 'content' and 'message' field names for compatibility
+        const content = req.body.content || req.body.message;
         const userId = req.user!.userId;
         const userRole = req.user!.role;
+
+        if (!content || !content.trim()) {
+            throw new AppError('Message content is required', 400);
+        }
 
         const ticket = await prisma.ticket.findUnique({
             where: { id },
@@ -511,7 +516,9 @@ export const assignTicket = async (req: Request, res: Response, next: NextFuncti
 export const updateTicketStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { id } = req.params;
-        const { status, message } = req.body;
+        const { status } = req.body;
+        // Accept both 'message' and 'reply' field names for compatibility
+        const message = req.body.message || req.body.reply;
         const userId = req.user!.userId;
         const userRole = req.user!.role;
 
