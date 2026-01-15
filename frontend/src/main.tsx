@@ -10,6 +10,7 @@ import { SessionProvider } from './context/SessionContext';
 import { ErrorProvider } from './context/ErrorContext';
 import { LoadingProvider } from './context/LoadingContext';
 import { AlertProvider } from './context/AlertContext';
+import { ConfigProvider } from './context/ConfigContext';
 import SessionManager from './components/common/SessionManager';
 import StatusPopup from './components/common/StatusPopup';
 import CookieConsent, { getCookieConsentStatus } from './components/common/CookieConsent';
@@ -34,30 +35,32 @@ const RootApp: React.FC = () => {
     return (
         <React.StrictMode>
             <BrowserRouter>
-                <ThemeProvider>
-                    <ErrorProvider>
-                        <LoadingProvider>
-                            <AuthProvider>
-                                <SessionProvider>
-                                    <ToastProvider>
-                                        <AlertProvider>
-                                            <SessionManager>
-                                                <App />
-                                                <StatusPopup />
-                                                <Analytics />
-                                                {/* Cookie Consent Banner - shown on first visit */}
-                                                <CookieConsent 
-                                                    onAccept={handleCookieAccept}
-                                                    onReject={handleCookieReject}
-                                                />
-                                            </SessionManager>
-                                        </AlertProvider>
-                                    </ToastProvider>
-                                </SessionProvider>
-                            </AuthProvider>
-                        </LoadingProvider>
-                    </ErrorProvider>
-                </ThemeProvider>
+                <ConfigProvider>
+                    <ThemeProvider>
+                        <ErrorProvider>
+                            <LoadingProvider>
+                                <AuthProvider>
+                                    <SessionProvider>
+                                        <ToastProvider>
+                                            <AlertProvider>
+                                                <SessionManager>
+                                                    <App />
+                                                    <StatusPopup />
+                                                    <Analytics />
+                                                    {/* Cookie Consent Banner - shown on first visit */}
+                                                    <CookieConsent 
+                                                        onAccept={handleCookieAccept}
+                                                        onReject={handleCookieReject}
+                                                    />
+                                                </SessionManager>
+                                            </AlertProvider>
+                                        </ToastProvider>
+                                    </SessionProvider>
+                                </AuthProvider>
+                            </LoadingProvider>
+                        </ErrorProvider>
+                    </ThemeProvider>
+                </ConfigProvider>
             </BrowserRouter>
         </React.StrictMode>
     );

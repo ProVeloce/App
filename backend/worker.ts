@@ -2000,6 +2000,34 @@ export default {
                 }
             }
 
+            // GET /api/config/public - Get public UI/feature configurations (no auth required)
+            if (url.pathname === "/api/config/public" && request.method === "GET") {
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    // Only return non-sensitive UI and feature configs
+                    const publicCategories = ['ui', 'features'];
+                    const configs = await env.proveloce_db.prepare(`
+                        SELECT id, category, key, value, type, label, description, updated_at
+                        FROM system_config 
+                        WHERE category IN ('ui', 'features', 'notifications', 'ticketing', 'users')
+                        ORDER BY category, key
+                    `).all();
+
+                    return jsonResponse({ 
+                        success: true, 
+                        data: configs.results || [],
+                        timestamp: new Date().toISOString()
+                    });
+                } catch (err) {
+                    console.error("Public config fetch error:", err);
+                    // Return empty array on error (non-critical)
+                    return jsonResponse({ success: true, data: [], timestamp: new Date().toISOString() });
+                }
+            }
+
             // GET /api/config - Get all system configurations (SUPERADMIN only)
             if (url.pathname === "/api/config" && request.method === "GET") {
                 const auth = await checkAdminRole(request);

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { configApi, SystemConfig } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { useConfig, broadcastConfigUpdate } from '../../context/ConfigContext';
 import './GlobalConfig.css';
 
 interface CategoryInfo {
@@ -81,6 +82,7 @@ const GlobalConfig: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const { success, error } = useToast();
+    const { refreshConfig } = useConfig();
 
     useEffect(() => {
         fetchConfigs();
@@ -127,9 +129,15 @@ const GlobalConfig: React.FC = () => {
             }));
 
             await configApi.bulkUpdateConfig(updates);
-            success(`${updates.length} configuration(s) saved successfully`);
+            success(`${updates.length} configuration(s) saved successfully. Changes applied globally.`);
             setPendingChanges(new Map());
-            fetchConfigs(); // Refresh
+            
+            // Refresh local configs
+            fetchConfigs();
+            
+            // Broadcast config update to all tabs and refresh global context
+            broadcastConfigUpdate();
+            await refreshConfig();
         } catch (err) {
             console.error('Failed to save configs:', err);
             error('Failed to save configurations');
