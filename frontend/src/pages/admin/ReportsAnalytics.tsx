@@ -470,7 +470,7 @@ const ReportsAnalytics: React.FC = () => {
                     </div>
                     <div className="chart-body">
                         <ResponsiveContainer width="100%" height={280}>
-                            <AreaChart data={formatGrowthData()}>
+                            <AreaChart data={formatGrowthData()} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                                 <defs>
                                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -478,8 +478,18 @@ const ReportsAnalytics: React.FC = () => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                                <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                                <XAxis 
+                                    dataKey="date" 
+                                    tick={{ fontSize: 11 }} 
+                                    stroke="#9ca3af"
+                                    tickMargin={8}
+                                />
+                                <YAxis 
+                                    tick={{ fontSize: 11 }} 
+                                    stroke="#9ca3af"
+                                    tickMargin={8}
+                                    allowDecimals={false}
+                                />
                                 <Tooltip
                                     contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                                 />
@@ -490,6 +500,7 @@ const ReportsAnalytics: React.FC = () => {
                                     strokeWidth={2}
                                     fillOpacity={1}
                                     fill="url(#colorUsers)"
+                                    name="New Users"
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -502,25 +513,34 @@ const ReportsAnalytics: React.FC = () => {
                         <h3><PieChartIcon size={18} /> User Distribution</h3>
                         <span className="chart-subtitle">By role</span>
                     </div>
-                    <div className="chart-body">
-                        <ResponsiveContainer width="100%" height={280}>
-                            <PieChart>
+                    <div className="chart-body pie-chart-body">
+                        <ResponsiveContainer width="100%" height={320}>
+                            <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                                 <Pie
                                     data={formatUserRoleData()}
                                     cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={90}
+                                    cy="40%"
+                                    innerRadius={45}
+                                    outerRadius={75}
                                     paddingAngle={3}
                                     dataKey="value"
-                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                    labelLine={false}
                                 >
                                     {formatUserRoleData().map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip />
+                                <Tooltip formatter={(value: number) => [value, 'Users']} />
+                                <Legend 
+                                    layout="horizontal" 
+                                    verticalAlign="bottom" 
+                                    align="center"
+                                    wrapperStyle={{ paddingTop: '20px' }}
+                                    formatter={(value, entry: any) => (
+                                        <span style={{ color: 'var(--text-primary)', fontSize: '12px' }}>
+                                            {value} ({entry.payload?.value || 0})
+                                        </span>
+                                    )}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -534,10 +554,20 @@ const ReportsAnalytics: React.FC = () => {
                     </div>
                     <div className="chart-body">
                         <ResponsiveContainer width="100%" height={280}>
-                            <LineChart data={formatTicketTrendData()}>
+                            <LineChart data={formatTicketTrendData()} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                                <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                                <XAxis 
+                                    dataKey="date" 
+                                    tick={{ fontSize: 11 }} 
+                                    stroke="#9ca3af"
+                                    tickMargin={8}
+                                />
+                                <YAxis 
+                                    tick={{ fontSize: 11 }} 
+                                    stroke="#9ca3af"
+                                    tickMargin={8}
+                                    allowDecimals={false}
+                                />
                                 <Tooltip
                                     contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                                 />
@@ -548,6 +578,7 @@ const ReportsAnalytics: React.FC = () => {
                                     strokeWidth={2}
                                     dot={{ fill: '#22c55e', strokeWidth: 2 }}
                                     activeDot={{ r: 6 }}
+                                    name="Tickets"
                                 />
                             </LineChart>
                         </ResponsiveContainer>
@@ -560,25 +591,34 @@ const ReportsAnalytics: React.FC = () => {
                         <h3><PieChartIcon size={18} /> Ticket Status</h3>
                         <span className="chart-subtitle">Distribution by status</span>
                     </div>
-                    <div className="chart-body">
-                        <ResponsiveContainer width="100%" height={280}>
-                            <PieChart>
+                    <div className="chart-body pie-chart-body">
+                        <ResponsiveContainer width="100%" height={320}>
+                            <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                                 <Pie
                                     data={formatTicketStatusData()}
                                     cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={90}
+                                    cy="40%"
+                                    innerRadius={45}
+                                    outerRadius={75}
                                     paddingAngle={3}
                                     dataKey="value"
-                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                    labelLine={false}
                                 >
                                     {formatTicketStatusData().map((_, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip />
+                                <Tooltip formatter={(value: number) => [value, 'Tickets']} />
+                                <Legend 
+                                    layout="horizontal" 
+                                    verticalAlign="bottom" 
+                                    align="center"
+                                    wrapperStyle={{ paddingTop: '20px' }}
+                                    formatter={(value, entry: any) => (
+                                        <span style={{ color: 'var(--text-primary)', fontSize: '12px' }}>
+                                            {value} ({entry.payload?.value || 0})
+                                        </span>
+                                    )}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -591,15 +631,29 @@ const ReportsAnalytics: React.FC = () => {
                         <span className="chart-subtitle">Most common actions</span>
                     </div>
                     <div className="chart-body">
-                        <ResponsiveContainer width="100%" height={280}>
-                            <BarChart data={formatActivityData()} layout="vertical">
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={formatActivityData()} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                <XAxis type="number" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} stroke="#9ca3af" width={100} />
+                                <XAxis 
+                                    type="number" 
+                                    tick={{ fontSize: 11 }} 
+                                    stroke="#9ca3af"
+                                    tickMargin={8}
+                                    allowDecimals={false}
+                                />
+                                <YAxis 
+                                    dataKey="name" 
+                                    type="category" 
+                                    tick={{ fontSize: 10 }} 
+                                    stroke="#9ca3af" 
+                                    width={120}
+                                    tickMargin={8}
+                                />
                                 <Tooltip
                                     contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                                    formatter={(value: number) => [value, 'Count']}
                                 />
-                                <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Actions" />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
