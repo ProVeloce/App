@@ -366,15 +366,22 @@ const TaskAssignment: React.FC = () => {
             const data = await response.json();
             if (data.success) {
                 success('Task status updated');
-                // Update local state immediately
-                setTasks(prev => prev.map(t => 
-                    t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t
-                ));
+                // Update local state with response or fallback
+                setTasks(prev => prev.map(t => {
+                    if (t.id === taskId) {
+                        if (data.data?.task) {
+                            return data.data.task;
+                        }
+                        return { ...t, status: newStatus as Task['status'] };
+                    }
+                    return t;
+                }));
             } else {
                 error(data.error || 'Failed to update task');
             }
-        } catch (err) {
-            error('Failed to update task');
+        } catch (err: any) {
+            console.error('Status update error:', err);
+            error('Failed to update task: ' + (err?.message || 'Unknown error'));
         } finally {
             setUpdatingTask(null);
         }
@@ -395,18 +402,23 @@ const TaskAssignment: React.FC = () => {
 
             const data = await response.json();
             if (data.success) {
-                const expertName = assignableUsers.find(u => u.id === expertId)?.name;
+                const expertName = expertId 
+                    ? (data.data?.task?.assigned_user_name || assignableUsers.find(u => u.id === expertId)?.name)
+                    : null;
                 success(expertId ? `Task assigned to ${expertName}` : 'Task unassigned');
                 
-                // Update local state immediately with expert name
+                // Update local state with response data or fallback
                 setTasks(prev => prev.map(t => {
                     if (t.id === taskId) {
+                        if (data.data?.task) {
+                            // Use server response if available
+                            return data.data.task;
+                        }
+                        // Fallback to local update
                         return {
                             ...t,
                             assigned_to: expertId || null,
-                            assigned_user_name: expertId 
-                                ? assignableUsers.find(u => u.id === expertId)?.name || null
-                                : null
+                            assigned_user_name: expertName || null
                         };
                     }
                     return t;
@@ -414,8 +426,9 @@ const TaskAssignment: React.FC = () => {
             } else {
                 error(data.error || 'Failed to assign task');
             }
-        } catch (err) {
-            error('Failed to assign task');
+        } catch (err: any) {
+            console.error('Assignment error:', err);
+            error('Failed to assign task: ' + (err?.message || 'Unknown error'));
         } finally {
             setUpdatingTask(null);
         }

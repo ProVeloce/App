@@ -5411,31 +5411,94 @@ export default {
                 if (!env.proveloce_db) return jsonResponse({ success: false, error: "Database not configured" }, 500);
 
                 try {
-                    const body = await request.json() as { status?: string; assignedTo?: string };
+                    let body: { status?: string; assignedTo?: string | null; title?: string; description?: string; dueDate?: string | null } = {};
+                    
+                    try {
+                        body = await request.json() as typeof body;
+                    } catch (parseError) {
+                        return jsonResponse({ success: false, error: "Invalid JSON body" }, 400);
+                    }
 
-                    const updates: string[] = [];
+                    // Check if task exists first
+                    const existingTask = await env.proveloce_db.prepare(
+                        "SELECT id FROM tasks WHERE id = ?"
+                    ).bind(taskId).first();
+
+                    if (!existingTask) {
+                        return jsonResponse({ success: false, error: "Task not found" }, 404);
+                    }
+
+                    const setClauses: string[] = [];
                     const params: any[] = [];
 
-                    if (body.status) {
-                        updates.push("status = ?");
+                    // Handle status update
+                    if (body.status !== undefined && body.status !== null) {
+                        const validStatuses = ['Pending', 'InProgress', 'Completed'];
+                        if (!validStatuses.includes(body.status)) {
+                            return jsonResponse({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, 400);
+                        }
+                        setClauses.push("status = ?");
                         params.push(body.status);
                     }
+
+                    // Handle assignedTo update (can be null to unassign)
                     if (body.assignedTo !== undefined) {
-                        updates.push("assigned_to = ?");
+                        setClauses.push("assigned_to = ?");
                         params.push(body.assignedTo || null);
                     }
-                    updates.push("updated_at = CURRENT_TIMESTAMP");
 
+                    // Handle title update
+                    if (body.title !== undefined && body.title !== null) {
+                        if (body.title.trim() === '') {
+                            return jsonResponse({ success: false, error: "Title cannot be empty" }, 400);
+                        }
+                        setClauses.push("title = ?");
+                        params.push(body.title.trim());
+                    }
+
+                    // Handle description update
+                    if (body.description !== undefined) {
+                        setClauses.push("description = ?");
+                        params.push(body.description || null);
+                    }
+
+                    // Handle dueDate update
+                    if (body.dueDate !== undefined) {
+                        setClauses.push("due_date = ?");
+                        params.push(body.dueDate || null);
+                    }
+
+                    // If no fields to update, just return success
+                    if (setClauses.length === 0) {
+                        return jsonResponse({ success: true, message: "No changes to apply" });
+                    }
+
+                    // Always update updated_at
+                    setClauses.push("updated_at = CURRENT_TIMESTAMP");
+
+                    // Add taskId as the last parameter for WHERE clause
                     params.push(taskId);
 
-                    await env.proveloce_db.prepare(`
-                        UPDATE tasks SET ${updates.join(", ")} WHERE id = ?
-                    `).bind(...params).run();
+                    const query = `UPDATE tasks SET ${setClauses.join(", ")} WHERE id = ?`;
+                    
+                    await env.proveloce_db.prepare(query).bind(...params).run();
 
-                    return jsonResponse({ success: true, message: "Task updated" });
+                    // Fetch updated task to return
+                    const updatedTask = await env.proveloce_db.prepare(`
+                        SELECT t.*, u.name as assigned_user_name
+                        FROM tasks t
+                        LEFT JOIN users u ON t.assigned_to = u.id
+                        WHERE t.id = ?
+                    `).bind(taskId).first();
+
+                    return jsonResponse({ 
+                        success: true, 
+                        message: "Task updated successfully",
+                        data: { task: updatedTask }
+                    });
                 } catch (error: any) {
-                    console.error("Error updating task:", error);
-                    return jsonResponse({ success: false, error: "Failed to update task" }, 500);
+                    console.error("Error updating task:", error?.message || error);
+                    return jsonResponse({ success: false, error: "Failed to update task: " + (error?.message || "Unknown error") }, 500);
                 }
             }
 

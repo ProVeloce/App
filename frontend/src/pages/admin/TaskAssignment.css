@@ -67,7 +67,8 @@
     background: var(--bg-primary);
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-light);
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
 }
 
 .tasks-table {
@@ -183,6 +184,21 @@
     gap: var(--space-2);
     align-items: center;
     flex-wrap: wrap;
+    position: relative;
+    overflow: visible;
+}
+
+/* Ensure table cells don't clip dropdowns */
+.tasks-table td {
+    overflow: visible;
+}
+
+.tasks-table tbody {
+    overflow: visible;
+}
+
+.tasks-table tr {
+    position: relative;
 }
 
 /* Header Actions */
