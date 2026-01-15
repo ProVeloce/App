@@ -188,20 +188,31 @@
 .modal-buttons-advanced {
   animation: buttonSlideIn 0.4s var(--smooth-out) forwards;
   animation-delay: 0.4s;
-  opacity: 0;
+  opacity: 1; /* Changed from 0 to ensure visibility */
+  display: flex !important;
+  gap: 12px;
+  justify-content: center;
+  visibility: visible !important;
 }
 
 .modal-button-advanced {
   animation: buttonSlideIn 0.3s var(--smooth-out) forwards;
-  opacity: 0;
+  opacity: 1 !important; /* Ensure buttons are always visible */
+  display: inline-flex !important;
+  visibility: visible !important;
 }
 
-/* Confirmed State - As per Specification */
-.modal-icon-advanced.confirmed,
-.modal-buttons-advanced.confirmed {
+/* Confirmed State - Hide only when loading/confirmed */
+.modal-icon-advanced.confirmed {
   opacity: 0 !important;
   visibility: hidden !important;
   transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+  pointer-events: none;
+}
+
+/* Don't hide buttons container during loading - only change text */
+.modal-buttons-advanced.confirmed {
+  /* Keep buttons visible but disable interaction */
   pointer-events: none;
 }
 

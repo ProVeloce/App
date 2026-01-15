@@ -88,9 +88,12 @@
 }
 
 .confirm-modal-actions {
-    display: flex;
+    display: flex !important;
     gap: var(--space-3);
     justify-content: center;
+    flex-wrap: wrap;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .confirm-modal-actions .btn {
@@ -101,6 +104,11 @@
     font-weight: 500;
     cursor: pointer;
     transition: all var(--transition-fast);
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .confirm-modal-actions .btn-outline {
