@@ -75,14 +75,21 @@ const api: AxiosInstance = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    withCredentials: true,
+    withCredentials: true, // Important: Send cookies with requests
 });
 
-// Token management
+// Session timeout in seconds (15 minutes)
+export const SESSION_TIMEOUT_SECONDS = 15 * 60;
+
+// Token management - kept for backward compatibility and local state tracking
+// Note: httpOnly cookies cannot be accessed directly from JavaScript
+// These functions now primarily track local state for UI purposes
 let accessToken: string | null = null;
+let isAuthenticated: boolean = false;
 
 export const setAccessToken = (token: string | null) => {
     accessToken = token;
+    isAuthenticated = !!token;
     if (token) {
         localStorage.setItem('accessToken', token);
     } else {
@@ -109,7 +116,23 @@ export const getRefreshToken = (): string | null => {
     return localStorage.getItem('refreshToken');
 };
 
-// Request interceptor
+export const isUserAuthenticated = (): boolean => {
+    return isAuthenticated || !!getAccessToken();
+};
+
+// Clear all auth state (used on logout/session expiry)
+export const clearAuthState = () => {
+    accessToken = null;
+    isAuthenticated = false;
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+};
+
+// Request interceptor - cookies are sent automatically with withCredentials: true
+// We also include Authorization header for backward compatibility
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const token = getAccessToken();
@@ -135,17 +158,31 @@ api.interceptors.response.use(
         }
         return response;
     },
-    async (error: AxiosError<{ error?: string; message?: string }>) => {
+    async (error: AxiosError<{ error?: string; message?: string; sessionExpired?: boolean }>) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _suppressError?: boolean };
 
-        // Handle 401 with token refresh
+        // Check if session expired (15 minute timeout)
+        const sessionExpired = error.response?.data?.sessionExpired;
+        
+        // Handle 401 with token refresh (only if not already retried)
         if (error.response?.status === 401 && !originalRequest._retry) {
+            // If session explicitly expired, redirect to login immediately
+            if (sessionExpired) {
+                clearAuthState();
+                window.dispatchEvent(new CustomEvent('session-expired'));
+                window.location.href = '/login?sessionExpired=true';
+                return Promise.reject(error);
+            }
+            
             originalRequest._retry = true;
 
             try {
-                const refreshToken = getRefreshToken();
-                if (refreshToken) {
-                    const response = await axios.post('/api/auth/refresh-token', { refreshToken });
+                // Try to refresh tokens - cookies are sent automatically
+                const response = await axios.post(`${API_BASE_URL}/api/auth/refresh-token`, {}, {
+                    withCredentials: true,
+                });
+                
+                if (response.data?.data?.tokens) {
                     const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data.data.tokens;
 
                     setAccessToken(newAccessToken);
@@ -155,22 +192,21 @@ api.interceptors.response.use(
                     return api(originalRequest);
                 }
             } catch (refreshError) {
-                // Refresh failed, clear tokens and redirect to login
-                setAccessToken(null);
-                setRefreshToken(null);
-                window.location.href = '/login';
+                // Refresh failed - session has expired (15 minutes passed)
+                clearAuthState();
+                window.dispatchEvent(new CustomEvent('session-expired'));
+                window.location.href = '/login?sessionExpired=true';
                 return Promise.reject(error);
             }
         }
 
         // Show global error modal for all other errors (unless suppressed)
-        if (!originalRequest._suppressError) {
+        if (!originalRequest._suppressError && error.response?.status !== 401) {
             // Determine error title based on status code
             let title = 'Something went wrong';
             const status = error.response?.status;
 
             if (status === 400) title = 'Invalid Request';
-            else if (status === 401) title = 'Authentication Failed';
             else if (status === 403) title = 'Access Denied';
             else if (status === 404) title = 'Not Found';
             else if (status === 409) title = 'Conflict';

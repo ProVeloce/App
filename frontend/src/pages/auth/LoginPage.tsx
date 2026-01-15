@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import AppLogo from '../../components/common/AppLogo';
 import './AuthPages.css';
 
@@ -21,12 +21,27 @@ const LoginPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [mode, setMode] = useState<'login' | 'signup'>('login');
     const [transitioning, setTransitioning] = useState(false);
+    const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
     const { login } = useAuth();
-    const { error, success } = useToast();
+    const { error, success, warning } = useToast();
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
 
     const from = (location.state as any)?.from?.pathname || '/dashboard';
+
+    // Check for session expired parameter
+    useEffect(() => {
+        const sessionExpired = searchParams.get('sessionExpired');
+        const stateMessage = (location.state as any)?.message;
+        
+        if (sessionExpired === 'true') {
+            setSessionExpiredMessage('Your session has expired after 15 minutes of inactivity. Please log in again to continue.');
+            warning('Session expired. Please log in again.');
+        } else if (stateMessage) {
+            setSessionExpiredMessage(stateMessage);
+        }
+    }, [searchParams, location.state, warning]);
 
     const {
         register,
@@ -78,6 +93,14 @@ const LoginPage: React.FC = () => {
                         </div>
 
                         <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
+                            {/* Session Expired Alert */}
+                            {sessionExpiredMessage && (
+                                <div className="session-expired-alert">
+                                    <AlertCircle size={18} />
+                                    <span>{sessionExpiredMessage}</span>
+                                </div>
+                            )}
+
                             <div className="form-group">
                                 <label htmlFor="email">Email Address</label>
                                 <div className="input-wrapper">

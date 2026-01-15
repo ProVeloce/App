@@ -10,16 +10,25 @@ export const config = {
     // Database
     databaseUrl: process.env.DATABASE_URL!,
 
-    // JWT
+    // JWT - Session expires after 15 minutes, requiring re-login
     jwt: {
         accessSecret: process.env.JWT_ACCESS_SECRET || 'access_secret_change_me',
         refreshSecret: process.env.JWT_REFRESH_SECRET || 'refresh_secret_change_me',
         accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-        refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+        refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '15m', // Same as access token for strict session expiry
     },
 
-    // Session
-    sessionTimeoutMinutes: parseInt(process.env.SESSION_TIMEOUT_MINUTES || '30', 10),
+    // Session timeout - 15 minutes
+    sessionTimeoutMinutes: parseInt(process.env.SESSION_TIMEOUT_MINUTES || '15', 10),
+
+    // Cookie settings
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: (process.env.COOKIE_SAME_SITE as 'strict' | 'lax' | 'none') || 'lax',
+        domain: process.env.COOKIE_DOMAIN || undefined,
+        httpOnly: true,
+        maxAge: 15 * 60 * 1000, // 15 minutes in milliseconds
+    },
 
     // Email
     smtp: {
