@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
     Briefcase, Plus, X, Calendar, User, Clock, CheckCircle, Loader, 
-    Search, ChevronDown, RefreshCw, Mail, Shield, AlertCircle, Edit2, Trash2, AlertTriangle
+    Search, ChevronDown, RefreshCw, Mail, Shield, AlertCircle, Edit2, Trash2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import './TaskAssignment.css';
 
 interface Task {
@@ -944,58 +945,21 @@ const TaskAssignment: React.FC = () => {
                 </div>
             )}
 
-            {/* Delete Confirmation Modal */}
-            {showDeleteModal && deletingTask && (
-                <div className="modal-overlay" onClick={closeDeleteModal}>
-                    <div className="modal-content modal-delete" onClick={e => e.stopPropagation()}>
-                        <div className="modal-header delete-header">
-                            <h2><AlertTriangle size={20} /> Delete Task</h2>
-                            <button className="close-btn" onClick={closeDeleteModal}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="delete-body">
-                            <div className="delete-warning">
-                                <AlertTriangle size={48} />
-                                <p>Are you sure you want to delete this task?</p>
-                            </div>
-                            <div className="delete-task-info">
-                                <strong>{deletingTask.title}</strong>
-                                <span>{deletingTask.description}</span>
-                                {deletingTask.assigned_user_name && (
-                                    <span className="assigned-to">
-                                        <User size={12} /> Assigned to: {deletingTask.assigned_user_name}
-                                    </span>
-                                )}
-                            </div>
-                            <p className="delete-warning-text">
-                                This action cannot be undone. The task will be permanently removed from the database.
-                            </p>
-                        </div>
-                        <div className="modal-actions">
-                            <button type="button" className="btn btn-secondary" onClick={closeDeleteModal}>
-                                Cancel
-                            </button>
-                            <button 
-                                type="button" 
-                                className="btn btn-danger" 
-                                onClick={handleDeleteTask}
-                                disabled={deleting}
-                            >
-                                {deleting ? (
-                                    <>
-                                        <Loader size={16} className="spin" /> Deleting...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Trash2 size={16} /> Delete Task
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Delete Confirmation Modal - Using standardized ConfirmModal component */}
+            <ConfirmModal
+                isOpen={showDeleteModal}
+                title="Delete Task"
+                message={deletingTask 
+                    ? `Are you sure you want to delete "${deletingTask.title}"?${deletingTask.assigned_user_name ? ` This task is currently assigned to ${deletingTask.assigned_user_name}.` : ''} This action cannot be undone.`
+                    : 'Are you sure you want to delete this task? This action cannot be undone.'
+                }
+                confirmText="Delete Task"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteTask}
+                onCancel={closeDeleteModal}
+                isLoading={deleting}
+            />
         </div>
     );
 };

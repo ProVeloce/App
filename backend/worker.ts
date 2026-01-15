@@ -5596,10 +5596,33 @@ export default {
                     const assignedToCol = useNewSchema ? "assigned_to" : "assigned_to_id";
                     const dueDateCol = useNewSchema ? "due_date" : "deadline";
 
+                    // Track if we're changing assignment for activity logging
+                    let previousAssignee: string | null = null;
+                    let newAssignee: string | null = null;
+
                     // Handle assignedTo update (can be null to unassign)
                     if (body.assignedTo !== undefined) {
+                        // Get current assignee for logging
+                        const currentTask = await env.proveloce_db.prepare(
+                            `SELECT ${assignedToCol} as current_assignee FROM tasks WHERE id = ?`
+                        ).bind(taskId).first() as any;
+                        previousAssignee = currentTask?.current_assignee || null;
+                        newAssignee = body.assignedTo || null;
+
                         setClauses.push(`${assignedToCol} = ?`);
                         params.push(body.assignedTo || null);
+
+                        // Also update the other column if it exists for consistency
+                        if (useNewSchema) {
+                            try {
+                                // Try to also update assigned_to_id for backwards compat
+                                await env.proveloce_db.prepare(
+                                    "UPDATE tasks SET assigned_to_id = ? WHERE id = ?"
+                                ).bind(body.assignedTo || null, taskId).run();
+                            } catch {
+                                // Ignore if column doesn't exist
+                            }
+                        }
                     }
 
                     // Handle title update
@@ -5673,6 +5696,42 @@ export default {
                             LEFT JOIN users u ON t.assigned_to_id = u.id
                             WHERE t.id = ?
                         `).bind(taskId).first();
+                    }
+
+                    // Log assignment change if applicable
+                    if (previousAssignee !== newAssignee && (previousAssignee !== null || newAssignee !== null)) {
+                        try {
+                            await env.proveloce_db.prepare(`
+                                INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
+                                VALUES (?, ?, 'task_assigned', 'task', ?, ?, CURRENT_TIMESTAMP)
+                            `).bind(
+                                crypto.randomUUID(),
+                                payload.userId,
+                                taskId,
+                                JSON.stringify({
+                                    previous_assignee: previousAssignee,
+                                    new_assignee: newAssignee,
+                                    assigned_by: payload.userId
+                                })
+                            ).run();
+                        } catch {
+                            // Ignore logging errors
+                        }
+
+                        // Notify new assignee
+                        if (newAssignee) {
+                            try {
+                                const taskTitle = (updatedTask as any)?.title || 'Task';
+                                await createNotification(
+                                    env, newAssignee, 'INFO',
+                                    'Task Assigned',
+                                    `You have been assigned to: ${taskTitle}`,
+                                    '/expert/tasks'
+                                );
+                            } catch {
+                                // Ignore notification errors
+                            }
+                        }
                     }
 
                     return jsonResponse({ 
