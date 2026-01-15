@@ -28,23 +28,23 @@ export const hasCookieConsent = (): boolean => {
     return getCookieConsentStatus() === 'accepted';
 };
 
-// Local cookie image from public folder
+// Cookie image - using local asset or fallback to CDN
 const COOKIE_IMAGE_URL = '/images/cookie.png';
+const COOKIE_FALLBACK_URL = 'https://cdn-icons-png.flaticon.com/512/1047/1047711.png';
 
 /**
  * Modern Cookie Consent Popup Component
- * Small, unobtrusive popup in the bottom-right corner
- * Professional MNC-style design with real cookie image
+ * Horizontal layout, bottom-right corner
+ * Professional MNC-style design
  */
 const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
+    const [imgSrc, setImgSrc] = useState(COOKIE_IMAGE_URL);
 
     useEffect(() => {
-        // Check if user has already made a choice
         const consentStatus = getCookieConsentStatus();
         if (consentStatus === 'pending') {
-            // Small delay before showing for better UX
             const timer = setTimeout(() => {
                 setIsVisible(true);
                 setIsAnimating(true);
@@ -73,50 +73,44 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         }, 350);
     };
 
+    const handleImageError = () => {
+        setImgSrc(COOKIE_FALLBACK_URL);
+    };
+
     if (!isVisible) return null;
 
     return (
         <div className={`cookie-popup ${isAnimating ? 'visible' : ''}`}>
-            <div className="cookie-popup-header">
-                <div className="cookie-popup-image-wrapper">
-                    <img 
-                        src={COOKIE_IMAGE_URL} 
-                        alt="Cookie" 
-                        className="cookie-popup-image"
-                        loading="eager"
-                    />
-                </div>
-                <div className="cookie-popup-header-text">
-                    <span className="cookie-popup-title">We use cookies</span>
-                    <span className="cookie-popup-subtitle">To improve your experience</span>
-                </div>
+            <div className="cookie-popup-image-wrapper">
+                <img 
+                    src={imgSrc} 
+                    alt="" 
+                    className="cookie-popup-image"
+                    onError={handleImageError}
+                />
             </div>
             
-            <p className="cookie-popup-message">
-                This site uses cookies to enhance your browsing experience, 
-                provide personalized content, and analyze traffic.
-            </p>
+            <div className="cookie-popup-content">
+                <p className="cookie-popup-message">
+                    We use cookies to enhance your experience. 
+                    <a href="/privacy" className="cookie-popup-link">Learn more</a>
+                </p>
+            </div>
             
             <div className="cookie-popup-actions">
                 <button 
                     className="cookie-popup-btn cookie-popup-btn-decline" 
                     onClick={handleReject}
-                    aria-label="Decline cookies"
                 >
                     Decline
                 </button>
                 <button 
                     className="cookie-popup-btn cookie-popup-btn-accept" 
                     onClick={handleAccept}
-                    aria-label="Accept cookies"
                 >
                     Accept
                 </button>
             </div>
-            
-            <a href="/privacy" className="cookie-popup-link">
-                Privacy Policy
-            </a>
         </div>
     );
 };
