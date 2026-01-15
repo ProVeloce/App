@@ -320,7 +320,7 @@ export const adminApi = {
         }>>('/admin/stats'),
 
     getLogs: (params?: Record<string, any>) =>
-        api.get<ApiResponse<{ logs: any[] }>>('/admin/logs', { params }),
+        api.get<ApiResponse<{ logs: any[]; pagination?: { page: number; limit: number; total: number; totalPages: number } }>>('/admin/logs', { params }),
 
     getDashboard: () =>
         api.get<ApiResponse<{ stats: any }>>('/admin/stats'),
