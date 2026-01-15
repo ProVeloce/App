@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Cookie, Shield, X, Check } from 'lucide-react';
 import './CookieConsent.css';
 
 interface CookieConsentProps {
@@ -29,10 +28,13 @@ export const hasCookieConsent = (): boolean => {
     return getCookieConsentStatus() === 'accepted';
 };
 
+// High-quality chocolate chip cookie image
+const COOKIE_IMAGE_URL = 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=120&h=120&fit=crop&crop=center&q=80';
+
 /**
- * CookieConsent Banner Component
- * Shows on first visit, asking users to Accept or Reject cookies
- * Similar to MNC (Multi-National Corporation) application cookie banners
+ * Modern Cookie Consent Popup Component
+ * Small, unobtrusive popup in the bottom-right corner
+ * Professional MNC-style design with real cookie image
  */
 const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => {
     const [isVisible, setIsVisible] = useState(false);
@@ -46,7 +48,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
             const timer = setTimeout(() => {
                 setIsVisible(true);
                 setIsAnimating(true);
-            }, 500);
+            }, 800);
             return () => clearTimeout(timer);
         }
     }, []);
@@ -58,7 +60,7 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         setTimeout(() => {
             setIsVisible(false);
             onAccept();
-        }, 300);
+        }, 250);
     };
 
     const handleReject = () => {
@@ -68,56 +70,53 @@ const CookieConsent: React.FC<CookieConsentProps> = ({ onAccept, onReject }) => 
         setTimeout(() => {
             setIsVisible(false);
             onReject();
-        }, 300);
+        }, 250);
     };
 
     if (!isVisible) return null;
 
     return (
-        <div className={`cookie-consent-overlay ${isAnimating ? 'visible' : ''}`}>
-            <div className={`cookie-consent-banner ${isAnimating ? 'visible' : ''}`}>
-                <div className="cookie-consent-content">
-                    <div className="cookie-consent-icon">
-                        <Cookie size={32} />
-                    </div>
-                    <div className="cookie-consent-text">
-                        <h3>Cookie Consent</h3>
-                        <p>
-                            This website uses cookies to ensure you get the best experience. 
-                            We use essential cookies for authentication and session management, 
-                            which are required for the application to function properly.
-                        </p>
-                        <div className="cookie-consent-details">
-                            <div className="cookie-detail">
-                                <Shield size={16} />
-                                <span><strong>Essential Cookies:</strong> Required for login, session security, and user preferences.</span>
-                            </div>
-                        </div>
-                        <p className="cookie-consent-note">
-                            By clicking "Accept", you consent to the use of cookies. 
-                            If you reject, some features may not work as expected.
-                        </p>
-                    </div>
+        <div className={`cookie-popup ${isAnimating ? 'visible' : ''}`}>
+            <div className="cookie-popup-header">
+                <div className="cookie-popup-image-wrapper">
+                    <img 
+                        src={COOKIE_IMAGE_URL} 
+                        alt="Cookie" 
+                        className="cookie-popup-image"
+                        loading="eager"
+                    />
                 </div>
-                <div className="cookie-consent-actions">
-                    <button 
-                        className="cookie-btn cookie-btn-reject" 
-                        onClick={handleReject}
-                        aria-label="Reject cookies"
-                    >
-                        <X size={18} />
-                        <span>Reject</span>
-                    </button>
-                    <button 
-                        className="cookie-btn cookie-btn-accept" 
-                        onClick={handleAccept}
-                        aria-label="Accept cookies"
-                    >
-                        <Check size={18} />
-                        <span>Accept</span>
-                    </button>
+                <div className="cookie-popup-header-text">
+                    <span className="cookie-popup-title">We use cookies</span>
+                    <span className="cookie-popup-subtitle">To improve your experience</span>
                 </div>
             </div>
+            
+            <p className="cookie-popup-message">
+                This site uses cookies to enhance your browsing experience, 
+                provide personalized content, and analyze traffic.
+            </p>
+            
+            <div className="cookie-popup-actions">
+                <button 
+                    className="cookie-popup-btn cookie-popup-btn-decline" 
+                    onClick={handleReject}
+                    aria-label="Decline cookies"
+                >
+                    Decline
+                </button>
+                <button 
+                    className="cookie-popup-btn cookie-popup-btn-accept" 
+                    onClick={handleAccept}
+                    aria-label="Accept cookies"
+                >
+                    Accept
+                </button>
+            </div>
+            
+            <a href="/privacy-policy" className="cookie-popup-link">
+                Privacy Policy
+            </a>
         </div>
     );
 };
