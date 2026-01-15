@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, Component, ReactNode } from 'react';
 import { useAuth } from './context/AuthContext';
 import PremiumLoader from './components/common/PremiumLoader';
 
@@ -10,6 +10,91 @@ import DashboardLayout from './layouts/DashboardLayout';
 // Route Guards (keep sync)
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import RoleRoute from './components/auth/RoleRoute';
+
+// =====================================================
+// Lazy Import with Retry - Handles cache/deployment issues
+// =====================================================
+const lazyWithRetry = <T extends { default: any }>(
+    importFn: () => Promise<T>,
+    retries = 3,
+    interval = 1000
+): Promise<T> => {
+    return new Promise((resolve, reject) => {
+        const attempt = (retriesLeft: number) => {
+            importFn()
+                .then(resolve)
+                .catch((error) => {
+                    if (retriesLeft > 0) {
+                        // Wait and retry
+                        setTimeout(() => attempt(retriesLeft - 1), interval);
+                    } else {
+                        // On final failure, try to force refresh
+                        console.error('Dynamic import failed after retries:', error);
+                        // Clear cache and try one more time
+                        if (typeof window !== 'undefined') {
+                            const currentPath = window.location.pathname;
+                            // Add cache-busting query param
+                            if (!window.location.search.includes('_r=')) {
+                                window.location.href = `${currentPath}?_r=${Date.now()}`;
+                                return;
+                            }
+                        }
+                        reject(error);
+                    }
+                });
+        };
+        attempt(retries);
+    });
+};
+
+// Error Boundary for catching render errors
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+    constructor(props: { children: ReactNode }) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        console.error('React Error Boundary caught error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ 
+                    padding: '40px', 
+                    textAlign: 'center', 
+                    fontFamily: 'system-ui, -apple-system, sans-serif' 
+                }}>
+                    <h2 style={{ color: '#ef4444', marginBottom: '16px' }}>Something went wrong</h2>
+                    <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+                        The page failed to load. This might be due to a recent update.
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        style={{
+                            padding: '12px 24px',
+                            background: '#6366f1',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '600'
+                        }}
+                    >
+                        Refresh Page
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 // =====================================================
 // Lazy-loaded Pages - Split by Portal
@@ -82,8 +167,9 @@ function App() {
     }
 
     return (
-        <Suspense fallback={<PremiumLoader />}>
-            <Routes>
+        <ErrorBoundary>
+            <Suspense fallback={<PremiumLoader />}>
+                <Routes>
                 {/* Public Routes */}
                 <Route element={<PublicLayout />}>
                     <Route path="/" element={<LandingPage />} />
@@ -153,10 +239,11 @@ function App() {
                     </Route>
                 </Route>
 
-                {/* 404 Not Found - Catch all unmatched routes */}
-                <Route path="*" element={<NotFound />} />
-            </Routes>
-        </Suspense>
+                    {/* 404 Not Found - Catch all unmatched routes */}
+                    <Route path="*" element={<NotFound />} />
+                </Routes>
+            </Suspense>
+        </ErrorBoundary>
     );
 }
 

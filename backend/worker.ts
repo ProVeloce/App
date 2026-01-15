@@ -4628,7 +4628,138 @@ export default {
                 });
             }
 
-            // GET /api/expert/notifications - Get expert's notifications
+            // =====================================================
+            // NOTIFICATIONS APIs
+            // =====================================================
+
+            // GET /api/notifications - Get user's notifications
+            if (url.pathname === "/api/notifications" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                try {
+                    // Ensure notifications table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS notifications (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            type TEXT DEFAULT 'info',
+                            title TEXT NOT NULL,
+                            message TEXT,
+                            link TEXT,
+                            is_read INTEGER DEFAULT 0,
+                            created_at TEXT
+                        )
+                    `).run();
+
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT id, title, message, type, is_read, link, created_at
+                        FROM notifications 
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    `).bind(payload.userId).all();
+
+                    return jsonResponse({
+                        success: true,
+                        data: { notifications: result.results || [] }
+                    });
+                } catch (err) {
+                    console.error("Notifications fetch error:", err);
+                    return jsonResponse({ success: true, data: { notifications: [] } });
+                }
+            }
+
+            // GET /api/notifications/count - Get unread notifications count
+            if (url.pathname === "/api/notifications/count" && request.method === "GET") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                try {
+                    // Ensure notifications table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS notifications (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            type TEXT DEFAULT 'info',
+                            title TEXT NOT NULL,
+                            message TEXT,
+                            link TEXT,
+                            is_read INTEGER DEFAULT 0,
+                            created_at TEXT
+                        )
+                    `).run();
+
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT COUNT(*) as count FROM notifications 
+                        WHERE user_id = ? AND is_read = 0
+                    `).bind(payload.userId).first() as { count: number } | null;
+
+                    return jsonResponse({
+                        success: true,
+                        data: { unreadCount: result?.count || 0 }
+                    });
+                } catch (err) {
+                    console.error("Notifications count error:", err);
+                    return jsonResponse({ success: true, data: { unreadCount: 0 } });
+                }
+            }
+
+            // PATCH /api/notifications/:id/read - Mark notification as read
+            if (url.pathname.match(/^\/api\/notifications\/[^\/]+\/read$/) && request.method === "PATCH") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                const notificationId = url.pathname.split("/")[3];
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        UPDATE notifications SET is_read = 1 
+                        WHERE id = ? AND user_id = ?
+                    `).bind(notificationId, payload.userId).run();
+
+                    return jsonResponse({ success: true, message: "Notification marked as read" });
+                } catch (err) {
+                    console.error("Mark notification read error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update notification" }, 500);
+                }
+            }
+
+            // POST /api/notifications/mark-all-read - Mark all notifications as read
+            if (url.pathname === "/api/notifications/mark-all-read" && request.method === "POST") {
+                const authHeader = request.headers.get("Authorization") || "";
+                const token = authHeader.replace("Bearer ", "");
+                const payload = await verifyJWT(token, env.JWT_ACCESS_SECRET || "default-secret") as { userId: string } | null;
+                if (!payload) {
+                    return jsonResponse({ success: false, error: "Unauthorized" }, 401);
+                }
+
+                try {
+                    await env.proveloce_db.prepare(`
+                        UPDATE notifications SET is_read = 1 
+                        WHERE user_id = ?
+                    `).bind(payload.userId).run();
+
+                    return jsonResponse({ success: true, message: "All notifications marked as read" });
+                } catch (err) {
+                    console.error("Mark all notifications read error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update notifications" }, 500);
+                }
+            }
+
+            // GET /api/expert/notifications - Get expert's notifications (legacy endpoint)
             if (url.pathname === "/api/expert/notifications" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -4637,18 +4768,22 @@ export default {
                     return jsonResponse({ success: false, error: "Unauthorized" }, 401);
                 }
 
-                const result = await env.proveloce_db.prepare(`
-                    SELECT id, title, message, type, is_read, link, created_at
-                    FROM notifications 
-                    WHERE user_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT 50
-                `).bind(payload.userId).all();
+                try {
+                    const result = await env.proveloce_db.prepare(`
+                        SELECT id, title, message, type, is_read, link, created_at
+                        FROM notifications 
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    `).bind(payload.userId).all();
 
-                return jsonResponse({
-                    success: true,
-                    data: { notifications: result.results || [] }
-                });
+                    return jsonResponse({
+                        success: true,
+                        data: { notifications: result.results || [] }
+                    });
+                } catch (err) {
+                    return jsonResponse({ success: true, data: { notifications: [] } });
+                }
             }
 
             // =====================================================
