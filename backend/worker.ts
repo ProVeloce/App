@@ -3875,6 +3875,7 @@ export default {
             }
 
             // GET /api/tasks - Get tasks (role-filtered)
+            // This endpoint is kept for backward compatibility but defers to POML endpoint for Experts
             if (url.pathname === "/api/tasks" && request.method === "GET") {
                 const authHeader = request.headers.get("Authorization") || "";
                 const token = authHeader.replace("Bearer ", "");
@@ -3891,36 +3892,134 @@ export default {
                 let tasks: any[] = [];
 
                 if (role === 'superadmin') {
-                    // SuperAdmin sees all tasks
-                    const result = await env.proveloce_db.prepare(`
-                        SELECT t.*, u.name as admin_name,
-                            (SELECT COUNT(*) FROM expert_tasks WHERE task_id = t.id) as assigned_count
-                        FROM tasks t
-                        LEFT JOIN users u ON t.admin_id = u.id
-                        ORDER BY t.created_at DESC
-                    `).all();
-                    tasks = result.results || [];
+                    // SuperAdmin sees all tasks with enhanced field mapping
+                    try {
+                        const result = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.created_by, t.created_by_id, t.admin_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id, t.admin_id) = c.id
+                            ORDER BY t.created_at DESC
+                        `).all();
+                        tasks = result.results || [];
+                    } catch {
+                        // Fallback for older schema
+                        const result = await env.proveloce_db.prepare(`
+                            SELECT t.*, u.name as admin_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.admin_id = u.id
+                            ORDER BY t.created_at DESC
+                        `).all();
+                        tasks = result.results || [];
+                    }
                 } else if (role === 'admin') {
-                    // Admin sees tasks they created
-                    const result = await env.proveloce_db.prepare(`
-                        SELECT t.*, u.name as admin_name,
-                            (SELECT COUNT(*) FROM expert_tasks WHERE task_id = t.id) as assigned_count
-                        FROM tasks t
-                        LEFT JOIN users u ON t.admin_id = u.id
-                        WHERE t.admin_id = ?
-                        ORDER BY t.created_at DESC
-                    `).bind(payload.userId).all();
-                    tasks = result.results || [];
+                    // Admin sees tasks they created or in their org
+                    try {
+                        const result = await env.proveloce_db.prepare(`
+                            SELECT 
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.created_by, t.created_by_id, t.admin_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id, t.admin_id) = c.id
+                            WHERE COALESCE(t.created_by, t.created_by_id, t.admin_id) = ? OR t.admin_id = ?
+                            ORDER BY t.created_at DESC
+                        `).bind(payload.userId, payload.userId).all();
+                        tasks = result.results || [];
+                    } catch {
+                        const result = await env.proveloce_db.prepare(`
+                            SELECT t.*, u.name as admin_name
+                            FROM tasks t
+                            LEFT JOIN users u ON t.admin_id = u.id
+                            WHERE t.admin_id = ?
+                            ORDER BY t.created_at DESC
+                        `).bind(payload.userId).all();
+                        tasks = result.results || [];
+                    }
                 } else if (role === 'expert') {
-                    // Expert sees tasks assigned to them
-                    const result = await env.proveloce_db.prepare(`
-                        SELECT t.*, et.status as assignment_status, et.id as assignment_id
-                        FROM tasks t
-                        JOIN expert_tasks et ON et.task_id = t.id
-                        WHERE et.expert_id = ?
-                        ORDER BY t.created_at DESC
-                    `).bind(payload.userId).all();
-                    tasks = result.results || [];
+                    // Expert sees tasks assigned to them via assigned_to/assigned_to_id columns
+                    // OR via expert_tasks junction table for backward compatibility
+                    try {
+                        const result = await env.proveloce_db.prepare(`
+                            SELECT DISTINCT
+                                t.id,
+                                t.title,
+                                t.description,
+                                COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                COALESCE(t.due_date, t.deadline) as due_date,
+                                t.status,
+                                COALESCE(t.created_by, t.created_by_id, t.admin_id) as created_by,
+                                t.created_at,
+                                t.updated_at,
+                                u.name as assigned_user_name,
+                                u.email as assigned_user_email,
+                                c.name as created_by_name
+                            FROM tasks t
+                            LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
+                            LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id, t.admin_id) = c.id
+                            LEFT JOIN expert_tasks et ON et.task_id = t.id AND et.expert_id = ?
+                            WHERE t.assigned_to = ? 
+                               OR t.assigned_to_id = ? 
+                               OR et.expert_id = ?
+                            ORDER BY t.created_at DESC
+                        `).bind(payload.userId, payload.userId, payload.userId, payload.userId).all();
+                        tasks = result.results || [];
+                    } catch (err) {
+                        console.error("Expert task fetch error:", err);
+                        // Fallback - try just assigned_to columns
+                        try {
+                            const result = await env.proveloce_db.prepare(`
+                                SELECT 
+                                    t.id,
+                                    t.title,
+                                    t.description,
+                                    COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
+                                    COALESCE(t.due_date, t.deadline) as due_date,
+                                    t.status,
+                                    COALESCE(t.created_by, t.created_by_id) as created_by,
+                                    t.created_at,
+                                    t.updated_at,
+                                    c.name as created_by_name
+                                FROM tasks t
+                                LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id) = c.id
+                                WHERE t.assigned_to = ? OR t.assigned_to_id = ?
+                                ORDER BY t.created_at DESC
+                            `).bind(payload.userId, payload.userId).all();
+                            tasks = result.results || [];
+                        } catch {
+                            // Ultimate fallback - expert_tasks junction table only
+                            const result = await env.proveloce_db.prepare(`
+                                SELECT t.*, et.status as assignment_status
+                                FROM tasks t
+                                JOIN expert_tasks et ON et.task_id = t.id
+                                WHERE et.expert_id = ?
+                                ORDER BY t.created_at DESC
+                            `).bind(payload.userId).all();
+                            tasks = result.results || [];
+                        }
+                    }
                 }
 
                 return jsonResponse({

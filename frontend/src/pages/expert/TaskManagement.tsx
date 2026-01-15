@@ -39,18 +39,41 @@ const TaskManagement: React.FC = () => {
         setLoading(true);
         try {
             const response = await fetch(`${API_BASE}/api/tasks`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}` 
+                }
             });
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response:', text.substring(0, 200));
+                if (response.status === 401 || response.status === 403) {
+                    error('Authentication failed. Please log in again.');
+                } else {
+                    error('Server returned an invalid response.');
+                }
+                return;
+            }
+            
             const data = await response.json();
             if (data.success) {
                 const taskList = data.data?.tasks || [];
+                // Ensure tasks are filtered for this expert (extra safety)
                 setTasks(taskList);
+                console.log(`Loaded ${taskList.length} tasks for expert`);
             } else {
                 error(data.error || 'Failed to fetch tasks');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to fetch tasks:', err);
-            error('Failed to fetch tasks');
+            if (err.message?.includes('JSON')) {
+                error('Server returned an invalid response.');
+            } else {
+                error('Failed to fetch tasks');
+            }
         } finally {
             setLoading(false);
         }
@@ -73,6 +96,24 @@ const TaskManagement: React.FC = () => {
                 body: JSON.stringify({ status: newStatus })
             });
 
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response:', text.substring(0, 200));
+                if (response.status === 401 || response.status === 403) {
+                    error('Authentication failed. Please log in again.');
+                } else if (response.ok) {
+                    success(`Task marked as ${newStatus === 'InProgress' ? 'In Progress' : newStatus}`);
+                    setTasks(prev => prev.map(t => 
+                        t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t
+                    ));
+                } else {
+                    error('Server returned an invalid response.');
+                }
+                return;
+            }
+
             const data = await response.json();
             if (data.success) {
                 success(`Task marked as ${newStatus === 'InProgress' ? 'In Progress' : newStatus}`);
@@ -90,7 +131,11 @@ const TaskManagement: React.FC = () => {
             }
         } catch (err: any) {
             console.error('Status update error:', err);
-            error('Failed to update task: ' + (err?.message || 'Unknown error'));
+            if (err.message?.includes('JSON')) {
+                error('Server returned an invalid response.');
+            } else {
+                error('Failed to update task: ' + (err?.message || 'Unknown error'));
+            }
         } finally {
             setUpdatingTask(null);
         }
