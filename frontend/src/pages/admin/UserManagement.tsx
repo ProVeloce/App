@@ -37,11 +37,11 @@ interface UserData {
 
 interface UserDetail {
     user: UserData;
-    profile: any;
-    bookings: any[];
-    sessions: any[];
-    expertApplication: any;
-    activityLogs: any[];
+    profile?: any;
+    bookings?: any[];
+    sessions?: any[];
+    expertApplication?: any;
+    activityLogs?: any[];
 }
 
 interface Stats {
@@ -159,18 +159,15 @@ const UserManagement: React.FC = () => {
     const fetchUserDetail = async (id: string) => {
         setFetchingDetail(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://backend.proveloce.com'}/api/admin/users/${id}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            const data = await response.json();
-            if (data.success) {
-                setSelectedUser(data.data);
+            const response = await adminUserApi.getUserById(id);
+            if (response.data.success && response.data.data) {
+                setSelectedUser(response.data.data);
                 setShowDetailModal(true);
             } else {
-                showGlobalError('Fetch Failed', data.error || 'Failed to fetch user details');
+                showGlobalError('Fetch Failed', response.data.error || 'Failed to fetch user details');
             }
         } catch (err: any) {
-            showGlobalError('Fetch Failed', 'An error occurred while fetching details');
+            showGlobalError('Fetch Failed', err.response?.data?.error || err.message || 'An error occurred while fetching details');
         } finally {
             setFetchingDetail(false);
         }

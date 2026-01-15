@@ -569,7 +569,14 @@ export const adminUserApi = {
         api.get<ApiResponse<{ users: any[]; pagination: any }>>('/admin/users', { params }),
 
     getUserById: (id: string) =>
-        api.get<ApiResponse<{ user: any }>>(`/admin/users/${id}`),
+        api.get<ApiResponse<{ 
+            user: any; 
+            profile?: any; 
+            bookings?: any[]; 
+            sessions?: any[]; 
+            expertApplication?: any; 
+            activityLogs?: any[]; 
+        }>>(`/admin/users/${id}`),
 
     updateUser: (id: string, data: any) =>
         api.patch<ApiResponse>(`/admin/users/${id}`, data),
