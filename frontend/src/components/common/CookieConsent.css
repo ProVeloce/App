@@ -39,10 +39,9 @@
     width: 52px;
     height: 52px;
     border-radius: 14px;
-    overflow: hidden;
+    overflow: visible;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-    background: #f9fafb;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
 }
 
 .cookie-popup-image {
@@ -190,7 +189,7 @@
     }
 
     .cookie-popup-image-wrapper {
-        background: #374151;
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
     }
 
     .cookie-popup-title {
@@ -245,7 +244,7 @@
 }
 
 [data-theme="dark"] .cookie-popup-image-wrapper {
-    background: #374151;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
 }
 
 [data-theme="dark"] .cookie-popup-title {

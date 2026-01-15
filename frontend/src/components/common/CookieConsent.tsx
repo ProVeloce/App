@@ -28,8 +28,8 @@ export const hasCookieConsent = (): boolean => {
     return getCookieConsentStatus() === 'accepted';
 };
 
-// High-quality chocolate chip cookie image
-const COOKIE_IMAGE_URL = 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=120&h=120&fit=crop&crop=center&q=80';
+// Local cookie image from public folder
+const COOKIE_IMAGE_URL = '/images/cookie.png';
 
 /**
  * Modern Cookie Consent Popup Component
