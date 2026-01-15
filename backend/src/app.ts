@@ -76,7 +76,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/certifications', certificationRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/tickets', ticketRoutes);
+app.use('/api/helpdesk/tickets', ticketRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/admin', adminRoutes);
