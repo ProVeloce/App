@@ -2007,12 +2007,11 @@ export default {
                 }
 
                 try {
-                    // Only return non-sensitive UI and feature configs
-                    const publicCategories = ['ui', 'features'];
+                    // Return public configs including system (for maintenance mode check)
                     const configs = await env.proveloce_db.prepare(`
                         SELECT id, category, key, value, type, label, description, updated_at
                         FROM system_config 
-                        WHERE category IN ('ui', 'features', 'notifications', 'ticketing', 'users')
+                        WHERE category IN ('system', 'ui', 'features', 'notifications', 'ticketing', 'users')
                         ORDER BY category, key
                     `).all();
 
@@ -2068,6 +2067,11 @@ export default {
                     // If empty, seed with defaults
                     if (!configs.results || configs.results.length === 0) {
                         const defaultConfigs = [
+                            // System & Maintenance Settings
+                            { id: crypto.randomUUID(), category: 'system', key: 'maintenance_mode', value: 'false', type: 'boolean', label: 'Maintenance Mode', description: 'Enable to show maintenance page to customers and experts' },
+                            { id: crypto.randomUUID(), category: 'system', key: 'maintenance_message', value: 'System is currently under maintenance. Please check back later.', type: 'string', label: 'Maintenance Message', description: 'Custom message displayed on maintenance page' },
+                            { id: crypto.randomUUID(), category: 'system', key: 'maintenance_end_time', value: '', type: 'string', label: 'Maintenance End Time', description: 'Estimated end time (ISO format, e.g., 2026-01-15T18:00:00Z)' },
+                            
                             // Authentication Settings
                             { id: crypto.randomUUID(), category: 'auth', key: 'session_timeout_minutes', value: '30', type: 'number', label: 'Session Timeout (minutes)', description: 'Auto logout after inactivity' },
                             { id: crypto.randomUUID(), category: 'auth', key: 'max_login_attempts', value: '5', type: 'number', label: 'Max Login Attempts', description: 'Lock account after failed attempts' },
@@ -2111,7 +2115,6 @@ export default {
                             { id: crypto.randomUUID(), category: 'features', key: 'messaging_enabled', value: 'true', type: 'boolean', label: 'Messaging System', description: 'Enable direct messages' },
                             { id: crypto.randomUUID(), category: 'features', key: 'portfolio_enabled', value: 'true', type: 'boolean', label: 'Portfolio Feature', description: 'Enable expert portfolios' },
                             { id: crypto.randomUUID(), category: 'features', key: 'certifications_enabled', value: 'true', type: 'boolean', label: 'Certifications', description: 'Enable certification uploads' },
-                            { id: crypto.randomUUID(), category: 'features', key: 'maintenance_mode', value: 'false', type: 'boolean', label: 'Maintenance Mode', description: 'Show maintenance page' },
                         ];
 
                         for (const cfg of defaultConfigs) {

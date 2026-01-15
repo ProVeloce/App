@@ -170,11 +170,16 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return cfg.value || defaultValue;
         };
 
+        // Check for maintenance mode in 'system' category first, fall back to legacy 'features' category
+        const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
+        const maintenanceFromFeatures = rawConfigs.find(c => c.category === 'features' && c.key === 'maintenance_mode');
+        const maintenanceModeValue = maintenanceFromSystem?.value || maintenanceFromFeatures?.value || 'false';
+
         return {
             system: {
-                maintenanceMode: getValue('system', 'maintenance_mode', DEFAULT_CONFIG.system.maintenanceMode),
+                maintenanceMode: maintenanceModeValue === 'true',
                 maintenanceMessage: getValue('system', 'maintenance_message', DEFAULT_CONFIG.system.maintenanceMessage),
-                maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime),
+                maintenanceEndTime: getValue('system', 'maintenance_end_time', DEFAULT_CONFIG.system.maintenanceEndTime) || null,
             },
             auth: {
                 sessionTimeout: getValue('auth', 'session_timeout', DEFAULT_CONFIG.auth.sessionTimeout),

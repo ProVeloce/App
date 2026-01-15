@@ -2,7 +2,7 @@ import React, { ReactNode, useEffect, useState, lazy, Suspense } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAccessToken } from '../../services/api';
-import { useMaintenanceMode } from '../../context/ConfigContext';
+import { useMaintenanceMode, useConfig } from '../../context/ConfigContext';
 
 // Lazy load MaintenancePage to avoid circular dependencies
 const MaintenancePage = lazy(() => import('../../pages/common/MaintenancePage'));
@@ -16,12 +16,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const location = useLocation();
     const [hasToken, setHasToken] = useState<boolean | null>(null);
     const { isMaintenanceMode } = useMaintenanceMode();
+    const { refreshConfig } = useConfig();
 
     // Check for token synchronously to prevent redirect loops
     useEffect(() => {
         const token = getAccessToken();
         setHasToken(!!token);
     }, []);
+
+    // Refresh config when user logs in or on route change to get latest maintenance status
+    useEffect(() => {
+        if (user) {
+            refreshConfig();
+        }
+    }, [user?.id, refreshConfig]);
 
     // Show loading only during initial auth check
     if (isLoading && hasToken === null) {
