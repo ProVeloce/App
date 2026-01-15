@@ -520,17 +520,19 @@ const UserManagement: React.FC = () => {
                 .modal-content { background: var(--bg-primary, white); border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: slideUp 0.3s ease-out; }
                 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
                 .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border-light, #eee); display: flex; justify-content: space-between; align-items: center; }
-                .modal-header-content { display: flex; align-items: center; gap: 1rem; }
-                .modal-header-content h3 { margin: 0; font-size: 1.25rem; font-weight: 600; color: var(--text-primary, #333); }
-                .modal-subtitle { font-size: 0.875rem; color: var(--text-secondary, #666); }
+                .modal-header-content { display: flex; align-items: center; gap: 1rem; min-width: 0; flex: 1; }
+                .modal-header-content > div { min-width: 0; flex: 1; }
+                .modal-header-content h3 { margin: 0; font-size: 1.25rem; font-weight: 600; color: var(--text-primary, #333); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .modal-subtitle { font-size: 0.875rem; color: var(--text-secondary, #666); display: block; word-break: break-all; overflow-wrap: break-word; }
                 .close-btn { background: var(--bg-tertiary, #f5f5f5); border: none; cursor: pointer; color: var(--text-secondary, #666); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
                 .close-btn:hover { background: var(--bg-surface-secondary, #eee); color: var(--text-primary, #333); }
                 .modal-body { padding: 1.5rem; }
                 .detail-section { margin-bottom: 2rem; }
                 .detail-section h4 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-600, #6366f1); border-bottom: 2px solid var(--border-light, #f0f0f0); padding-bottom: 0.75rem; font-size: 1rem; }
                 .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.25rem; }
+                .detail-item { min-width: 0; overflow: hidden; }
                 .detail-item label { display: block; font-size: 0.7rem; color: var(--text-tertiary, #888); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
-                .detail-item span { font-weight: 500; color: var(--text-primary, #333); }
+                .detail-item span { font-weight: 500; color: var(--text-primary, #333); display: block; word-break: break-word; overflow-wrap: break-word; }
                 .table-scroll { overflow-x: auto; }
                 .mini-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
                 .mini-table th { text-align: left; padding: 0.75rem; background: var(--bg-surface-secondary, #f9fafb); border-bottom: 1px solid var(--border-light, #eee); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary, #666); }
