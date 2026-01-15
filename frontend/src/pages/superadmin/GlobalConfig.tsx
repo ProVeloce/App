@@ -58,8 +58,8 @@ const SELECT_OPTIONS: Record<string, { value: string; label: string }[]> = {
         { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
     ],
     time_format: [
-        { value: '12h', label: '12-hour (AM/PM)' },
         { value: '24h', label: '24-hour' },
+        { value: '12h', label: '12-hour (AM/PM)' },
     ],
     default_export_format: [
         { value: 'csv', label: 'CSV' },

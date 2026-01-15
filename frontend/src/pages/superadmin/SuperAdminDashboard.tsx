@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { showGlobalError } from '../../context/ErrorContext';
 import Avatar from '../../components/common/Avatar';
+import { formatDate, formatDateTime, formatRelativeTime } from '../../utils/dateUtils';
 import './SuperAdminDashboard.css';
 
 interface Stats {
@@ -134,21 +135,7 @@ const SuperAdminDashboard: React.FC = () => {
         return 'Good evening';
     };
 
-    const formatRelativeTime = (dateStr: string) => {
-        if (!dateStr) return 'N/A';
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    };
+    // formatRelativeTime is imported from utils/dateUtils
 
     const getRoleBadge = (role: string) => {
         return <span className={`role-badge ${role?.toLowerCase()}`}>{role}</span>;
@@ -425,11 +412,11 @@ const SuperAdminDashboard: React.FC = () => {
                                     </div>
                                     <div className="detail-item">
                                         <label>Member Since</label>
-                                        <span>{selectedUser.user?.created_at ? new Date(selectedUser.user.created_at).toLocaleDateString() : 'N/A'}</span>
+                                        <span>{selectedUser.user?.created_at ? formatDate(selectedUser.user.created_at) : 'N/A'}</span>
                                     </div>
                                     <div className="detail-item">
                                         <label>Last Login</label>
-                                        <span>{selectedUser.user?.last_login_at ? new Date(selectedUser.user.last_login_at).toLocaleString() : 'Never'}</span>
+                                        <span>{selectedUser.user?.last_login_at ? formatDateTime(selectedUser.user.last_login_at) : 'Never'}</span>
                                     </div>
                                 </div>
                             </section>
@@ -453,7 +440,7 @@ const SuperAdminDashboard: React.FC = () => {
                                                         <td>{b.id?.substring(0, 8) || 'N/A'}...</td>
                                                         <td>{selectedUser.user?.role?.toLowerCase() === 'expert' ? (b.customer_name || 'N/A') : (b.expert_name || 'N/A')}</td>
                                                         <td><span className={`status-tag ${b.status?.toLowerCase()}`}>{b.status}</span></td>
-                                                        <td>{b.created_at ? new Date(b.created_at).toLocaleDateString() : 'N/A'}</td>
+                                                        <td>{b.created_at ? formatDate(b.created_at) : 'N/A'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -501,7 +488,7 @@ const SuperAdminDashboard: React.FC = () => {
                                         {selectedUser.activityLogs.slice(0, 10).map((log: any) => (
                                             <div key={log.id} className="activity-item">
                                                 <span className="activity-action">{log.action?.replace(/_/g, ' ')}</span>
-                                                <span className="activity-time">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+                                                <span className="activity-time">{log.created_at ? formatDateTime(log.created_at) : ''}</span>
                                             </div>
                                         ))}
                                     </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Wrench, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useMaintenanceMode } from '../../context/ConfigContext';
+import { formatFullDateTime } from '../../utils/dateUtils';
 import './MaintenancePage.css';
 
 const MaintenancePage: React.FC = () => {
@@ -8,19 +9,7 @@ const MaintenancePage: React.FC = () => {
 
     const formatEndTime = (endTimeStr: string | null): string | null => {
         if (!endTimeStr) return null;
-        try {
-            const date = new Date(endTimeStr);
-            return date.toLocaleString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch {
-            return endTimeStr;
-        }
+        return formatFullDateTime(endTimeStr);
     };
 
     const handleRefresh = () => {

@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { getAccessToken } from '../../services/api';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import { formatDate as formatDateIST, formatDateTime } from '../../utils/dateUtils';
 import './TaskAssignment.css';
 
 interface Task {
@@ -682,15 +683,7 @@ const TaskAssignment: React.FC = () => {
 
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return 'No due date';
-        try {
-            return new Date(dateStr).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        } catch {
-            return dateStr;
-        }
+        return formatDateIST(dateStr);
     };
 
     const handleRefresh = async () => {

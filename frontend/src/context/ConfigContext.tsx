@@ -106,7 +106,7 @@ const DEFAULT_CONFIG: AppConfig = {
         defaultTheme: 'system',
         defaultLanguage: 'en',
         dateFormat: 'MM/DD/YYYY',
-        timeFormat: '12h',
+        timeFormat: '24h',
     },
     analytics: {
         dataRetentionDays: 90,

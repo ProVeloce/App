@@ -18,6 +18,7 @@ import {
 import { adminUserApi } from '../../services/api';
 import Avatar from '../../components/common/Avatar';
 import { useAuth } from '../../context/AuthContext';
+import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { showGlobalError, showGlobalSuccess } from '../../context/ErrorContext';
 import { useAlert } from '../../context/AlertContext';
 import './UserManagement.css';
@@ -320,7 +321,7 @@ const UserManagement: React.FC = () => {
                                     </td>
                                     <td>
                                         <div className="date-cell">
-                                            {new Date(u.created_at).toLocaleDateString()}
+                                            {formatDate(u.created_at)}
                                         </div>
                                     </td>
                                     <td>
@@ -421,11 +422,11 @@ const UserManagement: React.FC = () => {
                                     </div>
                                     <div className="detail-item">
                                         <label>Member Since</label>
-                                        <span>{new Date(selectedUser.user.created_at).toLocaleDateString()}</span>
+                                        <span>{formatDate(selectedUser.user.created_at)}</span>
                                     </div>
                                     <div className="detail-item">
                                         <label>Last Login</label>
-                                        <span>{selectedUser.user.last_login_at ? new Date(selectedUser.user.last_login_at).toLocaleString() : 'Never'}</span>
+                                        <span>{selectedUser.user.last_login_at ? formatDateTime(selectedUser.user.last_login_at) : 'Never'}</span>
                                     </div>
                                 </div>
                             </section>
@@ -449,7 +450,7 @@ const UserManagement: React.FC = () => {
                                                         <td>{b.id?.substring(0, 8) || 'N/A'}...</td>
                                                         <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (b.customer_name || 'N/A') : (b.expert_name || 'N/A')}</td>
                                                         <td><span className={`status-tag ${b.status?.toLowerCase()}`}>{b.status}</span></td>
-                                                        <td>{b.created_at ? new Date(b.created_at).toLocaleDateString() : 'N/A'}</td>
+                                                        <td>{b.created_at ? formatDate(b.created_at) : 'N/A'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -478,7 +479,7 @@ const UserManagement: React.FC = () => {
                                                     <tr key={s.id}>
                                                         <td>{s.title || 'Session'}</td>
                                                         <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (s.customer_name || 'N/A') : (s.expert_name || 'N/A')}</td>
-                                                        <td>{s.scheduled_date ? new Date(s.scheduled_date).toLocaleDateString() : 'N/A'}</td>
+                                                        <td>{s.scheduled_date ? formatDate(s.scheduled_date) : 'N/A'}</td>
                                                         <td><span className={`status-tag ${s.status?.toLowerCase()}`}>{s.status}</span></td>
                                                     </tr>
                                                 ))}
@@ -497,7 +498,7 @@ const UserManagement: React.FC = () => {
                                         {selectedUser.activityLogs.slice(0, 10).map((log: any) => (
                                             <div key={log.id} className="activity-item">
                                                 <span className="activity-action">{log.action?.replace(/_/g, ' ')}</span>
-                                                <span className="activity-time">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+                                                <span className="activity-time">{log.created_at ? formatDateTime(log.created_at) : ''}</span>
                                             </div>
                                         ))}
                                     </div>

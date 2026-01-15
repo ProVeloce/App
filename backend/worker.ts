@@ -43,13 +43,57 @@ function jsonResponse(data: any, status: number = 200): Response {
     });
 }
 
+// =====================================================
+// IST (India Standard Time) Helper Functions
+// All timestamps are stored and returned in IST (GMT+05:30)
+// =====================================================
+
+/**
+ * Get current timestamp in IST as ISO string
+ * Use this instead of datetime('now', '+5 hours', '+30 minutes') for database operations
+ */
+function getISTTimestamp(): string {
+    const now = new Date();
+    // IST is UTC+5:30
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+    const istTime = new Date(now.getTime() + istOffset);
+    return istTime.toISOString().replace('Z', '+05:30');
+}
+
+/**
+ * Format a Date object to IST datetime string for database storage
+ * Format: "YYYY-MM-DD HH:mm:ss"
+ */
+function formatToISTDateTime(date?: Date): string {
+    const d = date || new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(d.getTime() + istOffset);
+    
+    const year = istTime.getUTCFullYear();
+    const month = String(istTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(istTime.getUTCDate()).padStart(2, '0');
+    const hours = String(istTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(istTime.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(istTime.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * SQLite expression for current IST timestamp
+ * Use this in SQL queries instead of datetime('now', '+5 hours', '+30 minutes')
+ * SQLite datetime function with +5 hours +30 minutes offset
+ */
+const IST_NOW = "datetime('now', '+5 hours', '+30 minutes')";
+
 async function createNotification(env: any, userId: string, type: string, title: string, message: string, link?: string): Promise<void> {
     if (!env.proveloce_db) return;
     try {
+        const istTimestamp = formatToISTDateTime();
         await env.proveloce_db.prepare(`
             INSERT INTO notifications (id, user_id, type, title, message, link, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `).bind(crypto.randomUUID(), userId, type, title, message, link || null).run();
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(crypto.randomUUID(), userId, type, title, message, link || null, istTimestamp).run();
     } catch (error) {
         console.error("Failed to create notification:", error);
     }
@@ -138,13 +182,13 @@ async function storeRefreshToken(env: any, userId: string, token: string, expire
     try {
         await env.proveloce_db.prepare(`
             INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
         `).bind(crypto.randomUUID(), userId, token, expiresAt.toISOString()).run();
 
         // Audit log: refresh_token_stored
         await env.proveloce_db.prepare(`
             INSERT INTO activity_logs (id, user_id, action, details, created_at)
-            VALUES (?, ?, 'refresh_token_stored', ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, 'refresh_token_stored', ?, datetime('now', '+5 hours', '+30 minutes'))
         `).bind(crypto.randomUUID(), userId, JSON.stringify({ expires_at: expiresAt.toISOString() })).run();
     } catch (error) {
         console.error("Failed to store refresh token:", error);
@@ -167,7 +211,7 @@ async function validateRefreshToken(env: any, token: string): Promise<{ valid: b
         // Audit log: refresh_token_fetched
         await env.proveloce_db.prepare(`
             INSERT INTO activity_logs (id, user_id, action, details, created_at)
-            VALUES (?, ?, 'refresh_token_fetched', ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, 'refresh_token_fetched', ?, datetime('now', '+5 hours', '+30 minutes'))
         `).bind(crypto.randomUUID(), result.user_id, JSON.stringify({ expires_at: result.expires_at })).run();
 
         return { valid: true, userId: result.user_id };
@@ -182,7 +226,7 @@ async function revokeRefreshToken(env: any, token: string, userId?: string): Pro
     try {
         await env.proveloce_db.prepare(`
             UPDATE refresh_tokens
-            SET revoked_at = CURRENT_TIMESTAMP
+            SET revoked_at = datetime('now', '+5 hours', '+30 minutes')
             WHERE token = ?
         `).bind(token).run();
 
@@ -190,7 +234,7 @@ async function revokeRefreshToken(env: any, token: string, userId?: string): Pro
         if (userId) {
             await env.proveloce_db.prepare(`
                 INSERT INTO activity_logs (id, user_id, action, details, created_at)
-                VALUES (?, ?, 'refresh_token_revoked', ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, 'refresh_token_revoked', ?, datetime('now', '+5 hours', '+30 minutes'))
             `).bind(crypto.randomUUID(), userId, JSON.stringify({ revoked_at: new Date().toISOString() })).run();
         }
 
@@ -206,7 +250,7 @@ async function revokeAllUserTokens(env: any, userId: string): Promise<boolean> {
     try {
         await env.proveloce_db.prepare(`
             UPDATE refresh_tokens
-            SET revoked_at = CURRENT_TIMESTAMP
+            SET revoked_at = datetime('now', '+5 hours', '+30 minutes')
             WHERE user_id = ? AND revoked_at IS NULL
         `).bind(userId).run();
         return true;
@@ -334,7 +378,7 @@ export default {
                     const currentStatus = user.status;
                     if (!currentStatus || currentStatus === 'pending_verification') {
                         await env.proveloce_db.prepare(
-                            "UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                            "UPDATE users SET status = 'active', updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                         ).bind(user.id).run();
 
                         // Log the activation
@@ -716,7 +760,7 @@ export default {
                         // existing user login trigger
                         if (!user.status || user.status === 'pending_verification') {
                             await env.proveloce_db.prepare(
-                                "UPDATE users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                                "UPDATE users SET status = 'active', updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                             ).bind(user.id).run();
 
                             await env.proveloce_db.prepare(
@@ -896,7 +940,7 @@ export default {
                     }
 
                     if (updates.length > 0) {
-                        updates.push("updated_at = CURRENT_TIMESTAMP");
+                        updates.push("updated_at = datetime('now', '+5 hours', '+30 minutes')");
                         values.push(payload.userId);
                         await env.proveloce_db.prepare(
                             `UPDATE users SET ${updates.join(", ")} WHERE id = ?`
@@ -921,7 +965,7 @@ export default {
                             country = COALESCE(?, country),
                             pincode = COALESCE(?, pincode),
                             bio = COALESCE(?, bio),
-                            updated_at = CURRENT_TIMESTAMP
+                            updated_at = datetime('now', '+5 hours', '+30 minutes')
                         WHERE user_id = ?
                     `).bind(dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
                 } else {
@@ -1019,13 +1063,13 @@ export default {
                     // Update user's profile_image and profile_photo_url in database
                     // Append timestamp for cache busting if needed, but unique filename per upload is better
                     await env.proveloce_db.prepare(
-                        "UPDATE users SET profile_image = ?, profile_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                        "UPDATE users SET profile_image = ?, profile_photo_url = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                     ).bind(avatarUrl, avatarUrl, payload.userId).run();
 
                     // Also update user_profiles.avatar_url if the table has that column
                     try {
                         await env.proveloce_db.prepare(
-                            "UPDATE user_profiles SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?"
+                            "UPDATE user_profiles SET avatar_url = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE user_id = ?"
                         ).bind(avatarUrl, payload.userId).run();
                     } catch (e) {
                         // Ignore if avatar_url column doesn't exist in user_profiles
@@ -1117,7 +1161,7 @@ export default {
 
                 // Update password
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET password_hash = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                 ).bind(newHash, payload.userId).run();
 
                 // Log activity
@@ -1605,7 +1649,7 @@ export default {
                     return jsonResponse({ success: false, error: "No fields to update" }, 400);
                 }
 
-                updates.push("updated_at = CURRENT_TIMESTAMP");
+                updates.push("updated_at = datetime('now', '+5 hours', '+30 minutes')");
                 values.push(id);
 
                 await env.proveloce_db.prepare(
@@ -1667,7 +1711,7 @@ export default {
 
                 // Update status to 'inactive' (POML Spec)
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET status = 'inactive', updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                 ).bind(id).run();
 
                 // Log activity
@@ -2053,7 +2097,7 @@ export default {
                             type TEXT DEFAULT 'string',
                             label TEXT,
                             description TEXT,
-                            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TEXT DEFAULT datetime('now', '+5 hours', '+30 minutes'),
                             updated_by TEXT,
                             UNIQUE(category, key)
                         )
@@ -2096,7 +2140,7 @@ export default {
                             { id: crypto.randomUUID(), category: 'ui', key: 'default_theme', value: 'light', type: 'select', label: 'Default Theme', description: 'Default color scheme' },
                             { id: crypto.randomUUID(), category: 'ui', key: 'default_language', value: 'en', type: 'select', label: 'Default Language', description: 'System language' },
                             { id: crypto.randomUUID(), category: 'ui', key: 'date_format', value: 'MM/DD/YYYY', type: 'select', label: 'Date Format', description: 'Display date format' },
-                            { id: crypto.randomUUID(), category: 'ui', key: 'time_format', value: '12h', type: 'select', label: 'Time Format', description: '12-hour or 24-hour' },
+                            { id: crypto.randomUUID(), category: 'ui', key: 'time_format', value: '24h', type: 'select', label: 'Time Format', description: '12-hour or 24-hour' },
                             { id: crypto.randomUUID(), category: 'ui', key: 'items_per_page', value: '25', type: 'number', label: 'Items Per Page', description: 'Default pagination size' },
                             
                             // Analytics Settings
@@ -2160,7 +2204,7 @@ export default {
                 try {
                     await env.proveloce_db.prepare(`
                         UPDATE system_config 
-                        SET value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                        SET value = ?, updated_at = datetime('now', '+5 hours', '+30 minutes'), updated_by = ?
                         WHERE id = ?
                     `).bind(body.value, auth.payload.userId, configId).run();
 
@@ -2198,7 +2242,7 @@ export default {
                     for (const cfg of body.configs) {
                         await env.proveloce_db.prepare(`
                             UPDATE system_config 
-                            SET value = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                            SET value = ?, updated_at = datetime('now', '+5 hours', '+30 minutes'), updated_by = ?
                             WHERE id = ?
                         `).bind(cfg.value, auth.payload.userId, cfg.id).run();
                     }
@@ -2675,12 +2719,12 @@ export default {
 
                 // Update application status to 'Approved'
                 await env.proveloce_db.prepare(
-                    "UPDATE expert_applications SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE expert_applications SET status = 'approved', reviewed_by = ?, reviewed_at = datetime('now', '+5 hours', '+30 minutes'), updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                 ).bind(payload.userId, applicationId).run();
 
                 // Update user role to 'agent'
                 await env.proveloce_db.prepare(
-                    "UPDATE users SET role = 'agent', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE users SET role = 'agent', updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                 ).bind(app.user_id).run();
 
                 // Log activity
@@ -2721,7 +2765,7 @@ export default {
                 }
 
                 await env.proveloce_db.prepare(
-                    "UPDATE expert_applications SET status = 'Rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    "UPDATE expert_applications SET status = 'Rejected', rejection_reason = ?, reviewed_by = ?, reviewed_at = datetime('now', '+5 hours', '+30 minutes'), updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                 ).bind(reason, payload.userId, applicationId).run();
 
                 // Log activity
@@ -2786,15 +2830,15 @@ export default {
                         SET status = 'revoked', 
                             rejection_reason = ?, 
                             reviewed_by = ?,
-                            reviewed_at = CURRENT_TIMESTAMP,
-                            updated_at = CURRENT_TIMESTAMP 
+                            reviewed_at = datetime('now', '+5 hours', '+30 minutes'),
+                            updated_at = datetime('now', '+5 hours', '+30 minutes') 
                         WHERE id = ?
                     `).bind(reason, payload.userId, applicationId).run();
 
                     // Revert user role back to customer (or suspended if permanent ban)
                     const newRole = permanentBan ? 'suspended' : 'customer';
                     await env.proveloce_db.prepare(
-                        "UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                        "UPDATE users SET role = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                     ).bind(newRole, app.user_id).run();
 
                     // Log activity
@@ -2848,7 +2892,7 @@ export default {
                         const userOrgId = payload.org_id || 'ORG-DEFAULT';
                         await env.proveloce_db.prepare(`
                             INSERT INTO expert_applications (id, user_id, org_id, status, created_at, updated_at)
-                            VALUES (?, ?, ?, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            VALUES (?, ?, ?, 'draft', datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                         `).bind(newId, payload.userId, userOrgId).run();
 
                         application = {
@@ -2921,7 +2965,7 @@ export default {
                                 profile_dob = ?, 
                                 profile_address = ?,
                                 status = 'draft',
-                                updated_at = CURRENT_TIMESTAMP
+                                updated_at = datetime('now', '+5 hours', '+30 minutes')
                             WHERE user_id = ?
                         `).bind(
                             body.phone || "",
@@ -2938,7 +2982,7 @@ export default {
                                 id, user_id, org_id, status,
                                 profile_phone, profile_dob, profile_address,
                                 created_at, updated_at
-                            ) VALUES (?, ?, ?, 'draft', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            ) VALUES (?, ?, ?, 'draft', ?, ?, ?, datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                         `).bind(
                             id, payload.userId, userOrgId,
                             body.phone || "",
@@ -3005,7 +3049,7 @@ export default {
                     // Update status to pending
                     await env.proveloce_db.prepare(`
                         UPDATE expert_applications 
-                        SET status = 'pending', submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                        SET status = 'pending', submitted_at = datetime('now', '+5 hours', '+30 minutes'), updated_at = datetime('now', '+5 hours', '+30 minutes')
                         WHERE user_id = ?
                     `).bind(payload.userId).run();
 
@@ -3196,7 +3240,7 @@ export default {
                         INSERT INTO expert_applications (
                             id, user_id, org_id, status, full_name, email, phone, summary_bio, 
                             skills, years_of_experience, documents, images, submitted_at, created_at, updated_at
-                        ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                     `).bind(
                         id, payload.userId, orgId,
                         full_name || '', email || '', phone || null, address || null,
@@ -3280,15 +3324,15 @@ export default {
                         SET status = ?, 
                             reviewed_by = ?, 
                             rejection_reason = ?,
-                            reviewed_at = CURRENT_TIMESTAMP, 
-                            updated_at = CURRENT_TIMESTAMP 
+                            reviewed_at = datetime('now', '+5 hours', '+30 minutes'), 
+                            updated_at = datetime('now', '+5 hours', '+30 minutes') 
                         WHERE id = ?
                     `).bind(status, reviewerId, reason, applicationId),
 
                     // 2. Audit Log (Spec: audit_logs table)
                     env.proveloce_db.prepare(`
                         INSERT INTO audit_logs (id, action, expert_id, expert_email, reason, performed_by, performed_at)
-                        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
                     `).bind(crypto.randomUUID(), auditAction, applicationId, app.user_email, reason, reviewerId),
 
                     // 3. Activity Log (Standard: activity_logs table for broad tracking)
@@ -3305,7 +3349,7 @@ export default {
                 if (decision === 'approved') {
                     statements.push(
                         env.proveloce_db.prepare(
-                            "UPDATE users SET role = 'Expert', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                            "UPDATE users SET role = 'Expert', updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?"
                         ).bind(app.user_id)
                     );
                 }
@@ -3837,7 +3881,7 @@ export default {
                     // Create the task
                     await env.proveloce_db.prepare(`
                         INSERT INTO tasks (id, title, description, domain, deadline, price_budget, priority, status, admin_id, created_by_id, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                     `).bind(
                         taskId,
                         title,
@@ -3857,7 +3901,7 @@ export default {
                             try {
                                 await env.proveloce_db.prepare(`
                                     INSERT INTO expert_tasks (id, task_id, expert_id, admin_id, status, created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                    VALUES (?, ?, ?, ?, 'PENDING', datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                                 `).bind(crypto.randomUUID(), taskId, expertId, payload.userId).run();
                                 assignedCount++;
                             } catch (e) {
@@ -4044,7 +4088,7 @@ export default {
                     try {
                         await env.proveloce_db.prepare(`
                             INSERT OR IGNORE INTO expert_tasks (id, task_id, expert_id, admin_id, status, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            VALUES (?, ?, ?, ?, 'PENDING', datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                         `).bind(crypto.randomUUID(), taskId, expertId, payload.userId).run();
                         assignedCount++;
                     } catch (e) {
@@ -4071,7 +4115,7 @@ export default {
                 const taskId = url.pathname.split('/')[4];
 
                 await env.proveloce_db.prepare(`
-                    UPDATE expert_tasks SET status = 'ACCEPTED', updated_at = CURRENT_TIMESTAMP
+                    UPDATE expert_tasks SET status = 'ACCEPTED', updated_at = datetime('now', '+5 hours', '+30 minutes')
                     WHERE task_id = ? AND expert_id = ? AND status = 'PENDING'
                 `).bind(taskId, payload.userId).run();
 
@@ -4090,7 +4134,7 @@ export default {
                 const taskId = url.pathname.split('/')[4];
 
                 await env.proveloce_db.prepare(`
-                    UPDATE expert_tasks SET status = 'DECLINED', updated_at = CURRENT_TIMESTAMP
+                    UPDATE expert_tasks SET status = 'DECLINED', updated_at = datetime('now', '+5 hours', '+30 minutes')
                     WHERE task_id = ? AND expert_id = ?
                 `).bind(taskId, payload.userId).run();
 
@@ -4109,7 +4153,7 @@ export default {
                 const taskId = url.pathname.split('/')[4];
 
                 await env.proveloce_db.prepare(`
-                    UPDATE expert_tasks SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+                    UPDATE expert_tasks SET status = 'COMPLETED', updated_at = datetime('now', '+5 hours', '+30 minutes')
                     WHERE task_id = ? AND expert_id = ? AND status IN ('ACCEPTED', 'IN_PROGRESS')
                 `).bind(taskId, payload.userId).run();
 
@@ -4501,7 +4545,7 @@ export default {
                             ticket_number, category, subject, description, 
                             raised_by_user_id, org_id, messages, status, created_at, updated_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'Open', datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                     `).bind(
                         ticketNumber,
                         category.trim(),
@@ -4531,7 +4575,7 @@ export default {
                             // Create FileReference in ticket_files
                             await env.proveloce_db.prepare(`
                                 INSERT INTO ticket_files (id, ticket_id, filename, filetype, bucket, uploaded_at)
-                                VALUES (?, ?, ?, ?, 'others', CURRENT_TIMESTAMP)
+                                VALUES (?, ?, ?, ?, 'others', datetime('now', '+5 hours', '+30 minutes'))
                             `).bind(fileId, ticketDbId, file.name, file.type).run();
 
                             fileAttachments.push({
@@ -4976,7 +5020,7 @@ export default {
                 }
 
                 // Update only the status field (no edit limits)
-                const updateQuery = "UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?";
+                const updateQuery = "UPDATE tickets SET status = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ? OR ticket_number = ?";
                 await env.proveloce_db.prepare(updateQuery).bind(finalStatus, ticketId, ticketId).run();
 
                 // AUDIT TRAIL - log every status change with full details
@@ -5085,8 +5129,8 @@ export default {
                     UPDATE tickets SET 
                         assigned_user_id = ?,
                         assignee_role = ?,
-                        assigned_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
+                        assigned_at = datetime('now', '+5 hours', '+30 minutes'),
+                        updated_at = datetime('now', '+5 hours', '+30 minutes')
                     WHERE id = ? OR ticket_number = ?
                 `).bind(assignedToId, assignedUser.role, ticketId, ticketId).run();
 
@@ -5142,7 +5186,7 @@ export default {
                 const prevAssigneeId = ticket.assigned_user_id;
 
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET assigned_user_id = ?, assignee_role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                    UPDATE tickets SET assigned_user_id = ?, assignee_role = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ? OR ticket_number = ?
                 `).bind(assignedToId, assignedUser.role, ticketId, ticketId).run();
 
                 // Audit
@@ -5176,7 +5220,7 @@ export default {
                 }
 
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET assigned_user_id = NULL, assignee_role = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                    UPDATE tickets SET assigned_user_id = NULL, assignee_role = NULL, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ? OR ticket_number = ?
                 `).bind(ticketId, ticketId).run();
 
                 return jsonResponse({ success: true, message: "Ticket unassigned" });
@@ -5268,7 +5312,7 @@ export default {
 
                 // Update ticket with new messages array (messages are immutable once added)
                 await env.proveloce_db.prepare(`
-                    UPDATE tickets SET messages = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR ticket_number = ?
+                    UPDATE tickets SET messages = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ? OR ticket_number = ?
                 `).bind(JSON.stringify(existingMessages), ticketId, ticketId).run();
 
                 // AUDIT TRAIL
@@ -5431,7 +5475,7 @@ export default {
                     // Insert task using assigned_to_id as single source of truth
                     await env.proveloce_db.prepare(`
                         INSERT INTO tasks (id, title, description, assigned_to_id, deadline, status, created_by_id, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 'Pending', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        VALUES (?, ?, ?, ?, ?, 'Pending', ?, datetime('now', '+5 hours', '+30 minutes'), datetime('now', '+5 hours', '+30 minutes'))
                     `).bind(
                         taskId,
                         body.title.trim(),
@@ -5634,7 +5678,7 @@ export default {
                     }
 
                     // Always update updated_at
-                    setClauses.push("updated_at = CURRENT_TIMESTAMP");
+                    setClauses.push("updated_at = datetime('now', '+5 hours', '+30 minutes')");
 
                     // Add taskId as the last parameter for WHERE clause
                     params.push(taskId);
@@ -5672,7 +5716,7 @@ export default {
                         try {
                             await env.proveloce_db.prepare(`
                                 INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
-                                VALUES (?, ?, 'task_assigned', 'task', ?, ?, CURRENT_TIMESTAMP)
+                                VALUES (?, ?, 'task_assigned', 'task', ?, ?, datetime('now', '+5 hours', '+30 minutes'))
                             `).bind(
                                 crypto.randomUUID(),
                                 payload.userId,
@@ -5801,7 +5845,7 @@ export default {
                     try {
                         await env.proveloce_db.prepare(`
                             INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
-                            VALUES (?, ?, 'task_deleted', 'task', ?, ?, CURRENT_TIMESTAMP)
+                            VALUES (?, ?, 'task_deleted', 'task', ?, ?, datetime('now', '+5 hours', '+30 minutes'))
                         `).bind(
                             crypto.randomUUID(),
                             payload.userId,
@@ -6082,7 +6126,7 @@ export default {
 
                     // Update status
                     await env.proveloce_db.prepare(`
-                        UPDATE connect_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                        UPDATE connect_requests SET status = ?, updated_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?
                     `).bind(body.status, requestId).run();
 
                     // If accepted, create session
@@ -6188,7 +6232,7 @@ export default {
 
                 try {
                     await env.proveloce_db.prepare(`
-                        UPDATE sessions SET status = 'live', started_at = CURRENT_TIMESTAMP WHERE id = ?
+                        UPDATE sessions SET status = 'live', started_at = datetime('now', '+5 hours', '+30 minutes') WHERE id = ?
                     `).bind(sessionId).run();
 
                     return jsonResponse({ success: true, message: "Session started" });
@@ -6217,8 +6261,8 @@ export default {
                 try {
                     await env.proveloce_db.prepare(`
                         UPDATE sessions 
-                        SET status = 'ended', ended_at = CURRENT_TIMESTAMP,
-                            duration_seconds = CAST((julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400 AS INTEGER)
+                        SET status = 'ended', ended_at = datetime('now', '+5 hours', '+30 minutes'),
+                            duration_seconds = CAST((julianday(datetime('now', '+5 hours', '+30 minutes')) - julianday(started_at)) * 86400 AS INTEGER)
                         WHERE id = ?
                     `).bind(sessionId).run();
 
@@ -6395,7 +6439,7 @@ export default {
 
                     // Mark messages as read
                     await env.proveloce_db.prepare(`
-                        UPDATE user_messages SET read_at = CURRENT_TIMESTAMP
+                        UPDATE user_messages SET read_at = datetime('now', '+5 hours', '+30 minutes')
                         WHERE sender_id = ? AND receiver_id = ? AND read_at IS NULL
                     `).bind(otherUserId, payload.userId).run();
 

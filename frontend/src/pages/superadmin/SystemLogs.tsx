@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { adminApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { formatDateTime, formatRelativeTime, formatDate as formatDateIST } from '../../utils/dateUtils';
 import './SystemLogs.css';
 
 interface ActivityLog {
@@ -139,24 +140,12 @@ const SystemLogs: React.FC = () => {
         });
     };
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleString();
+    const formatDateDisplay = (dateStr: string) => {
+        return formatDateTime(dateStr);
     };
 
-    const formatRelativeTime = (dateStr: string) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return date.toLocaleDateString();
+    const formatRelativeTimeDisplay = (dateStr: string) => {
+        return formatRelativeTime(dateStr);
     };
 
     const getActionIcon = (action: string) => {
@@ -438,8 +427,8 @@ const SystemLogs: React.FC = () => {
                                         </div>
 
                                         <div className="log-time-section">
-                                            <span className="relative-time">{formatRelativeTime(log.created_at)}</span>
-                                            <span className="absolute-time">{formatDate(log.created_at)}</span>
+                                            <span className="relative-time">{formatRelativeTimeDisplay(log.created_at)}</span>
+                                            <span className="absolute-time">{formatDateDisplay(log.created_at)}</span>
                                         </div>
 
                                         <div className="expand-indicator">
