@@ -354,6 +354,14 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
     }, []);
 
+    // Use ref to track last config hash to avoid stale closure issues
+    const liveConfigRef = useRef<Record<string, string>>({});
+    
+    // Keep ref in sync with state
+    useEffect(() => {
+        liveConfigRef.current = liveConfig;
+    }, [liveConfig]);
+
     // Lightweight polling function for live config updates
     const pollLiveConfig = useCallback(async () => {
         try {
@@ -364,11 +372,12 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             if (response.data.success && response.data.config) {
                 const newLiveConfig = response.data.config;
                 
-                // Create hash to detect changes
+                // Create hash to detect changes using ref (avoids stale closure)
                 const newHash = JSON.stringify(newLiveConfig);
-                const oldHash = JSON.stringify(liveConfig);
+                const oldHash = JSON.stringify(liveConfigRef.current);
                 
                 if (newHash !== oldHash) {
+                    console.log('[Config Polling] Changes detected, updating live config');
                     setLiveConfig(newLiveConfig);
                     setLastUpdated(new Date());
                     setConfigVersion(prev => prev + 1);
@@ -389,8 +398,9 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             }
         } catch (err) {
             // Silently fail polling - don't disturb user experience
+            console.warn('[Config Polling] Request failed:', err);
         }
-    }, [liveConfig]);
+    }, []); // No dependencies - uses refs for latest state
 
     // Refresh configs (public method for force refresh)
     const refreshConfig = useCallback(async () => {
@@ -439,14 +449,21 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Live polling for configuration updates (every 1 second)
     useEffect(() => {
+        console.log('[Config Polling] Starting live config polling (1 second interval)');
+        
         // Start polling
         setIsPolling(true);
         
+        // Immediately poll once on mount
+        pollLiveConfig();
+        
+        // Then poll every POLLING_INTERVAL
         pollingIntervalRef.current = setInterval(() => {
             pollLiveConfig();
         }, POLLING_INTERVAL);
 
         return () => {
+            console.log('[Config Polling] Stopping live config polling');
             setIsPolling(false);
             if (pollingIntervalRef.current) {
                 clearInterval(pollingIntervalRef.current);
