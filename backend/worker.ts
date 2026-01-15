@@ -3959,11 +3959,14 @@ export default {
                         tasks = result.results || [];
                     }
                 } else if (role === 'expert') {
-                    // Expert sees tasks assigned to them via assigned_to/assigned_to_id columns
-                    // OR via expert_tasks junction table for backward compatibility
+                    // Expert sees tasks assigned to them
+                    // Priority: Direct assignment via assigned_to/assigned_to_id columns (used by POML Task Assignment)
+                    // Fallback: expert_tasks junction table for legacy compatibility
+                    
+                    // First, try fetching via direct assignment columns (primary method)
                     try {
                         const result = await env.proveloce_db.prepare(`
-                            SELECT DISTINCT
+                            SELECT 
                                 t.id,
                                 t.title,
                                 t.description,
@@ -3979,18 +3982,40 @@ export default {
                             FROM tasks t
                             LEFT JOIN users u ON COALESCE(t.assigned_to, t.assigned_to_id) = u.id
                             LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id, t.admin_id) = c.id
-                            LEFT JOIN expert_tasks et ON et.task_id = t.id AND et.expert_id = ?
-                            WHERE t.assigned_to = ? 
-                               OR t.assigned_to_id = ? 
-                               OR et.expert_id = ?
+                            WHERE t.assigned_to = ? OR t.assigned_to_id = ?
                             ORDER BY t.created_at DESC
-                        `).bind(payload.userId, payload.userId, payload.userId, payload.userId).all();
+                        `).bind(payload.userId, payload.userId).all();
                         tasks = result.results || [];
+                        console.log(`Found ${tasks.length} tasks for expert ${payload.userId} via direct assignment`);
                     } catch (err) {
-                        console.error("Expert task fetch error:", err);
-                        // Fallback - try just assigned_to columns
+                        console.error("Expert task fetch error (direct):", err);
+                        // Fallback to simpler query
                         try {
                             const result = await env.proveloce_db.prepare(`
+                                SELECT 
+                                    t.id,
+                                    t.title,
+                                    t.description,
+                                    t.assigned_to_id as assigned_to,
+                                    t.deadline as due_date,
+                                    t.status,
+                                    t.created_by_id as created_by,
+                                    t.created_at,
+                                    t.updated_at
+                                FROM tasks t
+                                WHERE t.assigned_to_id = ?
+                                ORDER BY t.created_at DESC
+                            `).bind(payload.userId).all();
+                            tasks = result.results || [];
+                        } catch {
+                            tasks = [];
+                        }
+                    }
+                    
+                    // If no tasks found via direct assignment, also check expert_tasks junction table
+                    if (tasks.length === 0) {
+                        try {
+                            const legacyResult = await env.proveloce_db.prepare(`
                                 SELECT 
                                     t.id,
                                     t.title,
@@ -3998,26 +4023,24 @@ export default {
                                     COALESCE(t.assigned_to, t.assigned_to_id) as assigned_to,
                                     COALESCE(t.due_date, t.deadline) as due_date,
                                     t.status,
-                                    COALESCE(t.created_by, t.created_by_id) as created_by,
+                                    COALESCE(t.created_by, t.created_by_id, t.admin_id) as created_by,
                                     t.created_at,
                                     t.updated_at,
+                                    et.status as assignment_status,
                                     c.name as created_by_name
                                 FROM tasks t
-                                LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id) = c.id
-                                WHERE t.assigned_to = ? OR t.assigned_to_id = ?
-                                ORDER BY t.created_at DESC
-                            `).bind(payload.userId, payload.userId).all();
-                            tasks = result.results || [];
-                        } catch {
-                            // Ultimate fallback - expert_tasks junction table only
-                            const result = await env.proveloce_db.prepare(`
-                                SELECT t.*, et.status as assignment_status
-                                FROM tasks t
                                 JOIN expert_tasks et ON et.task_id = t.id
+                                LEFT JOIN users c ON COALESCE(t.created_by, t.created_by_id, t.admin_id) = c.id
                                 WHERE et.expert_id = ?
                                 ORDER BY t.created_at DESC
                             `).bind(payload.userId).all();
-                            tasks = result.results || [];
+                            if (legacyResult.results && legacyResult.results.length > 0) {
+                                tasks = legacyResult.results;
+                                console.log(`Found ${tasks.length} tasks for expert ${payload.userId} via expert_tasks table`);
+                            }
+                        } catch (legacyErr) {
+                            console.error("Expert task fetch error (legacy):", legacyErr);
+                            // That's okay, just return empty array
                         }
                     }
                 }
@@ -5757,23 +5780,30 @@ export default {
                     params.push(taskId);
 
                     const query = `UPDATE tasks SET ${setClauses.join(", ")} WHERE id = ?`;
+                    console.log(`Updating task ${taskId} with query: ${query}`);
                     
-                    await env.proveloce_db.prepare(query).bind(...params).run();
+                    const updateResult = await env.proveloce_db.prepare(query).bind(...params).run();
+                    console.log(`Task update result - changes: ${updateResult.meta?.changes}`);
 
                     // Sync both column variants for assignment to ensure consistency
                     if (body.assignedTo !== undefined) {
+                        console.log(`Syncing assignment for task ${taskId} to user ${body.assignedTo}`);
                         try {
-                            // Try to update both columns
+                            // Try to update both columns for maximum compatibility
                             await env.proveloce_db.prepare(
                                 "UPDATE tasks SET assigned_to = ?, assigned_to_id = ? WHERE id = ?"
                             ).bind(body.assignedTo || null, body.assignedTo || null, taskId).run();
-                        } catch {
+                            console.log(`Successfully synced both assigned_to and assigned_to_id columns`);
+                        } catch (syncErr) {
+                            console.log(`Could not sync assigned_to column, trying assigned_to_id only:`, syncErr);
                             // If that fails, try just the old column
                             try {
                                 await env.proveloce_db.prepare(
                                     "UPDATE tasks SET assigned_to_id = ? WHERE id = ?"
                                 ).bind(body.assignedTo || null, taskId).run();
-                            } catch {
+                                console.log(`Successfully synced assigned_to_id column`);
+                            } catch (syncErr2) {
+                                console.log(`Could not sync assigned_to_id column:`, syncErr2);
                                 // Ignore - main update already succeeded
                             }
                         }
