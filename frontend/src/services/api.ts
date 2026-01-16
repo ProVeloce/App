@@ -626,7 +626,20 @@ export const adminUserApi = {
             bookings?: any[]; 
             sessions?: any[]; 
             expertApplication?: any; 
-            activityLogs?: any[]; 
+            activityLogs?: any[];
+            loginHistory?: any[];
+            tickets?: any[];
+            notifications?: any[];
+            accountStats?: {
+                totalBookings: number;
+                totalSessions: number;
+                totalTickets: number;
+                totalActivityLogs: number;
+                acceptedBookings: number;
+                completedSessions: number;
+                openTickets: number;
+            };
+            fetchedAt?: string;
         }>>(`/admin/users/${id}`),
 
     updateUser: (id: string, data: any) =>

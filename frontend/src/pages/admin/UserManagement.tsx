@@ -13,7 +13,17 @@ import {
     MoreVertical,
     CheckCircle,
     Eye,
-    X
+    X,
+    Calendar,
+    Mail,
+    Phone,
+    Activity,
+    FileText,
+    Bell,
+    LogIn,
+    Briefcase,
+    BarChart3,
+    History
 } from 'lucide-react';
 import { adminUserApi } from '../../services/api';
 import Avatar from '../../components/common/Avatar';
@@ -33,7 +43,9 @@ interface UserData {
     profile_image?: string;
     profile_photo_url?: string;
     created_at: string;
+    updated_at?: string;
     last_login_at?: string;
+    email_verified?: boolean;
 }
 
 interface UserDetail {
@@ -43,6 +55,19 @@ interface UserDetail {
     sessions?: any[];
     expertApplication?: any;
     activityLogs?: any[];
+    loginHistory?: any[];
+    tickets?: any[];
+    notifications?: any[];
+    accountStats?: {
+        totalBookings: number;
+        totalSessions: number;
+        totalTickets: number;
+        totalActivityLogs: number;
+        acceptedBookings: number;
+        completedSessions: number;
+        openTickets: number;
+    };
+    fetchedAt?: string;
 }
 
 interface Stats {
@@ -386,53 +411,142 @@ const UserManagement: React.FC = () => {
                     <div className="modal-content user-detail-modal">
                         <div className="modal-header">
                             <div className="modal-header-content">
-                                <Avatar src={selectedUser.user.profile_image || selectedUser.user.profile_photo_url} name={selectedUser.user.name} />
+                                <div className="modal-avatar-wrapper">
+                                    <Avatar src={selectedUser.user.profile_image || selectedUser.user.profile_photo_url} name={selectedUser.user.name} />
+                                    <span className={`status-indicator ${selectedUser.user.status?.toLowerCase()}`}></span>
+                                </div>
                                 <div>
                                     <h3>{selectedUser.user.name}</h3>
                                     <span className="modal-subtitle">{selectedUser.user.email}</span>
+                                    <div className="modal-badges">
+                                        {getRoleBadge(selectedUser.user.role)}
+                                        <span className={`status-tag ${selectedUser.user.status?.toLowerCase()}`}>{selectedUser.user.status}</span>
+                                    </div>
                                 </div>
                             </div>
                             <button className="close-btn" onClick={() => setShowDetailModal(false)}>
                                 <X size={20} />
                             </button>
                         </div>
+
+                        {/* Account Statistics Banner */}
+                        {selectedUser.accountStats && (
+                            <div className="stats-banner">
+                                <div className="stat-mini">
+                                    <BarChart3 size={16} />
+                                    <div>
+                                        <span className="stat-number">{selectedUser.accountStats.totalBookings}</span>
+                                        <span className="stat-text">Bookings</span>
+                                    </div>
+                                </div>
+                                <div className="stat-mini">
+                                    <CheckCircle size={16} />
+                                    <div>
+                                        <span className="stat-number">{selectedUser.accountStats.completedSessions}</span>
+                                        <span className="stat-text">Sessions</span>
+                                    </div>
+                                </div>
+                                <div className="stat-mini">
+                                    <FileText size={16} />
+                                    <div>
+                                        <span className="stat-number">{selectedUser.accountStats.openTickets}</span>
+                                        <span className="stat-text">Open Tickets</span>
+                                    </div>
+                                </div>
+                                <div className="stat-mini">
+                                    <Activity size={16} />
+                                    <div>
+                                        <span className="stat-number">{selectedUser.accountStats.totalActivityLogs}</span>
+                                        <span className="stat-text">Activities</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="modal-body">
+                            {/* Basic Information Section */}
                             <section className="detail-section">
-                                <h4><UserIcon size={16} /> Profile Information</h4>
+                                <h4><UserIcon size={16} /> Basic Information</h4>
                                 <div className="detail-grid">
                                     <div className="detail-item">
-                                        <label>Full Name</label>
+                                        <label><UserIcon size={12} /> Full Name</label>
                                         <span>{selectedUser.user.name}</span>
                                     </div>
                                     <div className="detail-item">
-                                        <label>Email Address</label>
+                                        <label><Mail size={12} /> Email Address</label>
                                         <span>{selectedUser.user.email}</span>
                                     </div>
                                     <div className="detail-item">
-                                        <label>Phone</label>
-                                        <span>{selectedUser.user.phone || 'N/A'}</span>
+                                        <label><Phone size={12} /> Phone</label>
+                                        <span>{selectedUser.user.phone || 'Not provided'}</span>
                                     </div>
                                     <div className="detail-item">
-                                        <label>Role</label>
+                                        <label><Shield size={12} /> Role</label>
                                         {getRoleBadge(selectedUser.user.role)}
                                     </div>
-                                    <div className="detail-item">
-                                        <label>Status</label>
-                                        <span className={`status-tag ${selectedUser.user.status}`}>{selectedUser.user.status}</span>
-                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Account Metadata Section */}
+                            <section className="detail-section">
+                                <h4><Calendar size={16} /> Account Metadata</h4>
+                                <div className="detail-grid">
                                     <div className="detail-item">
                                         <label>Member Since</label>
-                                        <span>{formatDate(selectedUser.user.created_at)}</span>
+                                        <span>{formatDateTime(selectedUser.user.created_at)}</span>
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Last Updated</label>
+                                        <span>{selectedUser.user.updated_at ? formatDateTime(selectedUser.user.updated_at) : 'Never'}</span>
                                     </div>
                                     <div className="detail-item">
                                         <label>Last Login</label>
                                         <span>{selectedUser.user.last_login_at ? formatDateTime(selectedUser.user.last_login_at) : 'Never'}</span>
                                     </div>
+                                    <div className="detail-item">
+                                        <label>Email Verified</label>
+                                        <span className={`verification-badge ${selectedUser.user.email_verified ? 'verified' : 'unverified'}`}>
+                                            {selectedUser.user.email_verified ? '✓ Verified' : '✗ Not Verified'}
+                                        </span>
+                                    </div>
                                 </div>
                             </section>
 
+                            {/* Login History Section */}
                             <section className="detail-section">
-                                <h4><Clock size={16} /> Booking History (Connect Requests)</h4>
+                                <h4><LogIn size={16} /> Login History</h4>
+                                {selectedUser.loginHistory && selectedUser.loginHistory.length > 0 ? (
+                                    <div className="activity-list compact">
+                                        {selectedUser.loginHistory.slice(0, 10).map((log: any, idx: number) => (
+                                            <div key={log.id || idx} className="activity-item login-item">
+                                                <div className="activity-icon">
+                                                    <LogIn size={14} />
+                                                </div>
+                                                <div className="activity-details">
+                                                    <span className="activity-action">{log.action?.replace(/_/g, ' ')}</span>
+                                                    {log.metadata && (
+                                                        <span className="activity-meta">
+                                                            {(() => {
+                                                                try {
+                                                                    const meta = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
+                                                                    return meta.ip_address ? `IP: ${meta.ip_address}` : '';
+                                                                } catch { return ''; }
+                                                            })()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="activity-time">{log.created_at ? formatDateTime(log.created_at) : ''}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="no-data">No login history available.</p>
+                                )}
+                            </section>
+
+                            {/* Booking History Section */}
+                            <section className="detail-section">
+                                <h4><Briefcase size={16} /> Booking History (Connect Requests)</h4>
                                 {selectedUser.bookings && selectedUser.bookings.length > 0 ? (
                                     <div className="table-scroll">
                                         <table className="mini-table">
@@ -445,9 +559,9 @@ const UserManagement: React.FC = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {selectedUser.bookings.map((b: any) => (
+                                                {selectedUser.bookings.slice(0, 10).map((b: any) => (
                                                     <tr key={b.id}>
-                                                        <td>{b.id?.substring(0, 8) || 'N/A'}...</td>
+                                                        <td><code>{b.id?.substring(0, 8) || 'N/A'}</code></td>
                                                         <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (b.customer_name || 'N/A') : (b.expert_name || 'N/A')}</td>
                                                         <td><span className={`status-tag ${b.status?.toLowerCase()}`}>{b.status}</span></td>
                                                         <td>{b.created_at ? formatDate(b.created_at) : 'N/A'}</td>
@@ -455,12 +569,16 @@ const UserManagement: React.FC = () => {
                                                 ))}
                                             </tbody>
                                         </table>
+                                        {selectedUser.bookings.length > 10 && (
+                                            <p className="more-indicator">+ {selectedUser.bookings.length - 10} more bookings</p>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="no-data">No booking history available.</p>
                                 )}
                             </section>
 
+                            {/* Session History Section */}
                             <section className="detail-section">
                                 <h4><CheckCircle size={16} /> Session History (Meetings)</h4>
                                 {selectedUser.sessions && selectedUser.sessions.length > 0 ? (
@@ -475,7 +593,7 @@ const UserManagement: React.FC = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {selectedUser.sessions.map((s: any) => (
+                                                {selectedUser.sessions.slice(0, 10).map((s: any) => (
                                                     <tr key={s.id}>
                                                         <td>{s.title || 'Session'}</td>
                                                         <td>{selectedUser.user.role.toLowerCase() === 'expert' ? (s.customer_name || 'N/A') : (s.expert_name || 'N/A')}</td>
@@ -485,25 +603,107 @@ const UserManagement: React.FC = () => {
                                                 ))}
                                             </tbody>
                                         </table>
+                                        {selectedUser.sessions.length > 10 && (
+                                            <p className="more-indicator">+ {selectedUser.sessions.length - 10} more sessions</p>
+                                        )}
                                     </div>
                                 ) : (
                                     <p className="no-data">No session history found.</p>
                                 )}
                             </section>
 
-                            {selectedUser.activityLogs && selectedUser.activityLogs.length > 0 && (
-                                <section className="detail-section">
-                                    <h4><AlertCircle size={16} /> Recent Activity</h4>
-                                    <div className="activity-list">
-                                        {selectedUser.activityLogs.slice(0, 10).map((log: any) => (
-                                            <div key={log.id} className="activity-item">
-                                                <span className="activity-action">{log.action?.replace(/_/g, ' ')}</span>
-                                                <span className="activity-time">{log.created_at ? formatDateTime(log.created_at) : ''}</span>
+                            {/* Tickets History Section */}
+                            <section className="detail-section">
+                                <h4><FileText size={16} /> Support Tickets</h4>
+                                {selectedUser.tickets && selectedUser.tickets.length > 0 ? (
+                                    <div className="table-scroll">
+                                        <table className="mini-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Subject</th>
+                                                    <th>Priority</th>
+                                                    <th>Status</th>
+                                                    <th>Created</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {selectedUser.tickets.slice(0, 10).map((t: any) => (
+                                                    <tr key={t.id}>
+                                                        <td>{t.subject || t.title || 'Ticket'}</td>
+                                                        <td><span className={`priority-tag ${t.priority?.toLowerCase()}`}>{t.priority || 'Medium'}</span></td>
+                                                        <td><span className={`status-tag ${t.status?.toLowerCase()}`}>{t.status}</span></td>
+                                                        <td>{t.created_at ? formatDate(t.created_at) : 'N/A'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        {selectedUser.tickets.length > 10 && (
+                                            <p className="more-indicator">+ {selectedUser.tickets.length - 10} more tickets</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="no-data">No support tickets found.</p>
+                                )}
+                            </section>
+
+                            {/* Activity History Section */}
+                            <section className="detail-section">
+                                <h4><History size={16} /> Activity History</h4>
+                                {selectedUser.activityLogs && selectedUser.activityLogs.length > 0 ? (
+                                    <div className="activity-timeline">
+                                        {selectedUser.activityLogs.slice(0, 20).map((log: any, idx: number) => (
+                                            <div key={log.id || idx} className="timeline-item">
+                                                <div className="timeline-dot"></div>
+                                                <div className="timeline-content">
+                                                    <span className="timeline-action">{log.action?.replace(/_/g, ' ')}</span>
+                                                    {log.entity_type && <span className="timeline-entity">{log.entity_type}</span>}
+                                                    <span className="timeline-time">{log.created_at ? formatDateTime(log.created_at) : ''}</span>
+                                                </div>
                                             </div>
                                         ))}
+                                        {selectedUser.activityLogs.length > 20 && (
+                                            <p className="more-indicator">+ {selectedUser.activityLogs.length - 20} more activities</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="no-data">No activity history available.</p>
+                                )}
+                            </section>
+
+                            {/* Expert Application Section (if applicable) */}
+                            {selectedUser.expertApplication && (
+                                <section className="detail-section">
+                                    <h4><Award size={16} /> Expert Application</h4>
+                                    <div className="detail-grid">
+                                        <div className="detail-item">
+                                            <label>Application Status</label>
+                                            <span className={`status-tag ${selectedUser.expertApplication.status?.toLowerCase()}`}>
+                                                {selectedUser.expertApplication.status}
+                                            </span>
+                                        </div>
+                                        <div className="detail-item">
+                                            <label>Applied On</label>
+                                            <span>{selectedUser.expertApplication.created_at ? formatDateTime(selectedUser.expertApplication.created_at) : 'N/A'}</span>
+                                        </div>
+                                        {selectedUser.expertApplication.expertise && (
+                                            <div className="detail-item full-width">
+                                                <label>Expertise</label>
+                                                <span>{selectedUser.expertApplication.expertise}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </section>
                             )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="modal-footer">
+                            <span className="fetch-timestamp">
+                                Data fetched: {selectedUser.fetchedAt ? formatDateTime(selectedUser.fetchedAt) : 'Just now'}
+                            </span>
+                            <button className="btn btn-secondary" onClick={() => setShowDetailModal(false)}>
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -516,51 +716,131 @@ const UserManagement: React.FC = () => {
                 .no-results-cell { padding: var(--space-12) !important; text-align: center; }
                 .empty-state { color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); }
                 
+                /* Modal Styles */
                 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem; animation: fadeIn 0.2s ease-out; }
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                .modal-content { background: var(--bg-primary, white); border-radius: 16px; width: 100%; max-width: 900px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: slideUp 0.3s ease-out; }
+                .modal-content { background: var(--bg-primary, white); border-radius: 16px; width: 100%; max-width: 960px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.25); animation: slideUp 0.3s ease-out; display: flex; flex-direction: column; }
                 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-                .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border-light, #eee); display: flex; justify-content: space-between; align-items: center; }
+                
+                /* Modal Header */
+                .modal-header { padding: 1.5rem; border-bottom: 1px solid var(--border-light, #eee); display: flex; justify-content: space-between; align-items: flex-start; background: linear-gradient(135deg, var(--primary-50, #eef2ff) 0%, var(--bg-primary, white) 100%); border-radius: 16px 16px 0 0; }
                 .modal-header-content { display: flex; align-items: center; gap: 1rem; min-width: 0; flex: 1; }
-                .modal-header-content > div { min-width: 0; flex: 1; }
-                .modal-header-content h3 { margin: 0; font-size: 1.25rem; font-weight: 600; color: var(--text-primary, #333); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .modal-subtitle { font-size: 0.875rem; color: var(--text-secondary, #666); display: block; word-break: break-all; overflow-wrap: break-word; }
-                .close-btn { background: var(--bg-tertiary, #f5f5f5); border: none; cursor: pointer; color: var(--text-secondary, #666); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-                .close-btn:hover { background: var(--bg-surface-secondary, #eee); color: var(--text-primary, #333); }
-                .modal-body { padding: 1.5rem; }
+                .modal-avatar-wrapper { position: relative; }
+                .modal-avatar-wrapper .status-indicator { position: absolute; bottom: 2px; right: 2px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; }
+                .status-indicator.active { background: #10b981; }
+                .status-indicator.inactive { background: #6b7280; }
+                .status-indicator.suspended { background: #ef4444; }
+                .modal-header-content > div:last-child { min-width: 0; flex: 1; }
+                .modal-header-content h3 { margin: 0 0 0.25rem 0; font-size: 1.35rem; font-weight: 700; color: var(--text-primary, #333); }
+                .modal-subtitle { font-size: 0.875rem; color: var(--text-secondary, #666); display: block; }
+                .modal-badges { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
+                .close-btn { background: var(--bg-tertiary, #f5f5f5); border: none; cursor: pointer; color: var(--text-secondary, #666); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+                .close-btn:hover { background: var(--bg-surface-secondary, #eee); color: var(--text-primary, #333); transform: rotate(90deg); }
+                
+                /* Stats Banner */
+                .stats-banner { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 1rem 1.5rem; background: var(--bg-tertiary, #f9fafb); border-bottom: 1px solid var(--border-light, #eee); }
+                .stat-mini { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-primary, white); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+                .stat-mini svg { color: var(--primary-500, #6366f1); flex-shrink: 0; }
+                .stat-mini > div { display: flex; flex-direction: column; }
+                .stat-number { font-size: 1.25rem; font-weight: 700; color: var(--text-primary, #333); line-height: 1; }
+                .stat-text { font-size: 0.7rem; color: var(--text-tertiary, #888); text-transform: uppercase; letter-spacing: 0.5px; }
+                
+                /* Modal Body */
+                .modal-body { padding: 1.5rem; flex: 1; overflow-y: auto; }
                 .detail-section { margin-bottom: 2rem; }
-                .detail-section h4 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-600, #6366f1); border-bottom: 2px solid var(--border-light, #f0f0f0); padding-bottom: 0.75rem; font-size: 1rem; }
-                .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.25rem; }
+                .detail-section:last-child { margin-bottom: 0; }
+                .detail-section h4 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-600, #6366f1); border-bottom: 2px solid var(--border-light, #f0f0f0); padding-bottom: 0.75rem; font-size: 1rem; font-weight: 600; }
+                .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; }
                 .detail-item { min-width: 0; overflow: hidden; }
-                .detail-item label { display: block; font-size: 0.7rem; color: var(--text-tertiary, #888); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
+                .detail-item.full-width { grid-column: 1 / -1; }
+                .detail-item label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: var(--text-tertiary, #888); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.5px; }
+                .detail-item label svg { opacity: 0.6; }
                 .detail-item span { font-weight: 500; color: var(--text-primary, #333); display: block; word-break: break-word; overflow-wrap: break-word; }
-                .table-scroll { overflow-x: auto; }
+                
+                /* Verification Badge */
+                .verification-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+                .verification-badge.verified { background: #dcfce7; color: #166534; }
+                .verification-badge.unverified { background: #fef3c7; color: #92400e; }
+                
+                /* Tables */
+                .table-scroll { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-light, #eee); }
                 .mini-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-                .mini-table th { text-align: left; padding: 0.75rem; background: var(--bg-surface-secondary, #f9fafb); border-bottom: 1px solid var(--border-light, #eee); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary, #666); }
-                .mini-table td { padding: 0.75rem; border-bottom: 1px solid var(--border-light, #eee); }
+                .mini-table th { text-align: left; padding: 0.75rem 1rem; background: var(--bg-surface-secondary, #f9fafb); border-bottom: 1px solid var(--border-light, #eee); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary, #666); }
+                .mini-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-light, #eee); }
+                .mini-table tr:last-child td { border-bottom: none; }
+                .mini-table tr:hover { background: var(--bg-tertiary, #f9fafb); }
+                .mini-table code { background: var(--bg-tertiary, #f3f4f6); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-family: monospace; }
+                .more-indicator { text-align: center; color: var(--text-tertiary, #888); font-size: 0.8rem; padding: 0.75rem; margin: 0; background: var(--bg-tertiary, #f9fafb); border-top: 1px solid var(--border-light, #eee); }
+                
+                /* Status Tags */
                 .status-tag { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; text-transform: capitalize; font-weight: 500; }
-                .status-tag.accepted, .status-tag.completed, .status-tag.active { background: #e6fcf5; color: #087f5b; }
-                .status-tag.pending, .status-tag.pending_verification { background: #fff9db; color: #f08c00; }
-                .status-tag.rejected, .status-tag.inactive, .status-tag.suspended { background: #fff5f5; color: #fa5252; }
-                .status-tag.scheduled, .status-tag.in_progress { background: #e7f5ff; color: #1971c2; }
-                .no-data { text-align: center; color: var(--text-muted, #888); font-style: italic; padding: 1.5rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; }
+                .status-tag.accepted, .status-tag.completed, .status-tag.active, .status-tag.approved { background: #dcfce7; color: #166534; }
+                .status-tag.pending, .status-tag.pending_verification, .status-tag.open { background: #fef3c7; color: #92400e; }
+                .status-tag.rejected, .status-tag.inactive, .status-tag.suspended, .status-tag.closed { background: #fee2e2; color: #991b1b; }
+                .status-tag.scheduled, .status-tag.in_progress { background: #dbeafe; color: #1e40af; }
+                
+                /* Priority Tags */
+                .priority-tag { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; text-transform: capitalize; font-weight: 500; }
+                .priority-tag.high, .priority-tag.urgent { background: #fee2e2; color: #991b1b; }
+                .priority-tag.medium { background: #fef3c7; color: #92400e; }
+                .priority-tag.low { background: #dcfce7; color: #166534; }
+                
+                /* Activity List */
                 .activity-list { display: flex; flex-direction: column; gap: 0.5rem; }
-                .activity-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; }
-                .activity-action { font-size: 0.875rem; color: var(--text-primary, #333); text-transform: capitalize; }
-                .activity-time { font-size: 0.75rem; color: var(--text-tertiary, #888); }
+                .activity-list.compact { gap: 0.35rem; }
+                .activity-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; transition: background 0.2s; }
+                .activity-item:hover { background: var(--bg-surface-secondary, #f3f4f6); }
+                .activity-item.login-item { border-left: 3px solid var(--primary-400, #818cf8); }
+                .activity-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--primary-100, #e0e7ff); display: flex; align-items: center; justify-content: center; color: var(--primary-600, #4f46e5); flex-shrink: 0; }
+                .activity-details { flex: 1; min-width: 0; }
+                .activity-action { font-size: 0.875rem; color: var(--text-primary, #333); text-transform: capitalize; display: block; }
+                .activity-meta { font-size: 0.75rem; color: var(--text-tertiary, #888); display: block; }
+                .activity-time { font-size: 0.75rem; color: var(--text-tertiary, #888); flex-shrink: 0; }
+                
+                /* Activity Timeline */
+                .activity-timeline { position: relative; padding-left: 1.5rem; }
+                .activity-timeline::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; background: var(--border-light, #e5e7eb); }
+                .timeline-item { position: relative; padding: 0.75rem 0; display: flex; align-items: flex-start; gap: 1rem; }
+                .timeline-dot { position: absolute; left: -1.5rem; top: 1rem; width: 12px; height: 12px; border-radius: 50%; background: var(--primary-500, #6366f1); border: 2px solid white; box-shadow: 0 0 0 2px var(--primary-200, #c7d2fe); }
+                .timeline-content { flex: 1; background: var(--bg-tertiary, #f9fafb); padding: 0.75rem 1rem; border-radius: 8px; }
+                .timeline-action { font-size: 0.875rem; color: var(--text-primary, #333); text-transform: capitalize; font-weight: 500; }
+                .timeline-entity { font-size: 0.7rem; background: var(--primary-100, #e0e7ff); color: var(--primary-700, #4338ca); padding: 0.1rem 0.5rem; border-radius: 4px; margin-left: 0.5rem; text-transform: uppercase; }
+                .timeline-time { display: block; font-size: 0.75rem; color: var(--text-tertiary, #888); margin-top: 0.25rem; }
+                
+                /* No Data */
+                .no-data { text-align: center; color: var(--text-muted, #888); font-style: italic; padding: 1.5rem; background: var(--bg-tertiary, #f9fafb); border-radius: 8px; font-size: 0.875rem; }
+                
+                /* Modal Footer */
+                .modal-footer { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-top: 1px solid var(--border-light, #eee); background: var(--bg-tertiary, #f9fafb); border-radius: 0 0 16px 16px; }
+                .fetch-timestamp { font-size: 0.75rem; color: var(--text-tertiary, #888); }
                 
                 /* Action buttons visibility fix */
-                .action-btn { display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+                .action-btn { display: inline-flex !important; align-items: center !important; justify-content: center !important; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-light, #e5e7eb); background: var(--bg-primary, white); cursor: pointer; transition: all 0.2s; }
                 .action-btn svg { display: block !important; flex-shrink: 0; }
                 .action-btn.view { color: var(--primary-600, #6366f1); }
                 .action-btn.view:hover { background: var(--primary-50, #eef2ff); border-color: var(--primary-200, #c7d2fe); }
                 .action-btn.delete { color: var(--text-secondary, #666); }
                 .action-btn.delete:hover { background: var(--danger-50, #fef2f2); color: var(--danger-600, #dc2626); border-color: var(--danger-200, #fecaca); }
+                .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                
+                /* Responsive */
+                @media (max-width: 768px) {
+                    .stats-banner { grid-template-columns: repeat(2, 1fr); }
+                    .detail-grid { grid-template-columns: 1fr; }
+                    .modal-content { max-height: 95vh; border-radius: 12px; }
+                }
                 
                 /* Dark mode support */
                 [data-theme="dark"] .modal-content { background: var(--bg-secondary); }
+                [data-theme="dark"] .modal-header { background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%); }
+                [data-theme="dark"] .stats-banner { background: var(--bg-tertiary); }
+                [data-theme="dark"] .stat-mini { background: var(--bg-secondary); }
                 [data-theme="dark"] .mini-table th { background: var(--bg-tertiary); }
+                [data-theme="dark"] .mini-table tr:hover { background: var(--bg-tertiary); }
                 [data-theme="dark"] .detail-item span { color: var(--text-primary); }
+                [data-theme="dark"] .activity-item { background: var(--bg-tertiary); }
+                [data-theme="dark"] .timeline-content { background: var(--bg-tertiary); }
+                [data-theme="dark"] .modal-footer { background: var(--bg-tertiary); }
             `}</style>
         </div>
     );

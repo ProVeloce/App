@@ -1471,19 +1471,78 @@ export default {
                     console.error("Error fetching expert application:", e);
                 }
 
-                // Get activity logs for this user
+                // Get activity logs for this user (comprehensive history - 50 records)
                 let activityLogs: any[] = [];
                 try {
                     const logsResult = await env.proveloce_db.prepare(`
-                        SELECT * FROM activity_logs 
+                        SELECT id, user_id, action, entity_type, entity_id, metadata, details, created_at
+                        FROM activity_logs 
                         WHERE user_id = ? OR entity_id = ?
                         ORDER BY created_at DESC
-                        LIMIT 20
+                        LIMIT 50
                     `).bind(id, id).all();
                     activityLogs = logsResult.results || [];
                 } catch (e) {
                     console.error("Error fetching activity logs:", e);
                 }
+
+                // Get login history (filtered from activity logs)
+                let loginHistory: any[] = [];
+                try {
+                    const loginResult = await env.proveloce_db.prepare(`
+                        SELECT id, action, metadata, details, created_at
+                        FROM activity_logs 
+                        WHERE user_id = ? AND (action LIKE '%login%' OR action LIKE '%LOGIN%' OR action LIKE '%auth%' OR action LIKE '%AUTH%')
+                        ORDER BY created_at DESC
+                        LIMIT 20
+                    `).bind(id).all();
+                    loginHistory = loginResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching login history:", e);
+                }
+
+                // Get tickets history
+                let tickets: any[] = [];
+                try {
+                    const ticketsResult = await env.proveloce_db.prepare(`
+                        SELECT t.*, 
+                               a.name as assigned_to_name
+                        FROM tickets t
+                        LEFT JOIN users a ON a.id = t.assigned_to
+                        WHERE t.user_id = ? OR t.created_by = ?
+                        ORDER BY t.created_at DESC
+                        LIMIT 30
+                    `).bind(id, id).all();
+                    tickets = ticketsResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching tickets:", e);
+                }
+
+                // Get notifications history
+                let notifications: any[] = [];
+                try {
+                    const notifResult = await env.proveloce_db.prepare(`
+                        SELECT id, type, title, message, is_read, created_at
+                        FROM notifications
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 20
+                    `).bind(id).all();
+                    notifications = notifResult.results || [];
+                } catch (e) {
+                    console.error("Error fetching notifications:", e);
+                }
+
+                // Calculate account statistics
+                const accountStats = {
+                    totalBookings: bookings.length,
+                    totalSessions: sessions.length,
+                    totalTickets: tickets.length,
+                    totalActivityLogs: activityLogs.length,
+                    acceptedBookings: bookings.filter((b: any) => b.status === 'accepted').length,
+                    completedSessions: sessions.filter((s: any) => s.status === 'completed').length,
+                    openTickets: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length,
+                };
 
                 return jsonResponse({ 
                     success: true, 
@@ -1493,7 +1552,12 @@ export default {
                         bookings,
                         sessions,
                         expertApplication,
-                        activityLogs
+                        activityLogs,
+                        loginHistory,
+                        tickets,
+                        notifications,
+                        accountStats,
+                        fetchedAt: new Date().toISOString()
                     } 
                 });
             }
