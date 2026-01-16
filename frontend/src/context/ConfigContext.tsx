@@ -347,26 +347,38 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
             });
             
-            if (response.data && response.data.success !== false) {
+            // Handle both success: true and success: false cases
+            // Backend should always return liveConfig even on errors (with hardcoded defaults)
+            if (response.data) {
                 const configs = response.data.data || [];
                 const newLiveConfig = response.data.liveConfig || {};
 
-                // Validate that we received actual config data
-                // Backend should auto-seed, so empty config indicates critical backend failure
-                if (configs.length === 0 && Object.keys(newLiveConfig).length === 0) {
-                    // Check if backend returned an error
-                    if (response.data.error) {
+                // Check if backend returned an error
+                if (response.data.success === false && response.data.error) {
+                    // Backend error, but check if liveConfig was still provided
+                    if (Object.keys(newLiveConfig).length === 0) {
                         throw new Error(`Configuration API error: ${response.data.error}`);
                     }
+                    // If liveConfig exists, use it even if success is false
+                    console.warn('[ConfigContext] Backend returned error but provided liveConfig:', response.data.error);
+                }
+
+                // Validate that we received actual config data
+                // Backend should auto-seed, so empty config indicates critical backend failure
+                // However, backend now returns hardcoded defaults as last resort, so this should rarely happen
+                if (configs.length === 0 && Object.keys(newLiveConfig).length === 0) {
                     throw new Error('Configuration API returned empty data - backend may not be seeding defaults');
                 }
                 
                 // Even if system_config is empty, liveConfig from configuration table should have data
-                // If liveConfig is empty, backend seeding failed
+                // If liveConfig is empty, backend seeding failed (but backend should return hardcoded defaults)
                 if (Object.keys(newLiveConfig).length === 0) {
                     console.error('[ConfigContext] CRITICAL: liveConfig is empty - backend seeding may have failed');
                     throw new Error('Configuration table is empty - backend auto-seeding may have failed');
                 }
+                
+                // If we have liveConfig, proceed (even if system_config is empty)
+                // liveConfig is the primary source of truth
 
                 // Create a hash of the config to detect changes
                 const newHash = JSON.stringify({ configs, liveConfig: newLiveConfig });

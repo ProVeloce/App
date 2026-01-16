@@ -2743,31 +2743,80 @@ export default {
 
                     // Validate that we have config data (should always be true after auto-seeding)
                     if (Object.keys(configMap).length === 0) {
-                        console.error('[Config Public] CRITICAL: Configuration still empty after seeding');
-                        // Emergency seed attempt
-                        await seedConfigurationDefaults(env);
-                        const emergencyConfigs = await env.proveloce_db.prepare(`
-                            SELECT config_key, config_value FROM configuration ORDER BY config_key
-                        `).all();
-                        for (const cfg of (emergencyConfigs.results || []) as any[]) {
-                            configMap[cfg.config_key] = cfg.config_value;
+                        console.error('[Config Public] CRITICAL: Configuration still empty after seeding - attempting emergency seed');
+                        // Emergency seed attempt with retry
+                        try {
+                            await seedConfigurationDefaults(env);
+                            const emergencyConfigs = await env.proveloce_db.prepare(`
+                                SELECT config_key, config_value FROM configuration ORDER BY config_key
+                            `).all();
+                            for (const cfg of (emergencyConfigs.results || []) as any[]) {
+                                configMap[cfg.config_key] = cfg.config_value;
+                            }
+                            
+                            // If still empty after emergency seed, return hardcoded defaults as last resort
+                            if (Object.keys(configMap).length === 0) {
+                                console.error('[Config Public] CRITICAL: Emergency seed failed - returning hardcoded defaults');
+                                // Last resort: return hardcoded defaults to prevent frontend crash
+                                configMap['maintenance_mode'] = 'DISABLED';
+                                configMap['maintenance_message'] = 'System is currently under maintenance. Please check back later.';
+                                configMap['maintenance_end_time'] = '';
+                                configMap['allow_social_login'] = 'ENABLED';
+                                configMap['max_login_attempts'] = '5';
+                                configMap['min_password_length'] = '8';
+                                configMap['require_2FA'] = 'ENABLED';
+                                configMap['session_timeout'] = '30';
+                                configMap['certifications'] = 'ENABLED';
+                                configMap['messaging_system'] = 'ENABLED';
+                                configMap['portfolio_feature'] = 'ENABLED';
+                                configMap['notifications.sms'] = 'ENABLED';
+                                configMap['notifications.email'] = 'ENABLED';
+                                configMap['ui.time_format'] = '24-hour';
+                                configMap['ui.theme'] = 'light';
+                                configMap['ui.animations'] = 'ENABLED';
+                            }
+                        } catch (emergencyErr: any) {
+                            console.error('[Config Public] CRITICAL: Emergency seed also failed:', emergencyErr);
+                            // Return hardcoded defaults as absolute last resort
+                            configMap['maintenance_mode'] = 'DISABLED';
+                            configMap['certifications'] = 'ENABLED';
+                            configMap['require_2FA'] = 'ENABLED';
+                            configMap['notifications.sms'] = 'ENABLED';
+                            configMap['notifications.email'] = 'ENABLED';
+                            configMap['ui.time_format'] = '24-hour';
+                            configMap['ui.theme'] = 'light';
                         }
                     }
 
                     // Also fetch from system_config table (for detailed UI metadata)
                     // This is optional - if empty, we still return configMap from configuration table
-                    const configs = await env.proveloce_db.prepare(`
-                        SELECT id, category, key, value, type, label, description, updated_at
-                        FROM system_config 
-                        WHERE category IN ('system', 'ui', 'features', 'notifications', 'ticketing', 'users')
-                        ORDER BY category, key
-                    `).all();
+                    let configs: any = { results: [] };
+                    try {
+                        configs = await env.proveloce_db.prepare(`
+                            SELECT id, category, key, value, type, label, description, updated_at
+                            FROM system_config 
+                            WHERE category IN ('system', 'ui', 'features', 'notifications', 'ticketing', 'users')
+                            ORDER BY category, key
+                        `).all();
+                    } catch (systemConfigErr: any) {
+                        // system_config table might not exist or might fail - that's OK, we have configMap
+                        console.warn('[Config Public] system_config query failed (non-critical):', systemConfigErr.message);
+                    }
+
+                    // FINAL VALIDATION: NEVER return empty liveConfig
+                    // This should NEVER happen, but if it does, return hardcoded defaults
+                    if (Object.keys(configMap).length === 0) {
+                        console.error('[Config Public] ABSOLUTE CRITICAL: ConfigMap is still empty - returning hardcoded defaults');
+                        configMap['maintenance_mode'] = 'DISABLED';
+                        configMap['certifications'] = 'ENABLED';
+                        configMap['require_2FA'] = 'ENABLED';
+                    }
 
                     // NEVER return empty liveConfig - always return at least seeded defaults
                     return jsonResponse({ 
                         success: true, 
                         data: configs.results || [],
-                        liveConfig: configMap, // This should NEVER be empty after auto-seeding
+                        liveConfig: configMap, // This should NEVER be empty (guaranteed by above logic)
                         timestamp: new Date().toISOString()
                     });
                 } catch (err: any) {
@@ -2782,21 +2831,62 @@ export default {
                         for (const cfg of (emergencyConfigs.results || []) as any[]) {
                             configMap[cfg.config_key] = cfg.config_value;
                         }
+                        
+                        // If still empty after emergency seed, return hardcoded defaults
+                        if (Object.keys(configMap).length === 0) {
+                            console.error('[Config Public] Emergency seed returned empty - using hardcoded defaults');
+                            configMap['maintenance_mode'] = 'DISABLED';
+                            configMap['maintenance_message'] = 'System is currently under maintenance. Please check back later.';
+                            configMap['maintenance_end_time'] = '';
+                            configMap['allow_social_login'] = 'ENABLED';
+                            configMap['max_login_attempts'] = '5';
+                            configMap['min_password_length'] = '8';
+                            configMap['require_2FA'] = 'ENABLED';
+                            configMap['session_timeout'] = '30';
+                            configMap['certifications'] = 'ENABLED';
+                            configMap['messaging_system'] = 'ENABLED';
+                            configMap['portfolio_feature'] = 'ENABLED';
+                            configMap['notifications.sms'] = 'ENABLED';
+                            configMap['notifications.email'] = 'ENABLED';
+                            configMap['ui.time_format'] = '24-hour';
+                            configMap['ui.theme'] = 'light';
+                            configMap['ui.animations'] = 'ENABLED';
+                        }
+                        
                         return jsonResponse({ 
                             success: true, 
                             data: [],
-                            liveConfig: configMap, // Return seeded config even on error
+                            liveConfig: configMap, // Return seeded or hardcoded config even on error
                             timestamp: new Date().toISOString()
                         });
                     } catch (seedErr: any) {
-                        console.error('[Config Public] CRITICAL: Emergency seed also failed:', seedErr);
+                        console.error('[Config Public] CRITICAL: Emergency seed also failed - returning hardcoded defaults:', seedErr);
+                        // Absolute last resort: return hardcoded defaults to prevent frontend crash
+                        const hardcodedDefaults: Record<string, string> = {
+                            'maintenance_mode': 'DISABLED',
+                            'maintenance_message': 'System is currently under maintenance. Please check back later.',
+                            'maintenance_end_time': '',
+                            'allow_social_login': 'ENABLED',
+                            'max_login_attempts': '5',
+                            'min_password_length': '8',
+                            'require_2FA': 'ENABLED',
+                            'session_timeout': '30',
+                            'certifications': 'ENABLED',
+                            'messaging_system': 'ENABLED',
+                            'portfolio_feature': 'ENABLED',
+                            'notifications.sms': 'ENABLED',
+                            'notifications.email': 'ENABLED',
+                            'ui.time_format': '24-hour',
+                            'ui.theme': 'light',
+                            'ui.animations': 'ENABLED'
+                        };
                         return jsonResponse({ 
-                            success: false, 
-                            error: 'Configuration system failure - unable to seed defaults',
+                            success: true, // Return success with hardcoded defaults to prevent frontend error
                             data: [],
-                            liveConfig: {},
-                            timestamp: new Date().toISOString()
-                        }, 500);
+                            liveConfig: hardcodedDefaults, // NEVER return empty
+                            timestamp: new Date().toISOString(),
+                            warning: 'Using hardcoded defaults - database seeding failed'
+                        });
                     }
                 }
             }
