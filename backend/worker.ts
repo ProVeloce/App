@@ -2113,8 +2113,8 @@ export default {
             // =====================================================
 
             // GET /api/configuration - Get all configuration values (public, for live polling)
-            // GET /api/config - Alias for /api/configuration (public, for live polling)
-            if ((url.pathname === "/api/configuration" || url.pathname === "/api/config") && request.method === "GET") {
+            // Note: /api/config is reserved for Superadmin to get system_config details
+            if (url.pathname === "/api/configuration" && request.method === "GET") {
                 if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }

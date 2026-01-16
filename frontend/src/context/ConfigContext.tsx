@@ -366,7 +366,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Lightweight polling function for live config updates
     const pollLiveConfig = useCallback(async () => {
         try {
-            const response = await axios.get('/api/config', {
+            const response = await axios.get('/api/configuration', {
                 timeout: 5000 // 5 second timeout for polling requests
             });
             
