@@ -1,7 +1,7 @@
 /**
  * Date/Time Utility Functions
  * All times are stored and displayed in IST (India Standard Time, GMT+05:30)
- * All times use 24-hour format (HH:mm)
+ * Time format (12h/24h) is controlled by global configuration
  */
 
 // IST timezone identifier
@@ -9,6 +9,23 @@ export const IST_TIMEZONE = 'Asia/Kolkata';
 
 // Locale for formatting
 export const IST_LOCALE = 'en-IN';
+
+// Global time format - can be overridden by config
+let globalTimeFormat: '12h' | '24h' = '24h';
+
+/**
+ * Set global time format from configuration
+ */
+export function setTimeFormat(format: '12h' | '24h'): void {
+    globalTimeFormat = format;
+}
+
+/**
+ * Get current time format
+ */
+export function getTimeFormat(): '12h' | '24h' {
+    return globalTimeFormat;
+}
 
 /**
  * Convert a date to IST and return as ISO string
@@ -37,8 +54,8 @@ export function nowIST(): string {
 }
 
 /**
- * Format date for display in 24-hour format
- * Returns: "15 Jan 2026, 14:30"
+ * Format date for display (respects global time format)
+ * Returns: "15 Jan 2026, 14:30" (24h) or "15 Jan 2026, 2:30 PM" (12h)
  */
 export function formatDateTime(date: Date | string | null | undefined): string {
     if (!date) return '-';
@@ -55,7 +72,7 @@ export function formatDateTime(date: Date | string | null | undefined): string {
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false
+            hour12: globalTimeFormat === '12h'
         });
     } catch {
         return '-';
@@ -86,8 +103,8 @@ export function formatDate(date: Date | string | null | undefined): string {
 }
 
 /**
- * Format time only in 24-hour format
- * Returns: "14:30"
+ * Format time only (respects global time format)
+ * Returns: "14:30" (24h) or "2:30 PM" (12h)
  */
 export function formatTime(date: Date | string | null | undefined): string {
     if (!date) return '-';
@@ -101,7 +118,7 @@ export function formatTime(date: Date | string | null | undefined): string {
             timeZone: IST_TIMEZONE,
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false
+            hour12: globalTimeFormat === '12h'
         });
     } catch {
         return '-';
@@ -214,8 +231,8 @@ export function parseInputToIST(inputValue: string): Date | null {
 }
 
 /**
- * Format full datetime with weekday
- * Returns: "Wednesday, 15 Jan 2026, 14:30"
+ * Format full datetime with weekday (respects global time format)
+ * Returns: "Wednesday, 15 Jan 2026, 14:30" (24h) or "Wednesday, 15 Jan 2026, 2:30 PM" (12h)
  */
 export function formatFullDateTime(date: Date | string | null | undefined): string {
     if (!date) return '-';
@@ -233,7 +250,7 @@ export function formatFullDateTime(date: Date | string | null | undefined): stri
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false
+            hour12: globalTimeFormat === '12h'
         });
     } catch {
         return '-';

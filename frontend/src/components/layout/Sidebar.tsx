@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import Avatar from '../common/Avatar';
 import AppLogo from '../common/AppLogo';
+import { useCertificationsEnabled, useMessagingEnabled } from '../../context/ConfigContext';
+import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -99,10 +101,36 @@ const menuItems: MenuItem[] = [
 
 const Sidebar: React.FC<SidebarProps> = ({ user, collapsed, onToggle, onLogout }) => {
     const location = useLocation();
+    const { user: authUser } = useAuth();
+    const certificationsEnabled = useCertificationsEnabled();
+    const messagingEnabled = useMessagingEnabled();
+    
+    // Check if user is admin or superadmin (they bypass feature restrictions)
+    const isAdminOrSuperadmin = authUser?.role === 'ADMIN' || authUser?.role === 'SUPERADMIN';
 
-    const filteredItems = menuItems.filter(item =>
-        user && item.roles.includes(user.role)
-    );
+    const filteredItems = menuItems.filter(item => {
+        // First check role
+        if (!user || !item.roles.includes(user.role)) {
+            return false;
+        }
+        
+        // Then check feature flags (admins/superadmins bypass)
+        if (isAdminOrSuperadmin) {
+            return true;
+        }
+        
+        // Hide Certifications if disabled
+        if (item.path === '/expert/certifications' && !certificationsEnabled) {
+            return false;
+        }
+        
+        // Hide Messages if messaging is disabled
+        if (item.path === '/messages' && !messagingEnabled) {
+            return false;
+        }
+        
+        return true;
+    });
 
     const getRoleBadgeClass = (role: string) => {
         const classes: Record<string, string> = {

@@ -10,6 +10,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 // Route Guards (keep sync)
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import RoleRoute from './components/auth/RoleRoute';
+import FeatureRoute from './components/auth/FeatureRoute';
 
 // =====================================================
 // Lazy Import with Retry - Handles cache/deployment issues
@@ -192,7 +193,11 @@ function App() {
                     <Route path="/notifications" element={<Notifications />} />
                     <Route path="/help-desk" element={<HelpDesk />} />
                     <Route path="/change-password" element={<ChangePassword />} />
-                    <Route path="/messages" element={<Messages />} />
+                    <Route path="/messages" element={
+                        <FeatureRoute feature="messaging">
+                            <Messages />
+                        </FeatureRoute>
+                    } />
                     <Route path="/session" element={<SessionRoom />} />
 
                     {/* Customer Routes */}
@@ -208,7 +213,11 @@ function App() {
                     <Route element={<RoleRoute allowedRoles={['EXPERT']} />}>
                         <Route path="/expert/dashboard" element={<ExpertDashboard />} />
                         <Route path="/expert/portfolio" element={<PortfolioManager />} />
-                        <Route path="/expert/certifications" element={<CertificationsManager />} />
+                        <Route path="/expert/certifications" element={
+                            <FeatureRoute feature="certifications">
+                                <CertificationsManager />
+                            </FeatureRoute>
+                        } />
                         <Route path="/expert/tasks" element={<TaskManagement />} />
                         <Route path="/expert/earnings" element={<Earnings />} />
                         <Route path="/expert/connect-requests" element={<ConnectRequestsInbox />} />

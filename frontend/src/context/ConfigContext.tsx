@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo, useRef } from 'react';
 import axios from 'axios';
+import { setTimeFormat } from '../utils/dateUtils';
 
 // System configuration interface (from system_config table)
 export interface SystemConfig {
@@ -365,7 +366,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Lightweight polling function for live config updates
     const pollLiveConfig = useCallback(async () => {
         try {
-            const response = await axios.get('/api/configuration', {
+            const response = await axios.get('/api/config', {
                 timeout: 5000 // 5 second timeout for polling requests
             });
             
@@ -481,6 +482,14 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         return () => clearInterval(interval);
     }, [fetchConfigs]);
 
+    // Sync time format to dateUtils when config changes
+    useEffect(() => {
+        const timeFormat = config.ui.timeFormat;
+        if (timeFormat === '12h' || timeFormat === '24h') {
+            setTimeFormat(timeFormat);
+        }
+    }, [config.ui.timeFormat]);
+
     const value: ConfigContextType = {
         rawConfigs,
         liveConfig,
@@ -537,4 +546,81 @@ export const useMaintenanceMode = (): { isMaintenanceMode: boolean; message: str
 // Utility to broadcast config update across tabs
 export const broadcastConfigUpdate = (): void => {
     localStorage.setItem(CONFIG_VERSION_KEY, String(Date.now()));
+};
+
+// =====================================================
+// Feature Enforcement Hooks
+// =====================================================
+
+// Hook to check if certifications are enabled
+export const useCertificationsEnabled = (): boolean => {
+    const { getLiveConfigValue, getConfigValue } = useConfig();
+    const value = getLiveConfigValue('certifications_enabled') || 
+                 getLiveConfigValue('features.certifications_enabled') ||
+                 getConfigValue('features', 'certifications_enabled') ||
+                 'true';
+    return value === 'true' || value === 'ENABLED';
+};
+
+// Hook to check if social login is enabled
+export const useSocialLoginEnabled = (): boolean => {
+    const { getLiveConfigValue, getConfigValue } = useConfig();
+    const value = getLiveConfigValue('allow_social_login') || 
+                 getLiveConfigValue('auth.allow_social_login') ||
+                 getConfigValue('auth', 'allow_social_login') ||
+                 'true';
+    return value === 'true' || value === 'ENABLED';
+};
+
+// Hook to check if 2FA is required
+export const use2FARequired = (): boolean => {
+    const { getLiveConfigValue, getConfigValue, config } = useConfig();
+    const value = getLiveConfigValue('require_2FA') || 
+                 getLiveConfigValue('require_mfa') ||
+                 getLiveConfigValue('auth.require_2FA') ||
+                 getConfigValue('auth', 'require_mfa') ||
+                 String(config.auth.requireMfa);
+    return value === 'true' || value === 'ENABLED';
+};
+
+// Hook to check if SMS notifications are enabled
+export const useSMSEnabled = (): boolean => {
+    const { getLiveConfigValue, getConfigValue, config } = useConfig();
+    const value = getLiveConfigValue('sms_enabled') || 
+                 getLiveConfigValue('notifications.sms_enabled') ||
+                 getConfigValue('notifications', 'sms_enabled') ||
+                 String(config.notifications.smsEnabled);
+    return value === 'true' || value === 'ENABLED';
+};
+
+// Hook to check if messaging is enabled
+export const useMessagingEnabled = (): boolean => {
+    const { getLiveConfigValue, getConfigValue, config } = useConfig();
+    const value = getLiveConfigValue('messaging_enabled') || 
+                 getLiveConfigValue('feature.messaging') ||
+                 getLiveConfigValue('features.messaging_enabled') ||
+                 getConfigValue('features', 'messaging_enabled') ||
+                 'true';
+    return value === 'true' || value === 'ENABLED';
+};
+
+// Hook to get time format (12h or 24h)
+export const useTimeFormat = (): '12h' | '24h' => {
+    const { getLiveConfigValue, getConfigValue, config } = useConfig();
+    const value = getLiveConfigValue('time_format') || 
+                 getLiveConfigValue('ui.time_format') ||
+                 getConfigValue('ui', 'time_format') ||
+                 config.ui.timeFormat ||
+                 '24h';
+    return (value === '12h' || value === '12-hour') ? '12h' : '24h';
+};
+
+// Hook to check if analytics real-time is enabled
+export const useAnalyticsRealTime = (): boolean => {
+    const { getLiveConfigValue, getConfigValue } = useConfig();
+    const value = getLiveConfigValue('analytics.real_time') || 
+                 getLiveConfigValue('analytics_real_time') ||
+                 getConfigValue('analytics', 'real_time') ||
+                 'false';
+    return value === 'true' || value === 'ENABLED';
 };
