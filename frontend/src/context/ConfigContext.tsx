@@ -81,11 +81,13 @@ export interface AppConfig {
     };
 }
 
-// Default configuration values (ONLY used as fallback when database is truly empty)
-// All configuration values are stored in and fetched from the database tables:
+// Default configuration values (ONLY for app crash prevention - NOT for production use)
+// PRODUCTION RULE: Backend MUST auto-seed configuration table, so DEFAULT_CONFIG should NEVER be used
+// All configuration values MUST be stored in and fetched from the database tables:
 // - system_config table: Full config details (labels, descriptions, types)
-// - configuration table: Simple key-value pairs for live polling
+// - configuration table: Simple key-value pairs for live polling (SINGLE SOURCE OF TRUTH)
 // localStorage is ONLY used for caching to improve performance, never as primary source
+// If DEFAULT_CONFIG is used, it indicates a critical backend failure
 const DEFAULT_CONFIG: AppConfig = {
     system: {
         maintenanceMode: false,
@@ -186,13 +188,15 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // DEFAULT_CONFIG is ONLY used as a last resort when API completely fails - NOT for empty DB
     // Empty DB should trigger auto-seeding on backend, so empty config indicates API failure
     const config = useMemo((): AppConfig => {
-        // If both sources are empty, this indicates an API failure, not an empty DB
-        // Backend should auto-seed, so empty config means the API call failed
-        // We still use DEFAULT_CONFIG to prevent app crash, but this is an error state
+        // PRODUCTION RULE: If both sources are empty, this is a CRITICAL ERROR
+        // Backend MUST auto-seed configuration table, so empty config = backend failure
+        // DEFAULT_CONFIG is ONLY used to prevent app crash - this should NEVER happen in production
         if (rawConfigs.length === 0 && Object.keys(liveConfig).length === 0) {
-            // Log as error, not warning - this should not happen in production
-            console.error('[ConfigContext] ERROR: Both config sources are empty - API may have failed or backend not seeding');
-            // Still return DEFAULT_CONFIG to prevent app crash, but this is an error condition
+            // Log as CRITICAL ERROR - backend is not seeding or API is completely down
+            console.error('[ConfigContext] CRITICAL ERROR: Both config sources are empty - backend may have failed to seed or API is down');
+            console.error('[ConfigContext] This should NEVER happen in production - backend MUST auto-seed configuration table');
+            // Return DEFAULT_CONFIG ONLY to prevent app crash - this is a critical error state
+            // Frontend error state is already set by fetchConfigs, so user will see error message
             return DEFAULT_CONFIG;
         }
 

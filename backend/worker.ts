@@ -2208,9 +2208,11 @@ export default {
                     if (!configs.results || configs.results.length === 0) {
                         console.log('[Config] Configuration table is empty - auto-seeding default values');
                         
-                        // Default configuration rows that MUST exist
+                        // Default configuration rows that MUST exist (as per requirements)
                         const defaultConfigs = [
                             { config_key: 'maintenance_mode', config_value: 'DISABLED' },
+                            { config_key: 'maintenance_message', config_value: '' },
+                            { config_key: 'maintenance_end_time', config_value: '' },
                             { config_key: 'certifications', config_value: 'ENABLED' },
                             { config_key: 'require_2FA', config_value: 'DISABLED' },
                             { config_key: 'notifications.sms', config_value: 'ENABLED' },
@@ -2265,12 +2267,25 @@ export default {
                     }
 
                     // NEVER return empty config - always return at least seeded defaults
+                    // Validate that we have config data (should always be true after auto-seeding)
+                    if (Object.keys(structuredConfig).length === 0) {
+                        console.error('[Config] CRITICAL: Configuration table is empty even after seeding attempt');
+                        // Return error instead of empty config
+                        return jsonResponse({ 
+                            success: false, 
+                            error: 'Configuration table is empty - seeding may have failed' 
+                        }, 500);
+                    }
+                    
                     // Return structured config matching requirements
                     return jsonResponse(structuredConfig, 200, {
                         'Content-Type': 'application/json',
                         'Cache-Control': 'no-cache, no-store, must-revalidate',
                         'Pragma': 'no-cache',
-                        'Expires': '0'
+                        'Expires': '0',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                     });
                 } catch (err) {
                     console.error("Configuration fetch error:", err);
@@ -2295,11 +2310,14 @@ export default {
                 }
 
                 try {
-                    const body = await request.json() as { config_key: string; config_value: string };
+                    const body = await request.json() as { config_key: string; config_value: string | null; updated_by?: string };
                     
                     if (!body.config_key || body.config_value === undefined) {
                         return jsonResponse({ success: false, error: "config_key and config_value are required" }, 400);
                     }
+
+                    // Use provided updated_by or fall back to authenticated user ID
+                    const updatedBy = body.updated_by || String(auth.payload.userId);
 
                     // Validate config_value matches allowed values for specific keys
                     const allowedValues: Record<string, string[]> = {
@@ -2332,6 +2350,9 @@ export default {
                     `).run();
 
                     // Update immediately - NO delayed writes
+                    // Handle null/empty values properly
+                    const configValue = body.config_value === null || body.config_value === undefined ? '' : String(body.config_value);
+                    
                     await env.proveloce_db.prepare(`
                         INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
                         VALUES (?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
@@ -2339,7 +2360,7 @@ export default {
                             config_value = excluded.config_value,
                             updated_by = excluded.updated_by,
                             updated_at = datetime('now', '+5 hours', '+30 minutes')
-                    `).bind(body.config_key, body.config_value, auth.payload.userId).run();
+                    `).bind(body.config_key, configValue, updatedBy).run();
 
                     // Log the change
                     await env.proveloce_db.prepare(`
@@ -2369,9 +2390,21 @@ export default {
                         }
                     }
 
+                    // Validate that we have config data after update
+                    if (Object.keys(fullConfig).length === 0) {
+                        console.error('[Config] CRITICAL: Configuration table is empty after update');
+                        return jsonResponse({ 
+                            success: false, 
+                            error: 'Configuration table is empty after update' 
+                        }, 500);
+                    }
+                    
                     return jsonResponse(fullConfig, 200, {
                         'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate'
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
                     });
                 } catch (err) {
                     console.error("Configuration update error:", err);

@@ -172,34 +172,47 @@ const GlobalConfig: React.FC = () => {
             }
 
             // Update configuration table using POST /api/config (one by one for immediate updates)
-            // This ensures real-time propagation across all portals
+            // POST /api/config returns FULL updated config JSON - use it to update state instantly
             if (liveConfigUpdates.length > 0) {
                 try {
+                    let latestConfig: any = null;
+                    
                     // Update each config individually via POST /api/config for immediate effect
+                    // Each POST returns the full updated config - use the last one
                     for (const cfg of liveConfigUpdates) {
                         try {
-                            await axios.post('/api/config', {
+                            const response = await axios.post('/api/config', {
                                 config_key: cfg.config_key,
                                 config_value: cfg.config_value
                             });
+                            // POST /api/config returns the full updated config object
+                            if (response.data && typeof response.data === 'object') {
+                                latestConfig = response.data;
+                            }
                         } catch (err) {
                             console.warn(`Failed to update ${cfg.config_key}:`, err);
                         }
                     }
+                    
+                    // If we got the latest config from POST response, update global context immediately
+                    if (latestConfig) {
+                        // Broadcast config update to all tabs
+                        broadcastConfigUpdate();
+                        // Refresh global context with the latest config
+                        await refreshConfig();
+                    }
                 } catch (liveErr) {
                     console.warn('Failed to sync live config, polling will catch up:', liveErr);
+                    // Still refresh even if sync fails - polling will catch up
+                    await refreshConfig();
                 }
             }
 
             success(`${updates.length} configuration(s) saved successfully. Changes applied globally in real-time.`);
             setPendingChanges(new Map());
             
-            // Refresh local configs
+            // Refresh local configs from system_config table
             fetchConfigs();
-            
-            // Broadcast config update to all tabs and refresh global context
-            broadcastConfigUpdate();
-            await refreshConfig();
         } catch (err) {
             console.error('Failed to save configs:', err);
             error('Failed to save configurations');
