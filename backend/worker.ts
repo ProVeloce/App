@@ -2508,21 +2508,65 @@ export default {
                 const body = await request.json() as { configs: { id: string; value: string }[] };
 
                 try {
+                    // First, get the current config details to know the keys
+                    const configsToSync: Array<{ key: string; value: string; category: string }> = [];
+
                     for (const cfg of body.configs) {
+                        // Update system_config table
                         await env.proveloce_db.prepare(`
                             UPDATE system_config 
                             SET value = ?, updated_at = datetime('now', '+5 hours', '+30 minutes'), updated_by = ?
                             WHERE id = ?
                         `).bind(cfg.value, auth.payload.userId, cfg.id).run();
+
+                        // Get the config details for syncing
+                        const configDetail = await env.proveloce_db.prepare(`
+                            SELECT key, category FROM system_config WHERE id = ?
+                        `).bind(cfg.id).first() as { key: string; category: string } | null;
+
+                        if (configDetail) {
+                            configsToSync.push({
+                                key: configDetail.key,
+                                category: configDetail.category,
+                                value: cfg.value
+                            });
+                        }
+                    }
+
+                    // Auto-sync to configuration table for live polling
+                    // This ensures real-time updates across all portals
+                    if (configsToSync.length > 0) {
+                        // Ensure configuration table exists
+                        await env.proveloce_db.prepare(`
+                            CREATE TABLE IF NOT EXISTS configuration (
+                                config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                config_key TEXT NOT NULL UNIQUE,
+                                config_value TEXT NOT NULL,
+                                updated_by INTEGER NOT NULL,
+                                updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                            )
+                        `).run();
+
+                        for (const cfg of configsToSync) {
+                            // Sync using just the key (e.g., maintenance_mode)
+                            await env.proveloce_db.prepare(`
+                                INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                                VALUES (?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                                ON CONFLICT(config_key) DO UPDATE SET
+                                    config_value = excluded.config_value,
+                                    updated_by = excluded.updated_by,
+                                    updated_at = datetime('now', '+5 hours', '+30 minutes')
+                            `).bind(cfg.key, cfg.value, auth.payload.userId).run();
+                        }
                     }
 
                     // Log bulk update
                     await env.proveloce_db.prepare(`
                         INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, metadata)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    `).bind(crypto.randomUUID(), auth.payload.userId, 'BULK_UPDATE_CONFIG', 'CONFIG', 'bulk', JSON.stringify({ count: body.configs.length })).run();
+                    `).bind(crypto.randomUUID(), auth.payload.userId, 'BULK_UPDATE_CONFIG', 'CONFIG', 'bulk', JSON.stringify({ count: body.configs.length, synced: configsToSync.length })).run();
 
-                    return jsonResponse({ success: true, message: `${body.configs.length} configurations updated` });
+                    return jsonResponse({ success: true, message: `${body.configs.length} configurations updated and synced for live polling` });
                 } catch (err) {
                     console.error("Bulk config update error:", err);
                     return jsonResponse({ success: false, error: "Failed to update configurations" }, 500);
