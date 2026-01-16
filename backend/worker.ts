@@ -321,6 +321,83 @@ async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
 }
 
 // =====================================================
+// Configuration Seeding Function (Self-Healing)
+// =====================================================
+// This function ensures the configuration table is NEVER empty
+// Called automatically when table is detected as empty
+// Idempotent: safe to call multiple times (ON CONFLICT DO NOTHING)
+
+async function seedConfigurationDefaults(env: any): Promise<number> {
+    if (!env.proveloce_db) {
+        console.error('[Config Seed] Database not configured');
+        return 0;
+    }
+
+    try {
+        // Ensure table exists
+        await env.proveloce_db.prepare(`
+            CREATE TABLE IF NOT EXISTS configuration (
+                config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_key TEXT NOT NULL UNIQUE,
+                config_value TEXT NOT NULL,
+                updated_by INTEGER NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+            )
+        `).run();
+
+        // Required default configuration rows (as per requirements)
+        // These MUST exist for the system to function properly
+        const defaultConfigs = [
+            { config_key: 'maintenance_mode', config_value: 'DISABLED' },
+            { config_key: 'maintenance_message', config_value: 'System is currently under maintenance. Please check back later.' },
+            { config_key: 'maintenance_end_time', config_value: '' },
+            { config_key: 'allow_social_login', config_value: 'ENABLED' },
+            { config_key: 'max_login_attempts', config_value: '5' },
+            { config_key: 'min_password_length', config_value: '8' },
+            { config_key: 'require_2FA', config_value: 'ENABLED' },
+            { config_key: 'session_timeout', config_value: '30' },
+            { config_key: 'certifications', config_value: 'ENABLED' },
+            { config_key: 'messaging_system', config_value: 'ENABLED' },
+            { config_key: 'portfolio_feature', config_value: 'ENABLED' },
+            // Additional defaults for complete coverage
+            { config_key: 'notifications.sms', config_value: 'ENABLED' },
+            { config_key: 'notifications.email', config_value: 'ENABLED' },
+            { config_key: 'ui.time_format', config_value: '24-hour' },
+            { config_key: 'ui.theme', config_value: 'light' },
+            { config_key: 'ui.animations', config_value: 'ENABLED' },
+        ];
+
+        let seededCount = 0;
+        
+        // Seed all default configs (idempotent - ON CONFLICT DO NOTHING)
+        // Use system user ID 1 for auto-seeded configs (0 might cause issues)
+        for (const defaultCfg of defaultConfigs) {
+            try {
+                const result = await env.proveloce_db.prepare(`
+                    INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                    VALUES (?, ?, 1, datetime('now', '+5 hours', '+30 minutes'))
+                    ON CONFLICT(config_key) DO NOTHING
+                `).bind(defaultCfg.config_key, defaultCfg.config_value).run();
+                
+                // Check if row was actually inserted (not conflicted)
+                if (result.meta.changes > 0) {
+                    seededCount++;
+                }
+            } catch (seedErr: any) {
+                // Log but continue - individual failures shouldn't stop the process
+                console.warn(`[Config Seed] Failed to seed ${defaultCfg.config_key}:`, seedErr.message);
+            }
+        }
+
+        console.log(`[Config Seed] Seeded ${seededCount} new configuration rows (${defaultConfigs.length} total defaults)`);
+        return seededCount;
+    } catch (err: any) {
+        console.error('[Config Seed] CRITICAL: Failed to seed configuration defaults:', err);
+        throw err; // Re-throw to allow caller to handle
+    }
+}
+
+// =====================================================
 // Main Worker Export
 // =====================================================
 
@@ -2204,43 +2281,38 @@ export default {
                     `).all();
 
                     // MANDATORY: If table is empty, AUTO-SEED default configuration rows
-                    // This ensures the system is never in an empty state
+                    // This ensures the system is NEVER in an empty state (self-healing)
                     if (!configs.results || configs.results.length === 0) {
-                        console.log('[Config] Configuration table is empty - auto-seeding default values');
+                        console.log('[Config] Configuration table is empty - auto-seeding default values (self-healing)');
                         
-                        // Default configuration rows that MUST exist (as per requirements)
-                        const defaultConfigs = [
-                            { config_key: 'maintenance_mode', config_value: 'DISABLED' },
-                            { config_key: 'maintenance_message', config_value: '' },
-                            { config_key: 'maintenance_end_time', config_value: '' },
-                            { config_key: 'certifications', config_value: 'ENABLED' },
-                            { config_key: 'require_2FA', config_value: 'DISABLED' },
-                            { config_key: 'notifications.sms', config_value: 'ENABLED' },
-                            { config_key: 'notifications.email', config_value: 'ENABLED' },
-                            { config_key: 'ui.time_format', config_value: '24-hour' },
-                            { config_key: 'ui.theme', config_value: 'light' },
-                            { config_key: 'ui.animations', config_value: 'ENABLED' },
-                            { config_key: 'allow_social_login', config_value: 'ENABLED' },
-                            { config_key: 'messaging_enabled', config_value: 'ENABLED' },
-                        ];
+                        try {
+                            // Use reusable seeding function
+                            await seedConfigurationDefaults(env);
+                            
+                            // Re-query after seeding to return the seeded config
+                            configs = await env.proveloce_db.prepare(`
+                                SELECT config_key, config_value, updated_at
+                                FROM configuration
+                                ORDER BY config_key
+                            `).all();
 
-                        // Seed all default configs (use system user ID 0 for auto-seeded configs)
-                        for (const defaultCfg of defaultConfigs) {
-                            await env.proveloce_db.prepare(`
-                                INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
-                                VALUES (?, ?, 0, datetime('now', '+5 hours', '+30 minutes'))
-                                ON CONFLICT(config_key) DO NOTHING
-                            `).bind(defaultCfg.config_key, defaultCfg.config_value).run();
+                            // Validate that seeding worked
+                            if (!configs.results || configs.results.length === 0) {
+                                console.error('[Config] CRITICAL: Configuration table still empty after seeding attempt');
+                                return jsonResponse({ 
+                                    success: false, 
+                                    error: 'Configuration seeding failed - table remains empty' 
+                                }, 500);
+                            }
+
+                            console.log(`[Config] Self-healing complete: ${configs.results.length} configuration rows now exist`);
+                        } catch (seedErr: any) {
+                            console.error('[Config] CRITICAL: Failed to seed configuration:', seedErr);
+                            return jsonResponse({ 
+                                success: false, 
+                                error: `Configuration seeding failed: ${seedErr.message}` 
+                            }, 500);
                         }
-
-                        // Re-query after seeding to return the seeded config
-                        configs = await env.proveloce_db.prepare(`
-                            SELECT config_key, config_value, updated_at
-                            FROM configuration
-                            ORDER BY config_key
-                        `).all();
-
-                        console.log(`[Config] Auto-seeded ${defaultConfigs.length} default configuration rows`);
                     }
 
                     // Build structured configuration object
@@ -2266,14 +2338,55 @@ export default {
                         }
                     }
 
-                    // NEVER return empty config - always return at least seeded defaults
-                    // Validate that we have config data (should always be true after auto-seeding)
+                    // NEVER return empty config - this should NEVER happen after auto-seeding
+                    // Final validation before returning response
                     if (Object.keys(structuredConfig).length === 0) {
-                        console.error('[Config] CRITICAL: Configuration table is empty even after seeding attempt');
-                        // Return error instead of empty config
+                        console.error('[Config] CRITICAL: Configuration object is empty - attempting emergency seed');
+                        
+                        // Emergency re-seed attempt
+                        try {
+                            await seedConfigurationDefaults(env);
+                            // Re-fetch one more time
+                            const emergencyConfigs = await env.proveloce_db.prepare(`
+                                SELECT config_key, config_value FROM configuration ORDER BY config_key
+                            `).all();
+                            
+                            // Rebuild structured config
+                            const emergencyConfig: any = {};
+                            for (const cfg of (emergencyConfigs.results || []) as any[]) {
+                                const parts = cfg.config_key.split('.');
+                                if (parts.length > 1) {
+                                    let current = emergencyConfig;
+                                    for (let i = 0; i < parts.length - 1; i++) {
+                                        if (!current[parts[i]]) current[parts[i]] = {};
+                                        current = current[parts[i]];
+                                    }
+                                    current[parts[parts.length - 1]] = cfg.config_value;
+                                } else {
+                                    emergencyConfig[cfg.config_key] = cfg.config_value;
+                                }
+                            }
+                            
+                            if (Object.keys(emergencyConfig).length > 0) {
+                                console.log('[Config] Emergency seed successful - returning config');
+                                return jsonResponse(emergencyConfig, 200, {
+                                    'Content-Type': 'application/json',
+                                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                    'Pragma': 'no-cache',
+                                    'Expires': '0',
+                                    'Access-Control-Allow-Origin': '*',
+                                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                                });
+                            }
+                        } catch (emergencyErr: any) {
+                            console.error('[Config] CRITICAL: Emergency seed also failed:', emergencyErr);
+                        }
+                        
+                        // If we reach here, seeding completely failed
                         return jsonResponse({ 
                             success: false, 
-                            error: 'Configuration table is empty - seeding may have failed' 
+                            error: 'Configuration system failure - unable to seed defaults' 
                         }, 500);
                     }
                     
@@ -2338,7 +2451,7 @@ export default {
                         }, 400);
                     }
 
-                    // Ensure table exists
+                    // Ensure table exists and is seeded (self-healing)
                     await env.proveloce_db.prepare(`
                         CREATE TABLE IF NOT EXISTS configuration (
                             config_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2348,9 +2461,19 @@ export default {
                             updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
                         )
                     `).run();
+                    
+                    // Ensure table is not empty (self-healing check before update)
+                    const countResult = await env.proveloce_db.prepare(`
+                        SELECT COUNT(*) as count FROM configuration
+                    `).first() as { count: number } | null;
+                    
+                    if (!countResult || countResult.count === 0) {
+                        console.log('[Config] POST endpoint detected empty table - auto-seeding before update');
+                        await seedConfigurationDefaults(env);
+                    }
 
                     // Update immediately - NO delayed writes
-                    // Handle null/empty values properly
+                    // Handle null/empty values properly (convert to empty string for TEXT column)
                     const configValue = body.config_value === null || body.config_value === undefined ? '' : String(body.config_value);
                     
                     await env.proveloce_db.prepare(`
@@ -2369,9 +2492,18 @@ export default {
                     `).bind(crypto.randomUUID(), auth.payload.userId, body.config_key, JSON.stringify({ key: body.config_key, value: body.config_value })).run();
 
                     // Return FULL updated configuration (fetch live from DB)
-                    const allConfigs = await env.proveloce_db.prepare(`
+                    let allConfigs = await env.proveloce_db.prepare(`
                         SELECT config_key, config_value FROM configuration ORDER BY config_key
                     `).all();
+
+                    // Self-healing: If table is empty after update, seed and re-fetch
+                    if (!allConfigs.results || allConfigs.results.length === 0) {
+                        console.error('[Config] CRITICAL: Configuration table empty after update - emergency seed');
+                        await seedConfigurationDefaults(env);
+                        allConfigs = await env.proveloce_db.prepare(`
+                            SELECT config_key, config_value FROM configuration ORDER BY config_key
+                        `).all();
+                    }
 
                     const fullConfig: any = {};
                     for (const cfg of (allConfigs.results || []) as any[]) {
@@ -2390,12 +2522,12 @@ export default {
                         }
                     }
 
-                    // Validate that we have config data after update
+                    // Final validation - should NEVER be empty after seeding
                     if (Object.keys(fullConfig).length === 0) {
-                        console.error('[Config] CRITICAL: Configuration table is empty after update');
+                        console.error('[Config] CRITICAL: Configuration still empty after emergency seed');
                         return jsonResponse({ 
                             success: false, 
-                            error: 'Configuration table is empty after update' 
+                            error: 'Configuration system failure - unable to maintain defaults' 
                         }, 500);
                     }
                     
