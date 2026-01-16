@@ -338,16 +338,34 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
             // ALWAYS fetch fresh configs from database (public endpoint for basic UI configs)
             // This ensures we always have the latest data from the database
-            const response = await axios.get('/api/config/public');
+            // Backend auto-seeds if empty, so this should NEVER return empty
+            const response = await axios.get('/api/config/public', {
+                timeout: 5000, // 5 second timeout
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
             
-            if (response.data.success) {
+            if (response.data && response.data.success !== false) {
                 const configs = response.data.data || [];
                 const newLiveConfig = response.data.liveConfig || {};
 
                 // Validate that we received actual config data
-                // Empty config indicates backend issue (should auto-seed)
+                // Backend should auto-seed, so empty config indicates critical backend failure
                 if (configs.length === 0 && Object.keys(newLiveConfig).length === 0) {
+                    // Check if backend returned an error
+                    if (response.data.error) {
+                        throw new Error(`Configuration API error: ${response.data.error}`);
+                    }
                     throw new Error('Configuration API returned empty data - backend may not be seeding defaults');
+                }
+                
+                // Even if system_config is empty, liveConfig from configuration table should have data
+                // If liveConfig is empty, backend seeding failed
+                if (Object.keys(newLiveConfig).length === 0) {
+                    console.error('[ConfigContext] CRITICAL: liveConfig is empty - backend seeding may have failed');
+                    throw new Error('Configuration table is empty - backend auto-seeding may have failed');
                 }
 
                 // Create a hash of the config to detect changes
@@ -377,13 +395,23 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             // Set error state - do NOT silently fallback
             const errorMessage = err.response?.data?.error || err.message || 'Failed to load configurations';
             
+            // Check if it's a network error (CORS, timeout, connection refused)
+            const isNetworkError = !err.response && (err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || err.message?.includes('fetch'));
+            
             if (!isPollingRequest) {
                 // Only set error on initial load, not during polling
-                setError(errorMessage);
-                console.error('[ConfigContext] Failed to fetch configurations:', errorMessage);
+                if (isNetworkError) {
+                    setError('Unable to connect to configuration service. Please check your connection and try again.');
+                } else {
+                    setError(errorMessage);
+                }
+                console.error('[ConfigContext] Failed to fetch configurations:', errorMessage, err);
             } else {
                 // During polling, log but don't set error (to avoid UI disruption)
-                console.warn('[Config Polling] Failed to fetch config:', errorMessage);
+                // Network errors during polling are expected (temporary disconnections)
+                if (!isNetworkError) {
+                    console.warn('[Config Polling] Failed to fetch config:', errorMessage);
+                }
             }
         } finally {
             if (!isPollingRequest) {
@@ -402,6 +430,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Real-time polling function - fetches /api/config every 1 second
     // NO CACHING - always fetches live from database
+    // Backend auto-seeds if empty, so this should NEVER return empty
     const pollLiveConfig = useCallback(async () => {
         try {
             const response = await axios.get('/api/config', {
@@ -417,10 +446,25 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const newLiveConfig = response.data || {};
             
             // Validate that we received actual config data
+            // If backend returns empty, it means seeding failed (critical error)
             if (Object.keys(newLiveConfig).length === 0) {
-                console.error('[Config Polling] ERROR: Received empty config - backend should auto-seed');
+                // Check if backend returned an error object
+                if (response.data && response.data.error) {
+                    console.error('[Config Polling] ERROR: Backend returned error:', response.data.error);
+                } else {
+                    console.error('[Config Polling] ERROR: Received empty config - backend should auto-seed');
+                }
                 // Don't update state with empty config - keep existing config
+                // This prevents overwriting valid config with empty data
                 return;
+            }
+            
+            // Validate that we have at least some required keys (basic sanity check)
+            const requiredKeys = ['maintenance_mode', 'certifications', 'require_2FA'];
+            const hasRequiredKeys = requiredKeys.some(key => newLiveConfig[key] !== undefined);
+            if (!hasRequiredKeys && Object.keys(newLiveConfig).length < 5) {
+                console.warn('[Config Polling] WARNING: Config missing required keys - may be incomplete');
+                // Still update, but log warning
             }
             
             // Create hash to detect changes using ref (avoids stale closure)

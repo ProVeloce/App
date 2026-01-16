@@ -2701,13 +2701,61 @@ export default {
             // =====================================================
 
             // GET /api/config/public - Get public UI/feature configurations (no auth required)
+            // SELF-HEALING: Auto-seeds configuration table if empty
             if (url.pathname === "/api/config/public" && request.method === "GET") {
                 if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
 
                 try {
-                    // Return public configs including system (for maintenance mode check)
+                    // Ensure configuration table exists and is seeded (self-healing)
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS configuration (
+                            config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            config_key TEXT NOT NULL UNIQUE,
+                            config_value TEXT NOT NULL,
+                            updated_by INTEGER NOT NULL,
+                            updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                        )
+                    `).run();
+
+                    // Fetch from configuration table (primary source of truth)
+                    let simpleConfigs = await env.proveloce_db.prepare(`
+                        SELECT config_key, config_value FROM configuration ORDER BY config_key
+                    `).all();
+
+                    // MANDATORY: If configuration table is empty, AUTO-SEED defaults
+                    if (!simpleConfigs.results || simpleConfigs.results.length === 0) {
+                        console.log('[Config Public] Configuration table is empty - auto-seeding defaults');
+                        await seedConfigurationDefaults(env);
+                        
+                        // Re-fetch after seeding
+                        simpleConfigs = await env.proveloce_db.prepare(`
+                            SELECT config_key, config_value FROM configuration ORDER BY config_key
+                        `).all();
+                    }
+
+                    // Build config map from configuration table
+                    const configMap: Record<string, string> = {};
+                    for (const cfg of (simpleConfigs.results || []) as any[]) {
+                        configMap[cfg.config_key] = cfg.config_value;
+                    }
+
+                    // Validate that we have config data (should always be true after auto-seeding)
+                    if (Object.keys(configMap).length === 0) {
+                        console.error('[Config Public] CRITICAL: Configuration still empty after seeding');
+                        // Emergency seed attempt
+                        await seedConfigurationDefaults(env);
+                        const emergencyConfigs = await env.proveloce_db.prepare(`
+                            SELECT config_key, config_value FROM configuration ORDER BY config_key
+                        `).all();
+                        for (const cfg of (emergencyConfigs.results || []) as any[]) {
+                            configMap[cfg.config_key] = cfg.config_value;
+                        }
+                    }
+
+                    // Also fetch from system_config table (for detailed UI metadata)
+                    // This is optional - if empty, we still return configMap from configuration table
                     const configs = await env.proveloce_db.prepare(`
                         SELECT id, category, key, value, type, label, description, updated_at
                         FROM system_config 
@@ -2715,26 +2763,41 @@ export default {
                         ORDER BY category, key
                     `).all();
 
-                    // Also fetch from configuration table for simple key-value configs
-                    const simpleConfigs = await env.proveloce_db.prepare(`
-                        SELECT config_key, config_value FROM configuration
-                    `).all();
-
-                    const configMap: Record<string, string> = {};
-                    for (const cfg of (simpleConfigs.results || []) as any[]) {
-                        configMap[cfg.config_key] = cfg.config_value;
-                    }
-
+                    // NEVER return empty liveConfig - always return at least seeded defaults
                     return jsonResponse({ 
                         success: true, 
                         data: configs.results || [],
-                        liveConfig: configMap,
+                        liveConfig: configMap, // This should NEVER be empty after auto-seeding
                         timestamp: new Date().toISOString()
                     });
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Public config fetch error:", err);
-                    // Return empty array on error (non-critical)
-                    return jsonResponse({ success: true, data: [], liveConfig: {}, timestamp: new Date().toISOString() });
+                    // Try emergency seed on error
+                    try {
+                        await seedConfigurationDefaults(env);
+                        const emergencyConfigs = await env.proveloce_db.prepare(`
+                            SELECT config_key, config_value FROM configuration ORDER BY config_key
+                        `).all();
+                        const configMap: Record<string, string> = {};
+                        for (const cfg of (emergencyConfigs.results || []) as any[]) {
+                            configMap[cfg.config_key] = cfg.config_value;
+                        }
+                        return jsonResponse({ 
+                            success: true, 
+                            data: [],
+                            liveConfig: configMap, // Return seeded config even on error
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (seedErr: any) {
+                        console.error('[Config Public] CRITICAL: Emergency seed also failed:', seedErr);
+                        return jsonResponse({ 
+                            success: false, 
+                            error: 'Configuration system failure - unable to seed defaults',
+                            data: [],
+                            liveConfig: {},
+                            timestamp: new Date().toISOString()
+                        }, 500);
+                    }
                 }
             }
 
