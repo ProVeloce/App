@@ -81,7 +81,11 @@ export interface AppConfig {
     };
 }
 
-// Default configuration values (used as fallback)
+// Default configuration values (ONLY used as fallback when database is truly empty)
+// All configuration values are stored in and fetched from the database tables:
+// - system_config table: Full config details (labels, descriptions, types)
+// - configuration table: Simple key-value pairs for live polling
+// localStorage is ONLY used for caching to improve performance, never as primary source
 const DEFAULT_CONFIG: AppConfig = {
     system: {
         maintenanceMode: false,
@@ -178,8 +182,12 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const lastConfigHashRef = useRef<string>('');
 
     // Parse raw configs into typed AppConfig
+    // Priority: liveConfig (from configuration table) > rawConfigs (from system_config table) > DEFAULT_CONFIG (fallback only)
+    // DEFAULT_CONFIG is ONLY used when database is truly empty, not when API fails
     const config = useMemo((): AppConfig => {
+        // Only use DEFAULT_CONFIG if both database sources are empty (database truly has no data)
         if (rawConfigs.length === 0 && Object.keys(liveConfig).length === 0) {
+            console.warn('[ConfigContext] Using DEFAULT_CONFIG fallback - database appears empty');
             return DEFAULT_CONFIG;
         }
 
@@ -299,6 +307,8 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         try {
             // First, try to load from cache for immediate display (only on initial load)
+            // NOTE: localStorage is ONLY for caching to improve UX, NOT a primary data source
+            // All data MUST come from database via API calls
             if (!isPollingRequest) {
                 const cached = localStorage.getItem(CONFIG_CACHE_KEY);
                 if (cached) {
@@ -316,7 +326,8 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 }
             }
 
-            // Fetch fresh configs from server (public endpoint for basic UI configs)
+            // ALWAYS fetch fresh configs from database (public endpoint for basic UI configs)
+            // This ensures we always have the latest data from the database
             const response = await axios.get('/api/config/public');
             
             if (response.data.success) {

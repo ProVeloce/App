@@ -1562,6 +1562,71 @@ export default {
                 });
             }
 
+            // GET /api/users/:id/history - Get user history from activity_logs and user_history tables
+            if (url.pathname.match(/^\/api\/users\/[^\/]+\/history$/) && request.method === "GET") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                const id = url.pathname.split("/")[2]; // Extract user ID from /api/users/:id/history
+
+                try {
+                    // Get comprehensive activity history from activity_logs table
+                    const activityLogs = await env.proveloce_db.prepare(`
+                        SELECT id, user_id, action, entity_type, entity_id, metadata, details, created_at, ip_address, user_agent
+                        FROM activity_logs 
+                        WHERE user_id = ? OR entity_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 100
+                    `).bind(id, id).all();
+
+                    // Get login history (filtered from activity_logs)
+                    const loginHistory = await env.proveloce_db.prepare(`
+                        SELECT id, action, metadata, details, created_at, ip_address, user_agent
+                        FROM activity_logs 
+                        WHERE user_id = ? AND (action LIKE '%login%' OR action LIKE '%LOGIN%' OR action LIKE '%auth%' OR action LIKE '%AUTH%')
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    `).bind(id).all();
+
+                    // Check if user_history table exists and fetch from it (if it exists)
+                    let userHistory: any[] = [];
+                    try {
+                        const userHistoryResult = await env.proveloce_db.prepare(`
+                            SELECT * FROM user_history 
+                            WHERE user_id = ?
+                            ORDER BY timestamp DESC
+                            LIMIT 100
+                        `).bind(id).all();
+                        userHistory = userHistoryResult.results || [];
+                    } catch (e) {
+                        // user_history table might not exist, that's okay
+                        console.log("user_history table not found, using activity_logs only");
+                    }
+
+                    return jsonResponse({ 
+                        success: true, 
+                        data: { 
+                            userId: id,
+                            activityLogs: activityLogs.results || [],
+                            loginHistory: loginHistory.results || [],
+                            userHistory: userHistory,
+                            totalActivities: (activityLogs.results || []).length,
+                            totalLogins: (loginHistory.results || []).length,
+                            fetchedAt: new Date().toISOString()
+                        }
+                    });
+                } catch (err) {
+                    console.error("User history fetch error:", err);
+                    return jsonResponse({ success: false, error: "Failed to fetch user history" }, 500);
+                }
+            }
+
             // POST /api/admin/users - Create new user
             if (url.pathname === "/api/admin/users" && request.method === "POST") {
                 const auth = await checkAdminRole(request);
@@ -2378,7 +2443,8 @@ export default {
                         "SELECT * FROM system_config ORDER BY category, key"
                     ).all();
 
-                    // If empty, seed with defaults
+                    // If empty, seed with defaults (ONLY runs once when table is empty)
+                    // After seeding, all subsequent data comes from database updates via Superadmin portal
                     if (!configs.results || configs.results.length === 0) {
                         const defaultConfigs = [
                             // System & Maintenance Settings
@@ -2431,6 +2497,8 @@ export default {
                             { id: crypto.randomUUID(), category: 'features', key: 'certifications_enabled', value: 'true', type: 'boolean', label: 'Certifications', description: 'Enable certification uploads' },
                         ];
 
+                        // Insert default configs into database (INSERT OR IGNORE ensures no duplicates)
+                        // After this initial seed, all config changes come from Superadmin portal and are persisted to DB
                         for (const cfg of defaultConfigs) {
                             await env.proveloce_db.prepare(`
                                 INSERT OR IGNORE INTO system_config (id, category, key, value, type, label, description)
@@ -2536,6 +2604,10 @@ export default {
 
                     // Auto-sync to configuration table for live polling
                     // This ensures real-time updates across all portals
+                    // All changes are persisted to BOTH tables:
+                    // 1. system_config table: Full config details (for Superadmin UI)
+                    // 2. configuration table: Simple key-value pairs (for live polling)
+                    // This ensures data consistency and real-time updates across all portals
                     if (configsToSync.length > 0) {
                         // Ensure configuration table exists
                         await env.proveloce_db.prepare(`
