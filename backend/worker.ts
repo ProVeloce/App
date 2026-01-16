@@ -2175,12 +2175,11 @@ export default {
             }
 
             // =====================================================
-            // CONFIGURATION TABLE API (Simple key-value live config)
+            // UNIFIED CONFIGURATION API (Single Source of Truth)
             // =====================================================
-
-            // GET /api/configuration - Get all configuration values (public, for live polling)
-            // Note: /api/config is reserved for Superadmin to get system_config details
-            if (url.pathname === "/api/configuration" && request.method === "GET") {
+            // GET /api/config - Get all configuration values (NO CACHING, ALWAYS LIVE)
+            // This endpoint ALWAYS queries the database directly - NO in-memory caching
+            if (url.pathname === "/api/config" && request.method === "GET") {
                 if (!env.proveloce_db) {
                     return jsonResponse({ success: false, error: "Database not configured" }, 500);
                 }
@@ -2197,29 +2196,159 @@ export default {
                         )
                     `).run();
 
-                    // Fetch all configurations
+                    // ALWAYS fetch live from database - NO CACHING
                     const configs = await env.proveloce_db.prepare(`
-                        SELECT config_id, config_key, config_value, updated_by, updated_at
+                        SELECT config_key, config_value, updated_at
                         FROM configuration
                         ORDER BY config_key
                     `).all();
 
-                    // Transform to key-value object for easy access
-                    const configMap: Record<string, string> = {};
+                    // Build structured configuration object
+                    const structuredConfig: any = {};
+                    const flatConfig: Record<string, string> = {};
+
                     for (const cfg of (configs.results || []) as any[]) {
-                        configMap[cfg.config_key] = cfg.config_value;
+                        const key = cfg.config_key;
+                        const value = cfg.config_value;
+                        flatConfig[key] = value;
+
+                        // Parse nested keys (e.g., "notifications.sms" -> notifications: { sms: ... })
+                        const parts = key.split('.');
+                        if (parts.length > 1) {
+                            let current = structuredConfig;
+                            for (let i = 0; i < parts.length - 1; i++) {
+                                if (!current[parts[i]]) {
+                                    current[parts[i]] = {};
+                                }
+                                current = current[parts[i]];
+                            }
+                            current[parts[parts.length - 1]] = value;
+                        } else {
+                            structuredConfig[key] = value;
+                        }
                     }
 
-                    return jsonResponse({ 
-                        success: true, 
-                        data: configs.results || [],
-                        config: configMap,
-                        timestamp: new Date().toISOString()
+                    // Return structured config matching requirements
+                    return jsonResponse(structuredConfig, 200, {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
                     });
                 } catch (err) {
                     console.error("Configuration fetch error:", err);
                     return jsonResponse({ success: false, error: "Failed to fetch configurations" }, 500);
                 }
+            }
+
+            // POST /api/config - Update configuration (SUPERADMIN only)
+            // Updates configuration table immediately and returns FULL updated config
+            if (url.pathname === "/api/config" && request.method === "POST") {
+                const auth = await checkAdminRole(request);
+                if (!auth.valid) {
+                    return jsonResponse({ success: false, error: auth.error }, 401);
+                }
+
+                if ((auth.payload.role || "").toLowerCase() !== "superadmin") {
+                    return jsonResponse({ success: false, error: "Superadmin access required" }, 403);
+                }
+
+                if (!env.proveloce_db) {
+                    return jsonResponse({ success: false, error: "Database not configured" }, 500);
+                }
+
+                try {
+                    const body = await request.json() as { config_key: string; config_value: string };
+                    
+                    if (!body.config_key || body.config_value === undefined) {
+                        return jsonResponse({ success: false, error: "config_key and config_value are required" }, 400);
+                    }
+
+                    // Validate config_value matches allowed values for specific keys
+                    const allowedValues: Record<string, string[]> = {
+                        'maintenance_mode': ['ENABLED', 'DISABLED'],
+                        'certifications': ['ENABLED', 'DISABLED'],
+                        'require_2FA': ['ENABLED', 'DISABLED'],
+                        'notifications.sms': ['ENABLED', 'DISABLED'],
+                        'notifications.email': ['ENABLED', 'DISABLED'],
+                        'ui.time_format': ['24-hour', '12-hour'],
+                        'ui.theme': ['light', 'dark', 'system'],
+                        'ui.animations': ['ENABLED', 'DISABLED']
+                    };
+
+                    if (allowedValues[body.config_key] && !allowedValues[body.config_key].includes(body.config_value)) {
+                        return jsonResponse({ 
+                            success: false, 
+                            error: `Invalid config_value. Allowed values: ${allowedValues[body.config_key].join(', ')}` 
+                        }, 400);
+                    }
+
+                    // Ensure table exists
+                    await env.proveloce_db.prepare(`
+                        CREATE TABLE IF NOT EXISTS configuration (
+                            config_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            config_key TEXT NOT NULL UNIQUE,
+                            config_value TEXT NOT NULL,
+                            updated_by INTEGER NOT NULL,
+                            updated_at TEXT DEFAULT (datetime('now', '+5 hours', '+30 minutes'))
+                        )
+                    `).run();
+
+                    // Update immediately - NO delayed writes
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                        VALUES (?, ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                        ON CONFLICT(config_key) DO UPDATE SET
+                            config_value = excluded.config_value,
+                            updated_by = excluded.updated_by,
+                            updated_at = datetime('now', '+5 hours', '+30 minutes')
+                    `).bind(body.config_key, body.config_value, auth.payload.userId).run();
+
+                    // Log the change
+                    await env.proveloce_db.prepare(`
+                        INSERT INTO activity_logs (id, user_id, action, entity_type, entity_id, details, created_at)
+                        VALUES (?, ?, 'UPDATE_CONFIG', 'CONFIGURATION', ?, ?, datetime('now', '+5 hours', '+30 minutes'))
+                    `).bind(crypto.randomUUID(), auth.payload.userId, body.config_key, JSON.stringify({ key: body.config_key, value: body.config_value })).run();
+
+                    // Return FULL updated configuration (fetch live from DB)
+                    const allConfigs = await env.proveloce_db.prepare(`
+                        SELECT config_key, config_value FROM configuration ORDER BY config_key
+                    `).all();
+
+                    const fullConfig: any = {};
+                    for (const cfg of (allConfigs.results || []) as any[]) {
+                        const parts = cfg.config_key.split('.');
+                        if (parts.length > 1) {
+                            let current = fullConfig;
+                            for (let i = 0; i < parts.length - 1; i++) {
+                                if (!current[parts[i]]) {
+                                    current[parts[i]] = {};
+                                }
+                                current = current[parts[i]];
+                            }
+                            current[parts[parts.length - 1]] = cfg.config_value;
+                        } else {
+                            fullConfig[cfg.config_key] = cfg.config_value;
+                        }
+                    }
+
+                    return jsonResponse(fullConfig, 200, {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate'
+                    });
+                } catch (err) {
+                    console.error("Configuration update error:", err);
+                    return jsonResponse({ success: false, error: "Failed to update configuration" }, 500);
+                }
+            }
+
+            // Legacy endpoint for backward compatibility
+            // GET /api/configuration - Alias for /api/config
+            if (url.pathname === "/api/configuration" && request.method === "GET") {
+                // Redirect to /api/config
+                const newUrl = new URL(request.url);
+                newUrl.pathname = "/api/config";
+                return fetch(newUrl.toString(), request);
             }
 
             // POST /api/configuration - Insert or update configuration (SUPERADMIN only)

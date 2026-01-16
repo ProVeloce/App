@@ -171,10 +171,21 @@ const GlobalConfig: React.FC = () => {
                 }
             }
 
-            // Sync ALL configs to live configuration table for real-time updates
+            // Update configuration table using POST /api/config (one by one for immediate updates)
+            // This ensures real-time propagation across all portals
             if (liveConfigUpdates.length > 0) {
                 try {
-                    await axios.put('/api/configuration/bulk', { configs: liveConfigUpdates });
+                    // Update each config individually via POST /api/config for immediate effect
+                    for (const cfg of liveConfigUpdates) {
+                        try {
+                            await axios.post('/api/config', {
+                                config_key: cfg.config_key,
+                                config_value: cfg.config_value
+                            });
+                        } catch (err) {
+                            console.warn(`Failed to update ${cfg.config_key}:`, err);
+                        }
+                    }
                 } catch (liveErr) {
                     console.warn('Failed to sync live config, polling will catch up:', liveErr);
                 }

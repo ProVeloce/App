@@ -137,8 +137,8 @@ const DEFAULT_CONFIG: AppConfig = {
 interface ConfigContextType {
     // Raw configs from database (system_config table)
     rawConfigs: SystemConfig[];
-    // Live configs from configuration table (simple key-value)
-    liveConfig: Record<string, string>;
+    // Live configs from configuration table (can be flat or nested objects)
+    liveConfig: Record<string, any>;
     // Typed config object
     config: AppConfig;
     // Loading state
@@ -230,9 +230,10 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             return getSystemValue(category, key, defaultValue);
         };
 
-        // Check for maintenance mode in multiple sources
+        // Check for maintenance mode - supports structured config (maintenance_mode) and nested (system.maintenance_mode)
         // Supports both 'true'/'false' and 'ENABLED'/'DISABLED' values
-        const maintenanceFromLive = liveConfig['maintenance_mode'] ?? liveConfig['system.maintenance_mode'];
+        const maintenanceFromLive = liveConfig['maintenance_mode'] ?? 
+                                    (typeof liveConfig['system'] === 'object' && liveConfig['system'] !== null ? liveConfig['system']['maintenance_mode'] : undefined);
         const maintenanceFromSystem = rawConfigs.find(c => c.category === 'system' && c.key === 'maintenance_mode');
         const maintenanceModeValue = maintenanceFromLive ?? maintenanceFromSystem?.value ?? 'false';
         
@@ -262,10 +263,10 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 requireEmailVerification: getValue('users', 'require_email_verification', DEFAULT_CONFIG.users.requireEmailVerification),
                 allowSelfRegistration: getValue('users', 'allow_self_registration', DEFAULT_CONFIG.users.allowSelfRegistration),
             },
-            // Notifications
+            // Notifications - support structured config (notifications.sms, notifications.email)
             notifications: {
-                emailEnabled: getValue('notifications', 'email_enabled', DEFAULT_CONFIG.notifications.emailEnabled),
-                smsEnabled: getValue('notifications', 'sms_enabled', DEFAULT_CONFIG.notifications.smsEnabled),
+                emailEnabled: (typeof liveConfig['notifications'] === 'object' && liveConfig['notifications'] !== null && liveConfig['notifications']['email'] === 'ENABLED') || getValue('notifications', 'email_enabled', DEFAULT_CONFIG.notifications.emailEnabled),
+                smsEnabled: (typeof liveConfig['notifications'] === 'object' && liveConfig['notifications'] !== null && liveConfig['notifications']['sms'] === 'ENABLED') || getValue('notifications', 'sms_enabled', DEFAULT_CONFIG.notifications.smsEnabled),
                 inAppEnabled: getValue('notifications', 'in_app_enabled', DEFAULT_CONFIG.notifications.inAppEnabled),
                 digestFrequency: getValue('notifications', 'digest_frequency', DEFAULT_CONFIG.notifications.digestFrequency),
             },
@@ -276,12 +277,12 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 escalationHours: getValue('ticketing', 'escalation_hours', DEFAULT_CONFIG.ticketing.escalationHours),
                 autoCloseAfterDays: getValue('ticketing', 'auto_close_days', DEFAULT_CONFIG.ticketing.autoCloseAfterDays),
             },
-            // UI/UX Preferences
+            // UI/UX Preferences - support structured config (ui.time_format, ui.theme)
             ui: {
-                defaultTheme: getValue('ui', 'default_theme', DEFAULT_CONFIG.ui.defaultTheme) as 'light' | 'dark' | 'system',
+                defaultTheme: ((typeof liveConfig['ui'] === 'object' && liveConfig['ui'] !== null && liveConfig['ui']['theme']) || getValue('ui', 'default_theme', DEFAULT_CONFIG.ui.defaultTheme)) as 'light' | 'dark' | 'system',
                 defaultLanguage: getValue('ui', 'default_language', DEFAULT_CONFIG.ui.defaultLanguage),
                 dateFormat: getValue('ui', 'date_format', DEFAULT_CONFIG.ui.dateFormat),
-                timeFormat: getValue('ui', 'time_format', DEFAULT_CONFIG.ui.timeFormat),
+                timeFormat: (typeof liveConfig['ui'] === 'object' && liveConfig['ui'] !== null && liveConfig['ui']['time_format']) || getValue('ui', 'time_format', DEFAULT_CONFIG.ui.timeFormat),
             },
             // Analytics & Reporting
             analytics: {
@@ -367,44 +368,49 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, []);
 
     // Use ref to track last config hash to avoid stale closure issues
-    const liveConfigRef = useRef<Record<string, string>>({});
+    const liveConfigRef = useRef<Record<string, any>>({});
     
     // Keep ref in sync with state
     useEffect(() => {
         liveConfigRef.current = liveConfig;
     }, [liveConfig]);
 
-    // Lightweight polling function for live config updates
+    // Real-time polling function - fetches /api/config every 1 second
+    // NO CACHING - always fetches live from database
     const pollLiveConfig = useCallback(async () => {
         try {
-            const response = await axios.get('/api/configuration', {
-                timeout: 5000 // 5 second timeout for polling requests
+            const response = await axios.get('/api/config', {
+                timeout: 3000, // 3 second timeout for polling requests
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
             });
             
-            if (response.data.success && response.data.config) {
-                const newLiveConfig = response.data.config;
+            // Response is the structured config object directly (not wrapped in success/data)
+            // Handle both new format (direct object) and legacy format (wrapped)
+            const newLiveConfig = response.data?.config || response.data || {};
+            
+            // Create hash to detect changes using ref (avoids stale closure)
+            const newHash = JSON.stringify(newLiveConfig);
+            const oldHash = JSON.stringify(liveConfigRef.current);
+            
+            if (newHash !== oldHash) {
+                console.log('[Config Polling] Changes detected, applying live config updates');
+                setLiveConfig(newLiveConfig);
+                setLastUpdated(new Date());
+                setConfigVersion(prev => prev + 1);
                 
-                // Create hash to detect changes using ref (avoids stale closure)
-                const newHash = JSON.stringify(newLiveConfig);
-                const oldHash = JSON.stringify(liveConfigRef.current);
-                
-                if (newHash !== oldHash) {
-                    console.log('[Config Polling] Changes detected, updating live config');
-                    setLiveConfig(newLiveConfig);
-                    setLastUpdated(new Date());
-                    setConfigVersion(prev => prev + 1);
-                    
-                    // Update cache with new live config
-                    const cached = localStorage.getItem(CONFIG_CACHE_KEY);
-                    if (cached) {
-                        try {
-                            const parsedCache = JSON.parse(cached);
-                            parsedCache.liveConfig = newLiveConfig;
-                            parsedCache.timestamp = Date.now();
-                            localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(parsedCache));
-                        } catch (e) {
-                            // Ignore cache update errors
-                        }
+                // Update cache (for initial load only, not primary source)
+                const cached = localStorage.getItem(CONFIG_CACHE_KEY);
+                if (cached) {
+                    try {
+                        const parsedCache = JSON.parse(cached);
+                        parsedCache.liveConfig = newLiveConfig;
+                        parsedCache.timestamp = Date.now();
+                        localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(parsedCache));
+                    } catch (e) {
+                        // Ignore cache update errors
                     }
                 }
             }
@@ -560,78 +566,100 @@ export const broadcastConfigUpdate = (): void => {
 };
 
 // =====================================================
-// Feature Enforcement Hooks
+// Feature Enforcement Hooks (Real-time from /api/config)
 // =====================================================
+// These hooks read from liveConfig which is polled every 1 second
+// Changes are applied instantly without page refresh
 
-// Hook to check if certifications are enabled
+// Hook to check if certifications are enabled (supports both flat and nested config)
 export const useCertificationsEnabled = (): boolean => {
-    const { getLiveConfigValue, getConfigValue } = useConfig();
-    const value = getLiveConfigValue('certifications_enabled') || 
-                 getLiveConfigValue('features.certifications_enabled') ||
-                 getConfigValue('features', 'certifications_enabled') ||
-                 'true';
+    const { liveConfig, getLiveConfigValue, getConfigValue } = useConfig();
+    // Check structured config first (certifications: "ENABLED")
+    const structuredValue = liveConfig['certifications'];
+    // Check flat keys
+    const flatValue = getLiveConfigValue('certifications_enabled') || 
+                     getLiveConfigValue('features.certifications_enabled');
+    // Fall back to system_config
+    const systemValue = getConfigValue('features', 'certifications_enabled');
+    
+    const value = structuredValue || flatValue || systemValue || 'ENABLED';
     return value === 'true' || value === 'ENABLED';
 };
 
 // Hook to check if social login is enabled
 export const useSocialLoginEnabled = (): boolean => {
-    const { getLiveConfigValue, getConfigValue } = useConfig();
-    const value = getLiveConfigValue('allow_social_login') || 
-                 getLiveConfigValue('auth.allow_social_login') ||
-                 getConfigValue('auth', 'allow_social_login') ||
-                 'true';
+    const { liveConfig, getLiveConfigValue, getConfigValue } = useConfig();
+    const structuredValue = (typeof liveConfig['auth'] === 'object' && liveConfig['auth'] !== null) ? liveConfig['auth']['allow_social_login'] : undefined;
+    const flatValue = getLiveConfigValue('allow_social_login') || 
+                     getLiveConfigValue('auth.allow_social_login');
+    const systemValue = getConfigValue('auth', 'allow_social_login');
+    
+    const value = structuredValue || flatValue || systemValue || 'ENABLED';
     return value === 'true' || value === 'ENABLED';
 };
 
 // Hook to check if 2FA is required
 export const use2FARequired = (): boolean => {
-    const { getLiveConfigValue, getConfigValue, config } = useConfig();
-    const value = getLiveConfigValue('require_2FA') || 
-                 getLiveConfigValue('require_mfa') ||
-                 getLiveConfigValue('auth.require_2FA') ||
-                 getConfigValue('auth', 'require_mfa') ||
-                 String(config.auth.requireMfa);
+    const { liveConfig, getLiveConfigValue, getConfigValue, config } = useConfig();
+    const structuredValue = liveConfig['require_2FA'];
+    const flatValue = getLiveConfigValue('require_2FA') || 
+                     getLiveConfigValue('require_mfa') ||
+                     getLiveConfigValue('auth.require_2FA');
+    const systemValue = getConfigValue('auth', 'require_mfa') || String(config.auth.requireMfa);
+    
+    const value = structuredValue || flatValue || systemValue || 'DISABLED';
     return value === 'true' || value === 'ENABLED';
 };
 
 // Hook to check if SMS notifications are enabled
 export const useSMSEnabled = (): boolean => {
-    const { getLiveConfigValue, getConfigValue, config } = useConfig();
-    const value = getLiveConfigValue('sms_enabled') || 
-                 getLiveConfigValue('notifications.sms_enabled') ||
-                 getConfigValue('notifications', 'sms_enabled') ||
-                 String(config.notifications.smsEnabled);
+    const { liveConfig, getLiveConfigValue, getConfigValue, config } = useConfig();
+    // Check structured config (notifications: { sms: "ENABLED" })
+    const structuredValue = (typeof liveConfig['notifications'] === 'object' && liveConfig['notifications'] !== null) ? liveConfig['notifications']['sms'] : undefined;
+    const flatValue = getLiveConfigValue('notifications.sms') ||
+                     getLiveConfigValue('sms_enabled') || 
+                     getLiveConfigValue('notifications.sms_enabled');
+    const systemValue = getConfigValue('notifications', 'sms_enabled') || String(config.notifications.smsEnabled);
+    
+    const value = structuredValue || flatValue || systemValue || 'DISABLED';
     return value === 'true' || value === 'ENABLED';
 };
 
 // Hook to check if messaging is enabled
 export const useMessagingEnabled = (): boolean => {
-    const { getLiveConfigValue, getConfigValue, config } = useConfig();
-    const value = getLiveConfigValue('messaging_enabled') || 
-                 getLiveConfigValue('feature.messaging') ||
-                 getLiveConfigValue('features.messaging_enabled') ||
-                 getConfigValue('features', 'messaging_enabled') ||
-                 'true';
+    const { liveConfig, getLiveConfigValue, getConfigValue } = useConfig();
+    const structuredValue = liveConfig['messaging_enabled'] || 
+                           (typeof liveConfig['features'] === 'object' && liveConfig['features'] !== null ? liveConfig['features']['messaging'] : undefined);
+    const flatValue = getLiveConfigValue('messaging_enabled') || 
+                     getLiveConfigValue('feature.messaging') ||
+                     getLiveConfigValue('features.messaging_enabled');
+    const systemValue = getConfigValue('features', 'messaging_enabled');
+    
+    const value = structuredValue || flatValue || systemValue || 'ENABLED';
     return value === 'true' || value === 'ENABLED';
 };
 
-// Hook to get time format (12h or 24h)
+// Hook to get time format (12h or 24h) - supports structured config (ui.time_format)
 export const useTimeFormat = (): '12h' | '24h' => {
-    const { getLiveConfigValue, getConfigValue, config } = useConfig();
-    const value = getLiveConfigValue('time_format') || 
-                 getLiveConfigValue('ui.time_format') ||
-                 getConfigValue('ui', 'time_format') ||
-                 config.ui.timeFormat ||
-                 '24h';
+    const { liveConfig, getLiveConfigValue, getConfigValue, config } = useConfig();
+    // Check structured config (ui: { time_format: "24-hour" })
+    const structuredValue = (typeof liveConfig['ui'] === 'object' && liveConfig['ui'] !== null) ? liveConfig['ui']['time_format'] : undefined;
+    const flatValue = getLiveConfigValue('time_format') || 
+                     getLiveConfigValue('ui.time_format');
+    const systemValue = getConfigValue('ui', 'time_format') || config.ui.timeFormat || '24h';
+    
+    const value = structuredValue || flatValue || systemValue || '24h';
     return (value === '12h' || value === '12-hour') ? '12h' : '24h';
 };
 
 // Hook to check if analytics real-time is enabled
 export const useAnalyticsRealTime = (): boolean => {
-    const { getLiveConfigValue, getConfigValue } = useConfig();
-    const value = getLiveConfigValue('analytics.real_time') || 
-                 getLiveConfigValue('analytics_real_time') ||
-                 getConfigValue('analytics', 'real_time') ||
-                 'false';
+    const { liveConfig, getLiveConfigValue, getConfigValue } = useConfig();
+    const structuredValue = (typeof liveConfig['analytics'] === 'object' && liveConfig['analytics'] !== null) ? liveConfig['analytics']['real_time'] : undefined;
+    const flatValue = getLiveConfigValue('analytics.real_time') || 
+                     getLiveConfigValue('analytics_real_time');
+    const systemValue = getConfigValue('analytics', 'real_time') || 'DISABLED';
+    
+    const value = structuredValue || flatValue || systemValue || 'DISABLED';
     return value === 'true' || value === 'ENABLED';
 };
