@@ -923,7 +923,7 @@ export default {
                 }
 
                 const body = await request.json() as any;
-                const { name, phone, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio } = body;
+                const { name, phone, full_name, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio } = body;
 
                 // Update user name and phone if provided (these are in users table)
                 if (name || phone) {
@@ -956,6 +956,7 @@ export default {
                 if (existingProfile) {
                     await env.proveloce_db.prepare(`
                         UPDATE user_profiles SET 
+                            full_name = COALESCE(?, full_name),
                             dob = COALESCE(?, dob),
                             gender = COALESCE(?, gender),
                             address_line1 = COALESCE(?, address_line1),
@@ -967,13 +968,13 @@ export default {
                             bio = COALESCE(?, bio),
                             updated_at = datetime('now', '+5 hours', '+30 minutes')
                         WHERE user_id = ?
-                    `).bind(dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
+                    `).bind(full_name, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio, payload.userId).run();
                 } else {
                     const profileId = crypto.randomUUID();
                     await env.proveloce_db.prepare(`
-                        INSERT INTO user_profiles (id, user_id, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `).bind(profileId, payload.userId, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
+                        INSERT INTO user_profiles (id, user_id, full_name, dob, gender, address_line1, address_line2, city, state, country, pincode, bio)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(profileId, payload.userId, full_name, dob, gender, addressLine1, addressLine2, city, state, country, pincode, bio).run();
                 }
 
                 // Get updated user and profile
