@@ -531,7 +531,7 @@ export interface SystemConfig {
 
 export const configApi = {
     getSystemConfig: () =>
-        api.get<ApiResponse<SystemConfig[]>>('/config'),
+        api.get<ApiResponse<SystemConfig[]>>('/config/system'),
 
     updateConfig: (id: string, value: string) =>
         api.put<ApiResponse>(`/config/${id}`, { value }),

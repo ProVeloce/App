@@ -2197,20 +2197,56 @@ export default {
                     `).run();
 
                     // ALWAYS fetch live from database - NO CACHING
-                    const configs = await env.proveloce_db.prepare(`
+                    let configs = await env.proveloce_db.prepare(`
                         SELECT config_key, config_value, updated_at
                         FROM configuration
                         ORDER BY config_key
                     `).all();
 
+                    // MANDATORY: If table is empty, AUTO-SEED default configuration rows
+                    // This ensures the system is never in an empty state
+                    if (!configs.results || configs.results.length === 0) {
+                        console.log('[Config] Configuration table is empty - auto-seeding default values');
+                        
+                        // Default configuration rows that MUST exist
+                        const defaultConfigs = [
+                            { config_key: 'maintenance_mode', config_value: 'DISABLED' },
+                            { config_key: 'certifications', config_value: 'ENABLED' },
+                            { config_key: 'require_2FA', config_value: 'DISABLED' },
+                            { config_key: 'notifications.sms', config_value: 'ENABLED' },
+                            { config_key: 'notifications.email', config_value: 'ENABLED' },
+                            { config_key: 'ui.time_format', config_value: '24-hour' },
+                            { config_key: 'ui.theme', config_value: 'light' },
+                            { config_key: 'ui.animations', config_value: 'ENABLED' },
+                            { config_key: 'allow_social_login', config_value: 'ENABLED' },
+                            { config_key: 'messaging_enabled', config_value: 'ENABLED' },
+                        ];
+
+                        // Seed all default configs (use system user ID 0 for auto-seeded configs)
+                        for (const defaultCfg of defaultConfigs) {
+                            await env.proveloce_db.prepare(`
+                                INSERT INTO configuration (config_key, config_value, updated_by, updated_at)
+                                VALUES (?, ?, 0, datetime('now', '+5 hours', '+30 minutes'))
+                                ON CONFLICT(config_key) DO NOTHING
+                            `).bind(defaultCfg.config_key, defaultCfg.config_value).run();
+                        }
+
+                        // Re-query after seeding to return the seeded config
+                        configs = await env.proveloce_db.prepare(`
+                            SELECT config_key, config_value, updated_at
+                            FROM configuration
+                            ORDER BY config_key
+                        `).all();
+
+                        console.log(`[Config] Auto-seeded ${defaultConfigs.length} default configuration rows`);
+                    }
+
                     // Build structured configuration object
                     const structuredConfig: any = {};
-                    const flatConfig: Record<string, string> = {};
 
                     for (const cfg of (configs.results || []) as any[]) {
                         const key = cfg.config_key;
                         const value = cfg.config_value;
-                        flatConfig[key] = value;
 
                         // Parse nested keys (e.g., "notifications.sms" -> notifications: { sms: ... })
                         const parts = key.split('.');
@@ -2228,6 +2264,7 @@ export default {
                         }
                     }
 
+                    // NEVER return empty config - always return at least seeded defaults
                     // Return structured config matching requirements
                     return jsonResponse(structuredConfig, 200, {
                         'Content-Type': 'application/json',
@@ -2536,8 +2573,10 @@ export default {
                 }
             }
 
-            // GET /api/config - Get all system configurations (SUPERADMIN only)
-            if (url.pathname === "/api/config" && request.method === "GET") {
+            // GET /api/config/system - Get all system_config table entries (SUPERADMIN only)
+            // NOTE: This is different from GET /api/config which returns configuration table (public)
+            // This endpoint is for Superadmin UI to see full config details with labels/descriptions
+            if (url.pathname === "/api/config/system" && request.method === "GET") {
                 const auth = await checkAdminRole(request);
                 if (!auth.valid) {
                     return jsonResponse({ success: false, error: auth.error }, 401);

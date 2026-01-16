@@ -183,11 +183,16 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Parse raw configs into typed AppConfig
     // Priority: liveConfig (from configuration table) > rawConfigs (from system_config table) > DEFAULT_CONFIG (fallback only)
-    // DEFAULT_CONFIG is ONLY used when database is truly empty, not when API fails
+    // DEFAULT_CONFIG is ONLY used as a last resort when API completely fails - NOT for empty DB
+    // Empty DB should trigger auto-seeding on backend, so empty config indicates API failure
     const config = useMemo((): AppConfig => {
-        // Only use DEFAULT_CONFIG if both database sources are empty (database truly has no data)
+        // If both sources are empty, this indicates an API failure, not an empty DB
+        // Backend should auto-seed, so empty config means the API call failed
+        // We still use DEFAULT_CONFIG to prevent app crash, but this is an error state
         if (rawConfigs.length === 0 && Object.keys(liveConfig).length === 0) {
-            console.warn('[ConfigContext] Using DEFAULT_CONFIG fallback - database appears empty');
+            // Log as error, not warning - this should not happen in production
+            console.error('[ConfigContext] ERROR: Both config sources are empty - API may have failed or backend not seeding');
+            // Still return DEFAULT_CONFIG to prevent app crash, but this is an error condition
             return DEFAULT_CONFIG;
         }
 
@@ -335,6 +340,12 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 const configs = response.data.data || [];
                 const newLiveConfig = response.data.liveConfig || {};
 
+                // Validate that we received actual config data
+                // Empty config indicates backend issue (should auto-seed)
+                if (configs.length === 0 && Object.keys(newLiveConfig).length === 0) {
+                    throw new Error('Configuration API returned empty data - backend may not be seeding defaults');
+                }
+
                 // Create a hash of the config to detect changes
                 const newHash = JSON.stringify({ configs, liveConfig: newLiveConfig });
                 
@@ -345,6 +356,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     setLiveConfig(newLiveConfig);
                     setLastUpdated(new Date());
                     setConfigVersion(prev => prev + 1);
+                    setError(null); // Clear any previous errors
 
                     // Update cache
                     localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({
@@ -354,11 +366,20 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     }));
                     localStorage.setItem(CONFIG_VERSION_KEY, String(Date.now()));
                 }
+            } else {
+                throw new Error(response.data.error || 'Failed to fetch configurations');
             }
         } catch (err: any) {
-            // If fetch fails, continue with cached/default values
+            // Set error state - do NOT silently fallback
+            const errorMessage = err.response?.data?.error || err.message || 'Failed to load configurations';
+            
             if (!isPollingRequest) {
-                console.warn('Failed to fetch system config, using defaults:', err.message);
+                // Only set error on initial load, not during polling
+                setError(errorMessage);
+                console.error('[ConfigContext] Failed to fetch configurations:', errorMessage);
+            } else {
+                // During polling, log but don't set error (to avoid UI disruption)
+                console.warn('[Config Polling] Failed to fetch config:', errorMessage);
             }
         } finally {
             if (!isPollingRequest) {
@@ -388,8 +409,15 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             });
             
             // Response is the structured config object directly (not wrapped in success/data)
-            // Handle both new format (direct object) and legacy format (wrapped)
-            const newLiveConfig = response.data?.config || response.data || {};
+            // Backend should NEVER return empty - it auto-seeds if table is empty
+            const newLiveConfig = response.data || {};
+            
+            // Validate that we received actual config data
+            if (Object.keys(newLiveConfig).length === 0) {
+                console.error('[Config Polling] ERROR: Received empty config - backend should auto-seed');
+                // Don't update state with empty config - keep existing config
+                return;
+            }
             
             // Create hash to detect changes using ref (avoids stale closure)
             const newHash = JSON.stringify(newLiveConfig);
@@ -400,6 +428,7 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 setLiveConfig(newLiveConfig);
                 setLastUpdated(new Date());
                 setConfigVersion(prev => prev + 1);
+                setError(null); // Clear error if config loads successfully
                 
                 // Update cache (for initial load only, not primary source)
                 const cached = localStorage.getItem(CONFIG_CACHE_KEY);
@@ -414,9 +443,12 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     }
                 }
             }
-        } catch (err) {
-            // Silently fail polling - don't disturb user experience
-            console.warn('[Config Polling] Request failed:', err);
+        } catch (err: any) {
+            // Log polling failures but don't disrupt UI
+            // If initial load failed, error state is already set
+            const errorMessage = err.response?.data?.error || err.message;
+            console.warn('[Config Polling] Request failed:', errorMessage);
+            // Don't set error state during polling to avoid UI disruption
         }
     }, []); // No dependencies - uses refs for latest state
 
