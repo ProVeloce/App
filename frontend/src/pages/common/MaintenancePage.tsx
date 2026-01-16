@@ -1,13 +1,80 @@
-import React from 'react';
-import { Wrench, Clock, RefreshCw, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wrench, Clock, RefreshCw, AlertTriangle, Timer } from 'lucide-react';
 import { useMaintenanceMode } from '../../context/ConfigContext';
 import { formatFullDateTime } from '../../utils/dateUtils';
 import './MaintenancePage.css';
 
 const MaintenancePage: React.FC = () => {
     const { message, endTime } = useMaintenanceMode();
+    const [timeLeft, setTimeLeft] = useState<string>('');
+    const [isExpired, setIsExpired] = useState<boolean>(false);
 
-    const formatEndTime = (endTimeStr: string | null): string | null => {
+    // Live countdown timer
+    useEffect(() => {
+        if (!endTime) {
+            setTimeLeft('');
+            return;
+        }
+
+        const calculateTimeLeft = () => {
+            // Parse the end time - handle various formats
+            let endTimestamp: number;
+            
+            try {
+                // Try parsing as ISO string first
+                endTimestamp = new Date(endTime).getTime();
+                
+                // If invalid, try parsing as local datetime
+                if (isNaN(endTimestamp)) {
+                    // Try parsing "YYYY-MM-DD HH:mm:ss" format (IST stored in DB)
+                    const parts = endTime.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):?(\d{2})?/);
+                    if (parts) {
+                        const [, year, month, day, hours, minutes, seconds = '0'] = parts;
+                        endTimestamp = new Date(
+                            parseInt(year),
+                            parseInt(month) - 1,
+                            parseInt(day),
+                            parseInt(hours),
+                            parseInt(minutes),
+                            parseInt(seconds)
+                        ).getTime();
+                    }
+                }
+            } catch {
+                endTimestamp = 0;
+            }
+
+            if (!endTimestamp || isNaN(endTimestamp)) {
+                setTimeLeft('');
+                return;
+            }
+
+            const now = new Date().getTime();
+            const diff = endTimestamp - now;
+
+            if (diff <= 0) {
+                setTimeLeft('00:00:00');
+                setIsExpired(true);
+                return;
+            }
+
+            setIsExpired(false);
+            const hours = String(Math.floor(diff / (1000 * 60 * 60))).padStart(2, '0');
+            const minutes = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(2, '0');
+            const seconds = String(Math.floor((diff / 1000) % 60)).padStart(2, '0');
+            setTimeLeft(`${hours}:${minutes}:${seconds}`);
+        };
+
+        // Calculate immediately
+        calculateTimeLeft();
+
+        // Update every second
+        const interval = setInterval(calculateTimeLeft, 1000);
+
+        return () => clearInterval(interval);
+    }, [endTime]);
+
+    const formatEndTimeDisplay = (endTimeStr: string | null): string | null => {
         if (!endTimeStr) return null;
         return formatFullDateTime(endTimeStr);
     };
@@ -52,13 +119,46 @@ const MaintenancePage: React.FC = () => {
                         </p>
                     </div>
 
+                    {/* Live Countdown Timer */}
+                    {timeLeft && (
+                        <div className={`maintenance-countdown ${isExpired ? 'expired' : ''}`}>
+                            <div className="countdown-header">
+                                <Timer size={20} className="countdown-icon" />
+                                <span className="countdown-label">
+                                    {isExpired ? 'Maintenance should be complete' : 'Time Remaining'}
+                                </span>
+                            </div>
+                            <div className="countdown-timer">
+                                <div className="timer-segment">
+                                    <span className="timer-value">{timeLeft.split(':')[0]}</span>
+                                    <span className="timer-unit">Hours</span>
+                                </div>
+                                <span className="timer-separator">:</span>
+                                <div className="timer-segment">
+                                    <span className="timer-value">{timeLeft.split(':')[1]}</span>
+                                    <span className="timer-unit">Minutes</span>
+                                </div>
+                                <span className="timer-separator">:</span>
+                                <div className="timer-segment">
+                                    <span className="timer-value">{timeLeft.split(':')[2]}</span>
+                                    <span className="timer-unit">Seconds</span>
+                                </div>
+                            </div>
+                            {isExpired && (
+                                <p className="countdown-expired-message">
+                                    The scheduled maintenance period has ended. Please refresh to check if the system is back online.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Estimated end time */}
                     {endTime && (
                         <div className="maintenance-eta">
                             <Clock size={18} />
                             <div className="eta-content">
                                 <span className="eta-label">Expected to be back by:</span>
-                                <span className="eta-time">{formatEndTime(endTime)}</span>
+                                <span className="eta-time">{formatEndTimeDisplay(endTime)}</span>
                             </div>
                         </div>
                     )}
@@ -67,7 +167,7 @@ const MaintenancePage: React.FC = () => {
                     <div className="maintenance-actions">
                         <button className="btn btn-primary" onClick={handleRefresh}>
                             <RefreshCw size={16} />
-                            Check Status
+                            {isExpired ? 'Check if Back Online' : 'Check Status'}
                         </button>
                     </div>
 

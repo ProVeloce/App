@@ -65,14 +65,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // Check for maintenance mode - only affects CUSTOMER and EXPERT roles
-    // ADMIN, SUPERADMIN, and ANALYST can still access during maintenance
+    // Check for maintenance mode - affects ALL roles except SUPERADMIN
+    // Only SUPERADMIN can access during maintenance (full portal access)
     if (isMaintenanceMode && user) {
         const role = user.role?.toUpperCase();
-        const exemptRoles = ['ADMIN', 'SUPERADMIN', 'ANALYST'];
+        // Only SUPERADMIN bypasses maintenance mode
+        const exemptRoles = ['SUPERADMIN'];
         
         if (!exemptRoles.includes(role || '')) {
-            // Show maintenance page for customers and experts
+            // Show full-screen maintenance page for all other roles
+            // This hides all portal content including sidebar, dashboard, navigation
             return (
                 <Suspense fallback={
                     <div className="loading-screen">
